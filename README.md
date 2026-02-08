@@ -9,7 +9,7 @@
 A> **eigen-rs** is a pure Rust port of the **Eigen 3.4** C++ library.
 
 > **Warning**
-> This project has **not yet been verified by humans**. All benchmarks and tests are automated. Use with caution in production environments.
+> This project was **generated and verified by AI**. While it has passed comprehensive automated tests and benchmarks against C++ Eigen, it has **not yet been verified by humans**. Use with caution in production environments.
 
 `eigen-rs` aims to provide the same numerical stability, performance, and elegant API as the original Eigen library, leveraging Rust's safety and modern features like Const Generics and Trait-based SIMD/CUDA dispatching.
 

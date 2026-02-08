@@ -1,11 +1,20 @@
 # eigen-rs
 
+[![CI](https://github.com/user/eigen-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/user/eigen-rs/actions/workflows/ci.yml)
+[![Crates.io](https://img.shields.io/crates/v/eigen-rs.svg)](https://crates.io/crates/eigen-rs)
+[![Docs.rs](https://docs.rs/eigen-rs/badge.svg)](https://docs.rs/eigen-rs)
+[![License](https://img.shields.io/crates/l/eigen-rs.svg)](https://github.com/user/eigen-rs/blob/main/LICENSE)
+[![English](https://img.shields.io/badge/Language-English-blue.svg)](README.md)
+
 **Eigen 3.4** C++ 라이브러리의 고성능 Rust 포트입니다.
 
 > **주의 (Warning)**
-> 이 프로젝트는 아직 **사람에 의해 검증되지 않았습니다**. 모든 벤치마크와 테스트는 자동화된 시스템에 의해 수행되었습니다. 프로덕션 환경에서의 사용에 주의하십시오.
+> 이 프로젝트는 **AI에 의해 생성되고 검증되었습니다**. C++ Eigen에 대한 포괄적인 자동화 테스트와 벤치마크를 통과했으나, 아직 **사람에 의해 검증되지 않았습니다**. 프로덕션 환경에서의 사용에 주의하십시오.
 
 `eigen-rs`는 원본 Eigen 라이브러리와 동일한 수치적 안정성, 성능, 그리고 우아한 API를 제공하는 것을 목표로 하며, Rust의 안전성과 Const Generics, Trait 기반 SIMD/CUDA 디스패칭과 같은 현대적인 기능을 활용합니다.
+
+## 기여하기 (Contributing)
+기여에 관심이 있으신가요? 브랜치 전략 및 개발 워크플로우에 대한 자세한 내용은 [기여 가이드 (Contributing Guide)](CONTRIBUTING.md)를 참조하세요.
 
 ## 특징 (Features)
 
@@ -23,7 +32,7 @@
 
 ```toml
 [dependencies]
-eigen-rs = "0.1.0"
+eigen-rs = "3.4.0"
 ```
 
 ### 예제: 행렬 연산
