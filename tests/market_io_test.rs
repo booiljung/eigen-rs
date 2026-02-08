@@ -1,6 +1,6 @@
-use eigen_rs::core::sparse::{SparseMatrix, Triplet, StorageOrder};
-use eigen_rs::unsupported::market_io::{load_matrix_market, save_matrix_market};
 use eigen_rs::core::sparse::iterators::InnerIterator;
+use eigen_rs::core::sparse::{SparseMatrix, StorageOrder, Triplet};
+use eigen_rs::unsupported::market_io::{load_matrix_market, save_matrix_market};
 use std::fs;
 
 #[test]
@@ -28,22 +28,29 @@ fn test_matrix_market_roundtrip() {
     assert_eq!(loaded.cols(), 3);
 
     let check = |m: &SparseMatrix<f64>, r: usize, c: usize, expect: f64| {
-         let mut found = false;
-         for k in 0..m.outer_size() {
-             let mut it = InnerIterator::new(m, k);
-             while it.is_valid() {
-                 let (curr_r, curr_c) = (it.row(), it.col());
-                 let val = it.value();
-                 if curr_r == r && curr_c == c {
-                     assert!((val - expect).abs() < 1e-9, "Mismatch at ({},{}): got {}, want {}", r, c, val, expect);
-                     found = true;
-                 }
-                 it.next();
-             }
-         }
-         if expect != 0.0 && !found {
-             panic!("Element ({},{}) not found, expected {}", r, c, expect);
-         }
+        let mut found = false;
+        for k in 0..m.outer_size() {
+            let mut it = InnerIterator::new(m, k);
+            while it.is_valid() {
+                let (curr_r, curr_c) = (it.row(), it.col());
+                let val = it.value();
+                if curr_r == r && curr_c == c {
+                    assert!(
+                        (val - expect).abs() < 1e-9,
+                        "Mismatch at ({},{}): got {}, want {}",
+                        r,
+                        c,
+                        val,
+                        expect
+                    );
+                    found = true;
+                }
+                it.next();
+            }
+        }
+        if expect != 0.0 && !found {
+            panic!("Element ({},{}) not found, expected {}", r, c, expect);
+        }
     };
 
     check(&loaded, 0, 0, 1.0);
@@ -75,17 +82,17 @@ fn test_matrix_market_symmetric_load() {
         for k in 0..m.outer_size() {
             let mut it = InnerIterator::new(m, k);
             while it.is_valid() {
-                 let (curr_r, curr_c) = (it.row(), it.col());
-                 let val = it.value();
-                 if curr_r == r && curr_c == c {
-                     assert!((val - expect).abs() < 1e-9);
-                     seen = true;
-                 }
-                 it.next();
+                let (curr_r, curr_c) = (it.row(), it.col());
+                let val = it.value();
+                if curr_r == r && curr_c == c {
+                    assert!((val - expect).abs() < 1e-9);
+                    seen = true;
+                }
+                it.next();
             }
         }
         if expect != 0.0 && !seen {
-             panic!("Element ({},{}) not found, expected {}", r, c, expect);
+            panic!("Element ({},{}) not found, expected {}", r, c, expect);
         }
     };
 

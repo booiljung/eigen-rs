@@ -45,12 +45,12 @@ where
 {
     // Buffers for packed panels
     // MC x KC, padded to multiple of MR
-    let mc_rounded = (MC + K::MR - 1) / K::MR * K::MR;
+    let mc_rounded = MC.div_ceil(K::MR) * K::MR;
     let packed_a_len = mc_rounded * KC;
     let mut packed_a = vec![T::default(); packed_a_len];
 
     // KC x NC, padded to multiple of NR
-    let nc_rounded = (NC + K::NR - 1) / K::NR * K::NR;
+    let nc_rounded = NC.div_ceil(K::NR) * K::NR;
     let packed_b_len = KC * nc_rounded;
     let mut packed_b = vec![T::default(); packed_b_len];
 
@@ -113,7 +113,8 @@ where
                         if mr_curr == K::MR && nr_curr == K::NR {
                             // Fast path: Direct write
                             let c_ptr = c.offset(
-                                (ic as isize + ir as isize) * rs_c + (jc as isize + jr as isize) * cs_c,
+                                (ic as isize + ir as isize) * rs_c
+                                    + (jc as isize + jr as isize) * cs_c,
                             );
                             K::microkernel(
                                 kc_eff,
@@ -135,7 +136,7 @@ where
                                 b_ptr,
                                 T::default(), // beta=0
                                 tmp_c.as_mut_ptr(),
-                                1, // rs (col-major)
+                                1,              // rs (col-major)
                                 K::MR as isize, // cs
                             );
 
@@ -143,7 +144,8 @@ where
                             // C(ic+ir..ic+ir+mr_curr, jc+jr..jc+jr+nr_curr) += tmp
                             for j in 0..nr_curr {
                                 for i in 0..mr_curr {
-                                    let c_idx = (ic as isize + (ir + i) as isize) * rs_c + (jc as isize + (jr + j) as isize) * cs_c;
+                                    let c_idx = (ic as isize + (ir + i) as isize) * rs_c
+                                        + (jc as isize + (jr + j) as isize) * cs_c;
                                     let tmp_val = tmp_c[j * K::MR + i];
                                     *c.offset(c_idx) = *c.offset(c_idx) + tmp_val;
                                 }

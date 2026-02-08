@@ -1,7 +1,7 @@
 use crate::core::complex::Complex;
 use crate::core::scalar::Scalar;
-use rustfft::{num_complex::Complex as NumComplex, FftPlanner};
 use alloc::vec::Vec;
+use rustfft::{num_complex::Complex as NumComplex, FftPlanner};
 
 /// A wrapper for FFT operations using `rustfft`.
 pub struct FFT<T: Scalar + rustfft::FftNum> {
@@ -64,8 +64,8 @@ impl<T: Scalar + rustfft::FftNum> FFT<T> {
         let mut result = self.inverse(input);
         let scale = <T as Scalar>::from_usize(1) / <T as Scalar>::from_usize(n);
         for elem in result.iter_mut() {
-            elem.re = elem.re * scale;
-            elem.im = elem.im * scale;
+            elem.re *= scale;
+            elem.im *= scale;
         }
         result
     }
@@ -132,8 +132,8 @@ impl<T: Scalar + rustfft::FftNum, S: Storage<Complex<T>>> FftExtension<T>
                 row_data.push(*res.get(i, j).unwrap());
             }
             let transformed_row = fft.forward(&row_data);
-            for j in 0..cols {
-                *res.get_mut(i, j).unwrap() = transformed_row[j];
+            for (j, val) in transformed_row.iter().enumerate() {
+                *res.get_mut(i, j).unwrap() = *val;
             }
         }
 
@@ -144,8 +144,8 @@ impl<T: Scalar + rustfft::FftNum, S: Storage<Complex<T>>> FftExtension<T>
                 col_data.push(*res.get(i, j).unwrap());
             }
             let transformed_col = fft.forward(&col_data);
-            for i in 0..rows {
-                *res.get_mut(i, j).unwrap() = transformed_col[i];
+            for (i, val) in transformed_col.iter().enumerate() {
+                *res.get_mut(i, j).unwrap() = *val;
             }
         }
 
@@ -177,8 +177,8 @@ impl<T: Scalar + rustfft::FftNum, S: Storage<Complex<T>>> FftExtension<T>
             // Standard definition: 1/NM * Sum ...
             // If we use inverse_scaled for both, we get (1/N)*(1/M) scaling, which is correct for 2D IFFT.
             let transformed_row = fft.inverse_scaled(&row_data);
-            for j in 0..cols {
-                *res.get_mut(i, j).unwrap() = transformed_row[j];
+            for (j, val) in transformed_row.iter().enumerate() {
+                *res.get_mut(i, j).unwrap() = *val;
             }
         }
 
@@ -189,8 +189,8 @@ impl<T: Scalar + rustfft::FftNum, S: Storage<Complex<T>>> FftExtension<T>
                 col_data.push(*res.get(i, j).unwrap());
             }
             let transformed_col = fft.inverse_scaled(&col_data);
-            for i in 0..rows {
-                *res.get_mut(i, j).unwrap() = transformed_col[i];
+            for (i, val) in transformed_col.iter().enumerate() {
+                *res.get_mut(i, j).unwrap() = *val;
             }
         }
 

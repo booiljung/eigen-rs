@@ -63,8 +63,6 @@ fn test_simd_sse_packet_eval() {
     assert_eq!(res[3], 6.0);
 }
 
-
-
 #[cfg(target_arch = "x86_64")]
 #[test]
 fn test_simd_gemm_blocked_correctness() {

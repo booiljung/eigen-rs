@@ -1,8 +1,8 @@
 use crate::core::matrix::MatrixX;
 use crate::core::scalar::Scalar;
 
-use alloc::vec::Vec;
 use crate::core::xpr::MatrixXpr;
+use alloc::vec::Vec;
 use std::fmt::Debug;
 
 /// B-Spline curve of degree `k`.

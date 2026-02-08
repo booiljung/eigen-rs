@@ -111,7 +111,7 @@ fn test_skyline_from_sparse() {
 
     // Now test direct from_sparse
     let skyline = SkylineMatrix::from_sparse(&sparse);
-    
+
     // Verify same properties
     assert_eq!(skyline.coeff(1, 0), -1.0);
     assert_eq!(skyline.coeff(2, 0), 0.0);

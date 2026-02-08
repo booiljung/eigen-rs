@@ -7,7 +7,6 @@ use crate::core::sparse::ordering::{NaturalOrdering, Ordering, Permutation};
 use crate::core::sparse::sparse_matrix::SparseMatrix;
 use crate::core::storage::{DynamicStorage, Storage};
 
-
 /// Sparse QR decomposition.
 pub struct SparseQR<T: Scalar, O: Ordering = NaturalOrdering> {
     ordering: O,

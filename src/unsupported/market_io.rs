@@ -6,11 +6,11 @@
 //! - DataType: Real
 //! - Structure: General / Symmetric (Partial)
 
+use alloc::vec::Vec;
 use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::Path;
 use std::str::FromStr;
-use alloc::vec::Vec;
 
 use crate::core::scalar::Scalar;
 use crate::core::sparse::SparseMatrix;

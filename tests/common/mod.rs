@@ -13,14 +13,16 @@ pub fn run_cpp_harness(cpp_file: &str) -> Result<Vec<(usize, usize, f32)>, Strin
         .arg("-I")
         .arg("eigen-src") // Relative to project root
         .arg("-O3")
+        .arg("-march=native") // Enable host-specific optimizations (AVX, FMA, etc.) to match Rust
         .arg(cpp_file)
         .arg("-o")
         .arg(&bin_path)
-        .status()
+        .output()
         .map_err(|e| format!("Failed to run g++: {}", e))?;
 
-    if !status.success() {
-        return Err("C++ compilation failed".to_string());
+    if !status.status.success() {
+        let stderr = String::from_utf8_lossy(&status.stderr);
+        return Err(format!("C++ compilation failed:\n{}", stderr));
     }
 
     // 2. Run the binary
@@ -74,14 +76,16 @@ pub fn run_cpp_harness_stdout(cpp_file: &str) -> Result<String, String> {
         .arg("-I")
         .arg("eigen-src")
         .arg("-O3")
+        .arg("-march=native")
         .arg(cpp_file)
         .arg("-o")
         .arg(&bin_path)
-        .status()
+        .output()
         .map_err(|e| format!("Failed to run g++: {}", e))?;
 
-    if !status.success() {
-        return Err("C++ compilation failed".to_string());
+    if !status.status.success() {
+        let stderr = String::from_utf8_lossy(&status.stderr);
+        return Err(format!("C++ compilation failed:\n{}", stderr));
     }
 
     let output = Command::new(&bin_path)

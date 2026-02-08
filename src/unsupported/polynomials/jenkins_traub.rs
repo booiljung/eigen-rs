@@ -55,7 +55,7 @@ impl<T: Scalar> JenkinsTraubSolver<T> {
         // Normalize
         let leading = *coeffs.last().unwrap();
         for c in &mut coeffs {
-            *c = *c / leading;
+            *c /= leading;
         }
 
         self.roots.clear();
@@ -129,8 +129,6 @@ impl<T: Scalar> JenkinsTraubSolver<T> {
         let n = p.len() - 1;
         let mut q = vec![Complex::zero(); n];
 
-
-
         let mut carry = Complex::zero();
         for i in (0..n).rev() {
             let val = p[i + 1] + carry * root; // Coefficients stored as [c0, c1, ..., cn]
@@ -185,12 +183,12 @@ impl<T: Scalar> JenkinsTraubSolver<T> {
                 let deriv = Self::evaluate(&Self::derivative(p), z);
                 if deriv.norm_sq().to_f64() < 1e-20 {
                     // Saddle point, shift slightly
-                    z = z + Complex::new(T::from_f64(0.1), T::from_f64(0.1));
+                    z += Complex::new(T::from_f64(0.1), T::from_f64(0.1));
                     continue;
                 }
 
                 let delta = y / deriv;
-                z = z - delta;
+                z -= delta;
 
                 if delta.norm_sq().to_f64() < 1e-20 {
                     return z;
@@ -200,6 +198,6 @@ impl<T: Scalar> JenkinsTraubSolver<T> {
         }
 
         // Fallback
-        return z;
+        z
     }
 }

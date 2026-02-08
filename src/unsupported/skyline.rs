@@ -8,8 +8,8 @@ use crate::core::scalar::Scalar;
 use crate::core::sparse::iterators::InnerIterator;
 use crate::core::sparse::SparseMatrix;
 use crate::core::storage::DynamicStorage;
-use alloc::vec::Vec;
 use alloc::vec;
+use alloc::vec::Vec;
 
 /// Indexing scheme:
 /// For each row `i`, we store elements `A[i, j]` for `k <= j <= i`,
@@ -127,8 +127,8 @@ impl<T: Scalar> SkylineMatrix<T> {
         let mut profile_ptrs = vec![0usize; n + 1];
         let mut current_ptr = 0;
 
-        for i in 0..n {
-            profile_ptrs[i] = current_ptr;
+        for (i, ptr) in profile_ptrs.iter_mut().enumerate().take(n) {
+            *ptr = current_ptr;
             // Find first non-zero column k < i
             let mut first_nz = i;
             for k in 0..i {
@@ -178,10 +178,7 @@ impl<T: Scalar> SkylineMatrix<T> {
         let mut profile_ptrs = vec![0usize; n + 1];
         let current_ptr = 0;
 
-        for i in 0..n {
-            profile_ptrs[i] = current_ptr;
-            // Placeholder replaced by logic below
-        }
+        // Loop removed (redundant initialization)
 
         // Better approach:
         // 1. Initialize min_col[i] = i for all i.

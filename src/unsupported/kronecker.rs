@@ -1,5 +1,3 @@
-
-
 use crate::core::scalar::Scalar;
 
 use crate::core::xpr::MatrixXpr;

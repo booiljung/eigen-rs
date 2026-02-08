@@ -563,7 +563,7 @@ mod tests {
         let ut = u.transpose();
         let mut utu = Matrix::<f64, DynamicStorage<f64>>::new_dynamic(rows, rows)?;
         // Use assign_product instead of manual loop with .get()
-                                          // &ut * &u works.
+        // &ut * &u works.
         utu.assign_product(&(&ut * &u)).unwrap();
 
         for i in 0..rows {
