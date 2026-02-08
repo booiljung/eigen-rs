@@ -1,9 +1,9 @@
 //! Partial Pivoting LU decomposition (PA = LU).
 
 use crate::core::matrix::Matrix;
-use crate::core::storage::Storage;
 use crate::core::scalar::Scalar;
 use crate::core::storage::DynamicStorage;
+use crate::core::storage::Storage;
 
 /// Result of a Partial Pivoting LU decomposition.
 pub struct PartialPivLU<T: Scalar, S: Storage<T>> {
@@ -33,7 +33,7 @@ impl<T: Scalar, S: Storage<T>> PartialPivLU<T, S> {
             // Partial pivoting: find max in column k
             let mut max_val = T::from_usize(0);
             let mut imax = k;
-            
+
             for i in k..rows {
                 let val = *lu.get(i, k).unwrap();
                 let abs_val = val.abs();
@@ -89,7 +89,10 @@ impl<T: Scalar, S: Storage<T>> PartialPivLU<T, S> {
     }
 
     /// Solves Ax = b for x.
-    pub fn solve<S2: Storage<T>>(&self, b: &Matrix<T, S2>) -> Result<Matrix<T, DynamicStorage<T>>, String> {
+    pub fn solve<S2: Storage<T>>(
+        &self,
+        b: &Matrix<T, S2>,
+    ) -> Result<Matrix<T, DynamicStorage<T>>, String> {
         let rows = self.lu.rows();
         if b.rows() != rows {
             return Err("Dimension mismatch in LU solve".to_string());
@@ -97,7 +100,7 @@ impl<T: Scalar, S: Storage<T>> PartialPivLU<T, S> {
 
         let b0_cols = b.cols();
         let mut x = Matrix::<T, DynamicStorage<T>>::new_dynamic(rows, b0_cols)?;
-        
+
         // 1. Apply permutation P to b (x = Pb)
         for i in 0..rows {
             let pi = self.p[i];

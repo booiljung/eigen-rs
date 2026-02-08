@@ -1,9 +1,9 @@
-pub use crate::core::storage::{Storage, FixedStorage, DynamicStorage};
-use crate::core::xpr::MatrixXpr;
-use crate::core::ops::{CwiseAddOp, CwiseSubOp, CwiseScalarMulOp, Product};
-use crate::core::scalar::Scalar;
 use crate::core::decompositions::PartialPivLU;
-use std::ops::{Add, Sub, Mul};
+use crate::core::ops::{CwiseAddOp, CwiseScalarMulOp, CwiseSubOp, Product};
+use crate::core::scalar::Scalar;
+pub use crate::core::storage::{DynamicStorage, FixedStorage, Storage};
+use crate::core::xpr::MatrixXpr;
+use std::ops::{Add, Mul, Sub};
 
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
@@ -27,7 +27,9 @@ impl<T, S: Storage<T> + Clone> Clone for Matrix<T, S> {
 
 impl<T, S: Storage<T> + Copy> Copy for Matrix<T, S> {}
 
-impl<T: PartialEq + Scalar, S1: Storage<T>, S2: Storage<T>> PartialEq<Matrix<T, S2>> for Matrix<T, S1> {
+impl<T: PartialEq + Scalar, S1: Storage<T>, S2: Storage<T>> PartialEq<Matrix<T, S2>>
+    for Matrix<T, S1>
+{
     fn eq(&self, other: &Matrix<T, S2>) -> bool {
         if self.rows() != other.rows() || self.cols() != other.cols() {
             return false;
@@ -43,10 +45,10 @@ impl<T: PartialEq + Scalar, S1: Storage<T>, S2: Storage<T>> PartialEq<Matrix<T, 
     }
 }
 
-impl<T, S: Storage<T>> crate::core::cuda::CudaDispatcher<T> for Matrix<T, S> 
-where 
+impl<T, S: Storage<T>> crate::core::cuda::CudaDispatcher<T> for Matrix<T, S>
+where
     T: Scalar,
-    S: Storage<T>
+    S: Storage<T>,
 {
     fn as_cuda_storage(&self) -> Option<&crate::core::storage::cuda::CudaStorage<T>> {
         self.storage().as_cuda_storage()
@@ -57,28 +59,43 @@ impl<T, S: Storage<T>> MatrixXpr<T> for Matrix<T, S>
 where
     T: Scalar,
 {
-    fn rows(&self) -> usize { self.storage.rows() }
-    fn cols(&self) -> usize { self.storage.cols() }
+    fn rows(&self) -> usize {
+        self.storage.rows()
+    }
+    fn cols(&self) -> usize {
+        self.storage.cols()
+    }
 
     fn eval(&self, row: usize, col: usize) -> T {
         // Column-major: index = col * rows + row
         self.storage.data()[col * self.rows() + row]
     }
 
-    fn packet_eval<P: crate::core::arch::Packet<T>>(&self, row: usize, col: usize) -> P 
-    where T: Scalar
+    fn packet_eval<P: crate::core::arch::Packet<T>>(&self, row: usize, col: usize) -> P
+    where
+        T: Scalar,
     {
         unsafe { P::load(self.storage.get_ptr(row, col)) }
     }
 }
 
 impl<T: Scalar, S: Storage<T>> Matrix<T, S> {
-    pub fn rows(&self) -> usize { self.storage.rows() }
-    pub fn cols(&self) -> usize { self.storage.cols() }
-    pub fn size(&self) -> usize { self.rows() * self.cols() }
+    pub fn rows(&self) -> usize {
+        self.storage.rows()
+    }
+    pub fn cols(&self) -> usize {
+        self.storage.cols()
+    }
+    pub fn size(&self) -> usize {
+        self.rows() * self.cols()
+    }
 
-    pub fn storage(&self) -> &S { &self.storage }
-    pub fn storage_mut(&mut self) -> &mut S { &mut self.storage }
+    pub fn storage(&self) -> &S {
+        &self.storage
+    }
+    pub fn storage_mut(&mut self) -> &mut S {
+        &mut self.storage
+    }
 
     pub fn get(&self, row: usize, col: usize) -> Option<&T> {
         if row < self.rows() && col < self.cols() {
@@ -106,27 +123,35 @@ impl<T: Scalar, S: Storage<T>> Matrix<T, S> {
     }
 
     /// Computes the Householder QR decomposition of the matrix.
-    pub fn householder_qr(&self) -> Result<crate::core::decompositions::HouseholderQR<T, S>, String> {
+    pub fn householder_qr(
+        &self,
+    ) -> Result<crate::core::decompositions::HouseholderQR<T, S>, String> {
         crate::core::decompositions::HouseholderQR::new(self)
     }
 
     /// Computes the LLT decomposition of the matrix.
-    pub fn llt(&self) -> Result<crate::core::decompositions::LLT<T, S>, String> 
-    where T: Scalar + 'static, S: Storage<T> + 'static
+    pub fn llt(&self) -> Result<crate::core::decompositions::LLT<T, S>, String>
+    where
+        T: Scalar + 'static,
+        S: Storage<T> + 'static,
     {
         crate::core::decompositions::LLT::new(self)
     }
 
     /// Computes the LDLT decomposition of the matrix.
-    pub fn ldlt(&self) -> Result<crate::core::decompositions::LDLT<T, S>, String> 
-    where T: Scalar + 'static, S: Storage<T> + 'static
+    pub fn ldlt(&self) -> Result<crate::core::decompositions::LDLT<T, S>, String>
+    where
+        T: Scalar + 'static,
+        S: Storage<T> + 'static,
     {
         crate::core::decompositions::LDLT::new(self)
     }
 
     /// Computes the Jacobi SVD decomposition of the matrix.
-    pub fn jacobi_svd(&self) -> Result<crate::core::decompositions::JacobiSVD<T, S>, String> 
-    where T: Scalar + 'static, S: Storage<T> + 'static
+    pub fn jacobi_svd(&self) -> Result<crate::core::decompositions::JacobiSVD<T, S>, String>
+    where
+        T: Scalar + 'static,
+        S: Storage<T> + 'static,
     {
         crate::core::decompositions::JacobiSVD::new(self)
     }
@@ -148,18 +173,24 @@ impl<T: Scalar, S: Storage<T>> Matrix<T, S> {
                 let inv_det = T::from_usize(1) / det;
                 let mut res = Matrix::<T, DynamicStorage<T>>::new_dynamic(2, 2)?;
                 *res.get_mut(0, 0).unwrap() = *self.get(1, 1).unwrap() * inv_det;
-                *res.get_mut(0, 1).unwrap() = (T::from_usize(0) - *self.get(0, 1).unwrap()) * inv_det;
-                *res.get_mut(1, 0).unwrap() = (T::from_usize(0) - *self.get(1, 0).unwrap()) * inv_det;
+                *res.get_mut(0, 1).unwrap() =
+                    (T::from_usize(0) - *self.get(0, 1).unwrap()) * inv_det;
+                *res.get_mut(1, 0).unwrap() =
+                    (T::from_usize(0) - *self.get(1, 0).unwrap()) * inv_det;
                 *res.get_mut(1, 1).unwrap() = *self.get(0, 0).unwrap() * inv_det;
                 Ok(res)
-            },
+            }
             _ => {
                 // For N > 2 (or N != 2), use LU solve against identity
                 let lu = self.partial_piv_lu()?;
                 let mut ident = Matrix::<T, DynamicStorage<T>>::new_dynamic(rows, cols)?;
                 for i in 0..rows {
                     for j in 0..cols {
-                        *ident.get_mut(i, j).unwrap() = if i == j { T::from_usize(1) } else { T::from_usize(0) };
+                        *ident.get_mut(i, j).unwrap() = if i == j {
+                            T::from_usize(1)
+                        } else {
+                            T::from_usize(0)
+                        };
                     }
                 }
                 lu.solve(&ident)
@@ -214,7 +245,7 @@ impl<T: Scalar, S: Storage<T>> Matrix<T, S> {
 
         let rows = self.rows();
         let cols = self.cols();
-        
+
         // We need to get a raw pointer to the storage to safely mutate in parallel.
         // This is safe because each thread will access a distinct column.
         let data_ptr = self.storage_mut().data_mut().as_mut_ptr() as usize;
@@ -235,7 +266,11 @@ impl<T: Scalar, S: Storage<T>> Matrix<T, S> {
 
     /// Specialized addition for CUDA.
     #[cfg(feature = "cuda")]
-    pub fn assign_add_cuda<S1, S2>(&mut self, lhs: &Matrix<T, S1>, rhs: &Matrix<T, S2>) -> Result<(), String>
+    pub fn assign_add_cuda<S1, S2>(
+        &mut self,
+        lhs: &Matrix<T, S1>,
+        rhs: &Matrix<T, S2>,
+    ) -> Result<(), String>
     where
         T: Scalar + 'static,
         S1: Storage<T>,
@@ -244,16 +279,17 @@ impl<T: Scalar, S: Storage<T>> Matrix<T, S> {
         use crate::core::cuda::get_cuda_context;
         use crate::core::storage::CudaStorage;
 
-        if std::any::TypeId::of::<S>() != std::any::TypeId::of::<CudaStorage<T>>() ||
-           std::any::TypeId::of::<S1>() != std::any::TypeId::of::<CudaStorage<T>>() ||
-           std::any::TypeId::of::<S2>() != std::any::TypeId::of::<CudaStorage<T>>() {
+        if std::any::TypeId::of::<S>() != std::any::TypeId::of::<CudaStorage<T>>()
+            || std::any::TypeId::of::<S1>() != std::any::TypeId::of::<CudaStorage<T>>()
+            || std::any::TypeId::of::<S2>() != std::any::TypeId::of::<CudaStorage<T>>()
+        {
             return Err("CUDA addition requires all matrices to have CudaStorage".to_string());
         }
 
         // We know they are CudaStorage now.
         let ctx = get_cuda_context()?;
         let n = self.size() as i32;
-        
+
         // Safely get pointers since we checked TypeId
         // This is still unsafe because get_ptr is on Storage trait but we are casting conceptually.
         let a_ptr = lhs.storage().get_ptr(0, 0);
@@ -266,7 +302,7 @@ impl<T: Scalar, S: Storage<T>> Matrix<T, S> {
                     a_ptr as *const f32,
                     b_ptr as *const f32,
                     c_ptr as *mut f32,
-                    n
+                    n,
                 )?;
             }
             Ok(())
@@ -277,7 +313,11 @@ impl<T: Scalar, S: Storage<T>> Matrix<T, S> {
 
     /// Specialized subtraction for CUDA.
     #[cfg(feature = "cuda")]
-    pub fn assign_sub_cuda<S1, S2>(&mut self, lhs: &Matrix<T, S1>, rhs: &Matrix<T, S2>) -> Result<(), String>
+    pub fn assign_sub_cuda<S1, S2>(
+        &mut self,
+        lhs: &Matrix<T, S1>,
+        rhs: &Matrix<T, S2>,
+    ) -> Result<(), String>
     where
         T: Scalar + 'static,
         S1: Storage<T>,
@@ -286,9 +326,10 @@ impl<T: Scalar, S: Storage<T>> Matrix<T, S> {
         use crate::core::cuda::get_cuda_context;
         use crate::core::storage::cuda::CudaStorage;
 
-        if std::any::TypeId::of::<S>() != std::any::TypeId::of::<CudaStorage<T>>() ||
-           std::any::TypeId::of::<S1>() != std::any::TypeId::of::<CudaStorage<T>>() ||
-           std::any::TypeId::of::<S2>() != std::any::TypeId::of::<CudaStorage<T>>() {
+        if std::any::TypeId::of::<S>() != std::any::TypeId::of::<CudaStorage<T>>()
+            || std::any::TypeId::of::<S1>() != std::any::TypeId::of::<CudaStorage<T>>()
+            || std::any::TypeId::of::<S2>() != std::any::TypeId::of::<CudaStorage<T>>()
+        {
             return Err("CUDA subtraction requires all matrices to have CudaStorage".to_string());
         }
 
@@ -300,7 +341,12 @@ impl<T: Scalar, S: Storage<T>> Matrix<T, S> {
 
         if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() {
             unsafe {
-                ctx.launch_sub_f32(a_ptr as *const f32, b_ptr as *const f32, c_ptr as *mut f32, n)?;
+                ctx.launch_sub_f32(
+                    a_ptr as *const f32,
+                    b_ptr as *const f32,
+                    c_ptr as *mut f32,
+                    n,
+                )?;
             }
             Ok(())
         } else {
@@ -310,7 +356,11 @@ impl<T: Scalar, S: Storage<T>> Matrix<T, S> {
 
     /// Specialized scalar multiplication for CUDA.
     #[cfg(feature = "cuda")]
-    pub fn assign_scalar_mul_cuda<S1>(&mut self, lhs: &Matrix<T, S1>, scalar: T) -> Result<(), String>
+    pub fn assign_scalar_mul_cuda<S1>(
+        &mut self,
+        lhs: &Matrix<T, S1>,
+        scalar: T,
+    ) -> Result<(), String>
     where
         T: Scalar + 'static,
         S1: Storage<T>,
@@ -318,8 +368,9 @@ impl<T: Scalar, S: Storage<T>> Matrix<T, S> {
         use crate::core::cuda::get_cuda_context;
         use crate::core::storage::cuda::CudaStorage;
 
-        if std::any::TypeId::of::<S>() != std::any::TypeId::of::<CudaStorage<T>>() ||
-           std::any::TypeId::of::<S1>() != std::any::TypeId::of::<CudaStorage<T>>() {
+        if std::any::TypeId::of::<S>() != std::any::TypeId::of::<CudaStorage<T>>()
+            || std::any::TypeId::of::<S1>() != std::any::TypeId::of::<CudaStorage<T>>()
+        {
             return Err("CUDA scalar mul requires all matrices to have CudaStorage".to_string());
         }
 
@@ -347,11 +398,18 @@ impl<T: Scalar, S: Storage<T>> Matrix<T, S> {
         crate::core::ops::TransposeOp::new(self)
     }
 
-    pub fn block(&self, start_row: usize, start_col: usize, rows: usize, cols: usize) -> crate::core::ops::BlockOp<'_, T, Self>
+    pub fn block(
+        &self,
+        start_row: usize,
+        start_col: usize,
+        rows: usize,
+        cols: usize,
+    ) -> crate::core::ops::BlockOp<'_, T, Self>
     where
         Self: Sized + 'static,
     {
-        crate::core::ops::BlockOp::new(self, start_row, start_col, rows, cols).expect("Block out of bounds")
+        crate::core::ops::BlockOp::new(self, start_row, start_col, rows, cols)
+            .expect("Block out of bounds")
     }
 
     pub fn row(&self, i: usize) -> crate::core::ops::BlockOp<'_, T, Self>
@@ -369,7 +427,10 @@ impl<T: Scalar, S: Storage<T>> Matrix<T, S> {
     }
 
     /// Specialized assignment for matrix products.
-    pub fn assign_product<'a, L, R>(&mut self, product: &crate::core::ops::Product<'a, T, L, R>) -> Result<(), String>
+    pub fn assign_product<'a, L, R>(
+        &mut self,
+        product: &crate::core::ops::Product<'a, T, L, R>,
+    ) -> Result<(), String>
     where
         T: Scalar,
         L: crate::core::xpr::MatrixXpr<T>,
@@ -379,7 +440,10 @@ impl<T: Scalar, S: Storage<T>> Matrix<T, S> {
     }
 
     /// Computes the eigenvalues and eigenvectors of a self-adjoint matrix.
-    pub fn self_adjoint_eigen_solver(&self, compute_eigenvectors: bool) -> Result<crate::core::decompositions::SelfAdjointEigenSolver<T, S>, String>
+    pub fn self_adjoint_eigen_solver(
+        &self,
+        compute_eigenvectors: bool,
+    ) -> Result<crate::core::decompositions::SelfAdjointEigenSolver<T, S>, String>
     where
         Self: Sized + 'static,
     {
@@ -419,7 +483,11 @@ impl<T: Scalar, S: Storage<T>> Matrix<T, S> {
 
     /// Computes the dot product of this vector with another vector.
     pub fn dot<S2: Storage<T>>(&self, other: &Matrix<T, S2>) -> T {
-        assert_eq!(self.size(), other.size(), "Dot product requires vectors of equal size");
+        assert_eq!(
+            self.size(),
+            other.size(),
+            "Dot product requires vectors of equal size"
+        );
         let mut sum = T::default();
         // Simple dot product for now
         for i in 0..self.size() {
@@ -448,13 +516,14 @@ impl<T: Scalar, S: Storage<T>> Matrix<T, S> {
             }
         }
     }
-    
+
     /// Returns a normalized copy of the vector.
     pub fn normalized(&self) -> Matrix<T, DynamicStorage<T>> {
-        let mut res = Matrix::<T, DynamicStorage<T>>::new_dynamic(self.rows(), self.cols()).unwrap();
+        let mut res =
+            Matrix::<T, DynamicStorage<T>>::new_dynamic(self.rows(), self.cols()).unwrap();
         // Copy data
         for i in 0..self.size() {
-             *res.storage.data_mut().get_mut(i).unwrap() = self.storage.data()[i];
+            *res.storage.data_mut().get_mut(i).unwrap() = self.storage.data()[i];
         }
         res.normalize();
         res
@@ -465,7 +534,7 @@ impl<T: Scalar, S: Storage<T>> Matrix<T, S> {
         let size = self.size();
         let data = self.storage_mut().data_mut();
         for i in 0..size {
-             data[i] *= factor;
+            data[i] *= factor;
         }
     }
 
@@ -473,7 +542,7 @@ impl<T: Scalar, S: Storage<T>> Matrix<T, S> {
         let size = self.size();
         let data = self.storage_mut().data_mut();
         for i in 0..size {
-             data[i] = T::default();
+            data[i] = T::default();
         }
     }
 
@@ -481,7 +550,7 @@ impl<T: Scalar, S: Storage<T>> Matrix<T, S> {
         let size = self.size();
         let data = self.storage_mut().data_mut();
         for i in 0..size {
-             data[i] = val;
+            data[i] = val;
         }
     }
 
@@ -491,7 +560,7 @@ impl<T: Scalar, S: Storage<T>> Matrix<T, S> {
         let cols = self.cols();
         let n = std::cmp::min(rows, cols);
         for i in 0..n {
-             *self.get_mut(i, i).unwrap() = T::from_f64(1.0);
+            *self.get_mut(i, i).unwrap() = T::from_f64(1.0);
         }
     }
 }
@@ -501,20 +570,20 @@ impl<T: Scalar> Matrix<T, FixedStorage<T, 3, 1, 3>> {
     pub fn cross<S2: Storage<T>>(&self, other: &Matrix<T, S2>) -> Self {
         assert_eq!(other.rows(), 3);
         assert_eq!(other.cols(), 1);
-        
+
         let a1 = *self.get(0, 0).unwrap();
         let a2 = *self.get(1, 0).unwrap();
         let a3 = *self.get(2, 0).unwrap();
-        
+
         let b1 = *other.get(0, 0).unwrap();
         let b2 = *other.get(1, 0).unwrap();
         let b3 = *other.get(2, 0).unwrap();
-        
+
         let mut res = Self::new_fixed();
         *res.get_mut(0, 0).unwrap() = a2 * b3 - a3 * b2;
         *res.get_mut(1, 0).unwrap() = a3 * b1 - a1 * b3;
         *res.get_mut(2, 0).unwrap() = a1 * b2 - a2 * b1;
-        
+
         res
     }
 }
@@ -627,10 +696,10 @@ where
 }
 
 /// Trigonometric and Exponential functions
-impl<'a, T, S> Matrix<T, S> 
-where 
-    T: Scalar + 'static, 
-    S: Storage<T>
+impl<'a, T, S> Matrix<T, S>
+where
+    T: Scalar + 'static,
+    S: Storage<T>,
 {
     pub fn sin(&self) -> crate::core::ops::CwiseUnaryOp<'_, T, Self, crate::core::ops::ScalarSin> {
         crate::core::ops::CwiseUnaryOp::new(self, crate::core::ops::ScalarSin)
@@ -650,7 +719,9 @@ where
 }
 
 /// Specialization for Fixed-size matrices.
-impl<T: Scalar, const R: usize, const C: usize, const S: usize> Matrix<T, FixedStorage<T, R, C, S>> {
+impl<T: Scalar, const R: usize, const C: usize, const S: usize>
+    Matrix<T, FixedStorage<T, R, C, S>>
+{
     pub fn new_fixed() -> Self {
         Self {
             storage: FixedStorage::new(R, C).unwrap(),
@@ -690,7 +761,11 @@ impl<T: Scalar> Matrix<T, DynamicStorage<T>> {
         let mut m = Self::new_dynamic(rows, cols).expect("Failed to allocate identity matrix");
         for i in 0..rows {
             for j in 0..cols {
-                let val = if i == j { T::from_usize(1) } else { T::from_usize(0) };
+                let val = if i == j {
+                    T::from_usize(1)
+                } else {
+                    T::from_usize(0)
+                };
                 *m.get_mut(i, j).unwrap() = val;
             }
         }
@@ -726,10 +801,12 @@ impl<'a, T: Sync> Map<'a, T> {
             _phantom: std::marker::PhantomData,
         }
     }
-    
+
     pub unsafe fn new_with_stride(ptr: *mut T, rows: usize, cols: usize, stride: usize) -> Self {
         Self {
-            storage: unsafe { crate::core::storage::MapStorage::new_with_stride(ptr, rows, cols, stride) },
+            storage: unsafe {
+                crate::core::storage::MapStorage::new_with_stride(ptr, rows, cols, stride)
+            },
             _phantom: std::marker::PhantomData,
         }
     }

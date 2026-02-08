@@ -1,4 +1,3 @@
-
 use crate::core::storage::Storage;
 use std::marker::PhantomData;
 
@@ -52,12 +51,17 @@ impl<'a, T: Sync> Storage<T> for MapStorage<'a, T> {
     }
 
     fn data_mut(&mut self) -> &mut [T] {
-        unsafe { std::slice::from_raw_parts_mut(self.ptr, self.rows * self.cols) } // Valid only if contiguous
+        unsafe { std::slice::from_raw_parts_mut(self.ptr, self.rows * self.cols) }
+        // Valid only if contiguous
     }
 
-    fn rows(&self) -> usize { self.rows }
-    fn cols(&self) -> usize { self.cols }
-    
+    fn rows(&self) -> usize {
+        self.rows
+    }
+    fn cols(&self) -> usize {
+        self.cols
+    }
+
     fn get_ptr(&self, row: usize, col: usize) -> *const T {
         unsafe { self.ptr.add(col * self.stride + row) }
     }

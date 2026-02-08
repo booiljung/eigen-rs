@@ -60,8 +60,8 @@ let x = llt.solve(&b).expect("Solve failed");
 
 ## Documentation
 
--   [**Benchmarks**](BENCHMARK.md): Methodology and Performance results.
--   [**벤치마크 (Korean)**](BENCHMARK.KO.md): Korean translation of benchmark methodology.
+-   [**Project Guide & Benchmarks**](GEMINI.md): Project overview and Benchmark Methodology.
+-   [**프로젝트 가이드 (Korean)**](GEMINI.KO.md): Project overview and Benchmark Methodology (Korean).
 -   [**Roadmap**](ROADMAP.md): Feature parity progress across core modules.
 
 ## Roadmap

@@ -4,9 +4,12 @@ mod common;
 #[test]
 fn test_svd_reconstruction() {
     let mut m = MatrixX::<f32>::new_dynamic(3, 2).unwrap();
-    *m.get_mut(0, 0).unwrap() = 1.0; *m.get_mut(0, 1).unwrap() = 2.0;
-    *m.get_mut(1, 0).unwrap() = 3.0; *m.get_mut(1, 1).unwrap() = 4.0;
-    *m.get_mut(2, 0).unwrap() = 5.0; *m.get_mut(2, 1).unwrap() = 6.0;
+    *m.get_mut(0, 0).unwrap() = 1.0;
+    *m.get_mut(0, 1).unwrap() = 2.0;
+    *m.get_mut(1, 0).unwrap() = 3.0;
+    *m.get_mut(1, 1).unwrap() = 4.0;
+    *m.get_mut(2, 0).unwrap() = 5.0;
+    *m.get_mut(2, 1).unwrap() = 6.0;
 
     let svd = m.jacobi_svd().unwrap();
     let u = svd.matrix_u();
@@ -35,15 +38,20 @@ fn test_svd_reconstruction() {
     }
 
     // Differential Testing
-    let cpp_output = common::run_cpp_harness_stdout("tests/cpp_harness/matrix_svd_verify.cpp").unwrap();
+    let cpp_output =
+        common::run_cpp_harness_stdout("tests/cpp_harness/matrix_svd_verify.cpp").unwrap();
     for line in cpp_output.lines() {
         let parts: Vec<&str> = line.split(',').collect();
         match parts[0] {
             "S" => {
                 let idx: usize = parts[1].parse().unwrap();
                 let val_cpp: f32 = parts[2].parse().unwrap();
-                assert!((s[idx] - val_cpp).abs() < 1e-5, "SVD singular value mismatch at {}", idx);
-            },
+                assert!(
+                    (s[idx] - val_cpp).abs() < 1e-5,
+                    "SVD singular value mismatch at {}",
+                    idx
+                );
+            }
             "U" => {
                 let r: usize = parts[1].parse().unwrap();
                 let c: usize = parts[2].parse().unwrap();
@@ -51,18 +59,28 @@ fn test_svd_reconstruction() {
                 // Only compare first 2 columns for 3x2 matrix
                 if c < 2 {
                     let val_rust = *u.get(r, c).unwrap();
-                    assert!((val_rust.abs() - val_cpp.abs()).abs() < 1e-4, "SVD U mismatch at {},{}", r, c);
+                    assert!(
+                        (val_rust.abs() - val_cpp.abs()).abs() < 1e-4,
+                        "SVD U mismatch at {},{}",
+                        r,
+                        c
+                    );
                 }
-            },
+            }
             "V" => {
                 let r: usize = parts[1].parse().unwrap();
                 let c: usize = parts[2].parse().unwrap();
                 let val_cpp: f32 = parts[3].parse().unwrap();
                 if c < 2 {
                     let val_rust = *v.get(r, c).unwrap();
-                    assert!((val_rust.abs() - val_cpp.abs()).abs() < 1e-4, "SVD V mismatch at {},{}", r, c);
+                    assert!(
+                        (val_rust.abs() - val_cpp.abs()).abs() < 1e-4,
+                        "SVD V mismatch at {},{}",
+                        r,
+                        c
+                    );
                 }
-            },
+            }
             _ => {}
         }
     }
@@ -71,9 +89,12 @@ fn test_svd_reconstruction() {
 #[test]
 fn test_svd_orthogonality() {
     let mut m = MatrixX::<f32>::new_dynamic(3, 2).unwrap();
-    *m.get_mut(0, 0).unwrap() = 1.0; *m.get_mut(0, 1).unwrap() = 2.0;
-    *m.get_mut(1, 0).unwrap() = 3.0; *m.get_mut(1, 1).unwrap() = 4.0;
-    *m.get_mut(2, 0).unwrap() = 5.0; *m.get_mut(2, 1).unwrap() = 6.0;
+    *m.get_mut(0, 0).unwrap() = 1.0;
+    *m.get_mut(0, 1).unwrap() = 2.0;
+    *m.get_mut(1, 0).unwrap() = 3.0;
+    *m.get_mut(1, 1).unwrap() = 4.0;
+    *m.get_mut(2, 0).unwrap() = 5.0;
+    *m.get_mut(2, 1).unwrap() = 6.0;
 
     let svd = m.jacobi_svd().unwrap();
     let u = svd.matrix_u();
@@ -106,9 +127,12 @@ fn test_svd_orthogonality() {
 #[test]
 fn test_bdcsvd_reconstruction() {
     let mut m = MatrixX::<f32>::new_dynamic(3, 2).unwrap();
-    *m.get_mut(0, 0).unwrap() = 1.0; *m.get_mut(0, 1).unwrap() = 2.0;
-    *m.get_mut(1, 0).unwrap() = 3.0; *m.get_mut(1, 1).unwrap() = 4.0;
-    *m.get_mut(2, 0).unwrap() = 5.0; *m.get_mut(2, 1).unwrap() = 6.0;
+    *m.get_mut(0, 0).unwrap() = 1.0;
+    *m.get_mut(0, 1).unwrap() = 2.0;
+    *m.get_mut(1, 0).unwrap() = 3.0;
+    *m.get_mut(1, 1).unwrap() = 4.0;
+    *m.get_mut(2, 0).unwrap() = 5.0;
+    *m.get_mut(2, 1).unwrap() = 6.0;
 
     use eigen_rs::core::decompositions::BDCSVD;
     let svd = BDCSVD::new(&m).unwrap();
@@ -133,8 +157,12 @@ fn test_bdcsvd_reconstruction() {
 
     for i in 0..3 {
         for j in 0..2 {
-            assert!((m_reconstructed.get(i, j).unwrap() - m.get(i, j).unwrap()).abs() < 1e-4, 
-                "Mismatch at {},{}", i, j);
+            assert!(
+                (m_reconstructed.get(i, j).unwrap() - m.get(i, j).unwrap()).abs() < 1e-4,
+                "Mismatch at {},{}",
+                i,
+                j
+            );
         }
     }
 }

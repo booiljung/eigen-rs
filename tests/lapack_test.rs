@@ -1,4 +1,3 @@
-
 #[cfg(feature = "lapack")]
 #[test]
 fn test_lapack_lu() {
@@ -33,9 +32,7 @@ fn test_lapack_lu() {
 fn test_lapack_qr() {
     let mut m = MatrixX::<f64>::new_dynamic(4, 3).unwrap();
     let data = [
-        1.0, 2.0, 3.0, 4.0,
-        5.0, 6.0, 7.0, 8.0,
-        9.0, 10.0, 11.0, 12.0
+        1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0,
     ];
     for (i, &val) in data.iter().enumerate() {
         m.storage_mut().data_mut()[i] = val;

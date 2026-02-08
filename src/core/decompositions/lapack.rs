@@ -1,9 +1,9 @@
 //! LAPACK bridges for eigen-rs.
 //! Provides high-performance LU and QR decompositions.
 
-use crate::core::scalar::Scalar;
 use crate::core::matrix::Matrix;
-use crate::core::storage::{Storage, DynamicStorage};
+use crate::core::scalar::Scalar;
+use crate::core::storage::{DynamicStorage, Storage};
 
 #[cfg(feature = "lapack")]
 extern crate lapack_sys;
@@ -33,7 +33,7 @@ impl<T: Scalar> LapackLU<T> {
         self.rows = matrix.rows();
         self.cols = matrix.cols();
         self.lu.assign(matrix)?;
-        
+
         #[cfg(feature = "lapack")]
         unsafe {
             let m = self.rows as i32;
@@ -44,48 +44,59 @@ impl<T: Scalar> LapackLU<T> {
 
             if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() {
                 lapack_sys::sgetrf_(
-                    &m, &n, 
-                    self.lu.storage_mut().data_mut().as_mut_ptr() as *mut f32, 
-                    &lda, 
-                    self.ipiv.as_mut_ptr(), 
-                    &mut info
+                    &m,
+                    &n,
+                    self.lu.storage_mut().data_mut().as_mut_ptr() as *mut f32,
+                    &lda,
+                    self.ipiv.as_mut_ptr(),
+                    &mut info,
                 );
             } else if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>() {
                 lapack_sys::dgetrf_(
-                    &m, &n, 
-                    self.lu.storage_mut().data_mut().as_mut_ptr() as *mut f64, 
-                    &lda, 
-                    self.ipiv.as_mut_ptr(), 
-                    &mut info
+                    &m,
+                    &n,
+                    self.lu.storage_mut().data_mut().as_mut_ptr() as *mut f64,
+                    &lda,
+                    self.ipiv.as_mut_ptr(),
+                    &mut info,
                 );
             } else {
                 return Err("LAPACK only supports f32 and f64".to_string());
             }
 
             if info < 0 {
-                return Err(format!("LAPACK getrf: argument {} had illegal value", -info));
+                return Err(format!(
+                    "LAPACK getrf: argument {} had illegal value",
+                    -info
+                ));
             } else if info > 0 {
-                return Err(format!("LAPACK getrf: matrix is singular, U({}, {}) is exactly zero", info, info));
+                return Err(format!(
+                    "LAPACK getrf: matrix is singular, U({}, {}) is exactly zero",
+                    info, info
+                ));
             }
-            
+
             self.is_initialized = true;
             Ok(())
         }
-        
+
         #[cfg(not(feature = "lapack"))]
         {
             Err("LAPACK feature not enabled".to_string())
         }
     }
 
-    pub fn solve<S: Storage<T>>(&self, b: &Matrix<T, S>) -> Result<Matrix<T, DynamicStorage<T>>, String> {
+    pub fn solve<S: Storage<T>>(
+        &self,
+        b: &Matrix<T, S>,
+    ) -> Result<Matrix<T, DynamicStorage<T>>, String> {
         if !self.is_initialized {
             return Err("LapackLU not initialized".to_string());
         }
         if b.rows() != self.rows {
             return Err("Dimension mismatch in solve".to_string());
         }
-        
+
         #[cfg(feature = "lapack")]
         unsafe {
             let mut x = Matrix::new_dynamic(b.rows(), b.cols())?;
@@ -100,33 +111,37 @@ impl<T: Scalar> LapackLU<T> {
 
             if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() {
                 lapack_sys::sgetrs_(
-                    &trans, &n, &nrhs,
+                    &trans,
+                    &n,
+                    &nrhs,
                     self.lu.storage().data().as_ptr() as *const f32,
                     &lda,
                     self.ipiv.as_ptr(),
                     x.storage_mut().data_mut().as_mut_ptr() as *mut f32,
                     &ldb,
-                    &mut info
+                    &mut info,
                 );
             } else if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>() {
                 lapack_sys::dgetrs_(
-                    &trans, &n, &nrhs,
+                    &trans,
+                    &n,
+                    &nrhs,
                     self.lu.storage().data().as_ptr() as *const f64,
                     &lda,
                     self.ipiv.as_ptr(),
                     x.storage_mut().data_mut().as_mut_ptr() as *mut f64,
                     &ldb,
-                    &mut info
+                    &mut info,
                 );
             }
-            
+
             if info != 0 {
                 return Err(format!("LAPACK getrs failed with info {}", info));
             }
-            
+
             Ok(x)
         }
-        
+
         #[cfg(not(feature = "lapack"))]
         {
             Err("LAPACK feature not enabled".to_string())
@@ -173,15 +188,51 @@ impl<T: Scalar> LapackQR<T> {
 
             if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() {
                 // Workspace query
-                lapack_sys::sgeqrf_(&m, &n, std::ptr::null_mut(), &lda, std::ptr::null_mut(), work.as_mut_ptr() as *mut f32, &lwork, &mut info);
+                lapack_sys::sgeqrf_(
+                    &m,
+                    &n,
+                    std::ptr::null_mut(),
+                    &lda,
+                    std::ptr::null_mut(),
+                    work.as_mut_ptr() as *mut f32,
+                    &lwork,
+                    &mut info,
+                );
                 lwork = work[0].to_f64() as i32;
                 let mut vwork = vec![0.0f32; lwork as usize];
-                lapack_sys::sgeqrf_(&m, &n, self.qr.storage_mut().data_mut().as_mut_ptr() as *mut f32, &lda, self.tau.as_mut_ptr() as *mut f32, vwork.as_mut_ptr(), &lwork, &mut info);
+                lapack_sys::sgeqrf_(
+                    &m,
+                    &n,
+                    self.qr.storage_mut().data_mut().as_mut_ptr() as *mut f32,
+                    &lda,
+                    self.tau.as_mut_ptr() as *mut f32,
+                    vwork.as_mut_ptr(),
+                    &lwork,
+                    &mut info,
+                );
             } else if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>() {
-                lapack_sys::dgeqrf_(&m, &n, std::ptr::null_mut(), &lda, std::ptr::null_mut(), work.as_mut_ptr() as *mut f64, &lwork, &mut info);
+                lapack_sys::dgeqrf_(
+                    &m,
+                    &n,
+                    std::ptr::null_mut(),
+                    &lda,
+                    std::ptr::null_mut(),
+                    work.as_mut_ptr() as *mut f64,
+                    &lwork,
+                    &mut info,
+                );
                 lwork = work[0].to_f64() as i32;
                 let mut vwork = vec![0.0f64; lwork as usize];
-                lapack_sys::dgeqrf_(&m, &n, self.qr.storage_mut().data_mut().as_mut_ptr() as *mut f64, &lda, self.tau.as_mut_ptr() as *mut f64, vwork.as_mut_ptr(), &lwork, &mut info);
+                lapack_sys::dgeqrf_(
+                    &m,
+                    &n,
+                    self.qr.storage_mut().data_mut().as_mut_ptr() as *mut f64,
+                    &lda,
+                    self.tau.as_mut_ptr() as *mut f64,
+                    vwork.as_mut_ptr(),
+                    &lwork,
+                    &mut info,
+                );
             } else {
                 return Err("LAPACK only supports f32 and f64".to_string());
             }
@@ -189,22 +240,25 @@ impl<T: Scalar> LapackQR<T> {
             if info != 0 {
                 return Err(format!("LAPACK geqrf failed with info {}", info));
             }
-            
+
             self.is_initialized = true;
             Ok(())
         }
-        
+
         #[cfg(not(feature = "lapack"))]
         {
             Err("LAPACK feature not enabled".to_string())
         }
     }
 
-    pub fn solve<S: Storage<T>>(&self, b: &Matrix<T, S>) -> Result<Matrix<T, DynamicStorage<T>>, String> {
+    pub fn solve<S: Storage<T>>(
+        &self,
+        _b: &Matrix<T, S>,
+    ) -> Result<Matrix<T, DynamicStorage<T>>, String> {
         if !self.is_initialized {
             return Err("LapackQR not initialized".to_string());
         }
-        
+
         #[cfg(feature = "lapack")]
         unsafe {
             let m = self.rows as i32;
@@ -225,32 +279,110 @@ impl<T: Scalar> LapackQR<T> {
             let mut lwork = -1i32;
 
             if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() {
-                lapack_sys::sormqr_(&side, &trans, &m, &nrhs, &k, self.qr.storage().data().as_ptr() as *const f32, &lda, self.tau.as_ptr() as *const f32, b_copy.storage_mut().data_mut().as_mut_ptr() as *mut f32, &ldb, work.as_mut_ptr() as *mut f32, &lwork, &mut info);
+                lapack_sys::sormqr_(
+                    &side,
+                    &trans,
+                    &m,
+                    &nrhs,
+                    &k,
+                    self.qr.storage().data().as_ptr() as *const f32,
+                    &lda,
+                    self.tau.as_ptr() as *const f32,
+                    b_copy.storage_mut().data_mut().as_mut_ptr() as *mut f32,
+                    &ldb,
+                    work.as_mut_ptr() as *mut f32,
+                    &lwork,
+                    &mut info,
+                );
                 lwork = work[0].to_f64() as i32;
                 let mut vwork = vec![0.0f32; lwork as usize];
-                lapack_sys::sormqr_(&side, &trans, &m, &nrhs, &k, self.qr.storage().data().as_ptr() as *const f32, &lda, self.tau.as_ptr() as *const f32, b_copy.storage_mut().data_mut().as_mut_ptr() as *mut f32, &ldb, vwork.as_mut_ptr(), &lwork, &mut info);
-                
+                lapack_sys::sormqr_(
+                    &side,
+                    &trans,
+                    &m,
+                    &nrhs,
+                    &k,
+                    self.qr.storage().data().as_ptr() as *const f32,
+                    &lda,
+                    self.tau.as_ptr() as *const f32,
+                    b_copy.storage_mut().data_mut().as_mut_ptr() as *mut f32,
+                    &ldb,
+                    vwork.as_mut_ptr(),
+                    &lwork,
+                    &mut info,
+                );
+
                 if info == 0 {
                     // Back substitution with R
                     let uplo = 'U' as i8;
                     let transa = 'N' as i8;
                     let diag = 'N' as i8;
-                    lapack_sys::strtrs_(&uplo, &transa, &diag, &n, &nrhs, self.qr.storage().data().as_ptr() as *const f32, &lda, b_copy.storage_mut().data_mut().as_mut_ptr() as *mut f32, &ldb, &mut info);
+                    lapack_sys::strtrs_(
+                        &uplo,
+                        &transa,
+                        &diag,
+                        &n,
+                        &nrhs,
+                        self.qr.storage().data().as_ptr() as *const f32,
+                        &lda,
+                        b_copy.storage_mut().data_mut().as_mut_ptr() as *mut f32,
+                        &ldb,
+                        &mut info,
+                    );
                 }
             } else if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>() {
-                lapack_sys::dormqr_(&side, &trans, &m, &nrhs, &k, self.qr.storage().data().as_ptr() as *const f64, &lda, self.tau.as_ptr() as *const f64, b_copy.storage_mut().data_mut().as_mut_ptr() as *mut f64, &ldb, work.as_mut_ptr() as *mut f64, &lwork, &mut info);
+                lapack_sys::dormqr_(
+                    &side,
+                    &trans,
+                    &m,
+                    &nrhs,
+                    &k,
+                    self.qr.storage().data().as_ptr() as *const f64,
+                    &lda,
+                    self.tau.as_ptr() as *const f64,
+                    b_copy.storage_mut().data_mut().as_mut_ptr() as *mut f64,
+                    &ldb,
+                    work.as_mut_ptr() as *mut f64,
+                    &lwork,
+                    &mut info,
+                );
                 lwork = work[0].to_f64() as i32;
                 let mut vwork = vec![0.0f64; lwork as usize];
-                lapack_sys::dormqr_(&side, &trans, &m, &nrhs, &k, self.qr.storage().data().as_ptr() as *const f64, &lda, self.tau.as_ptr() as *const f64, b_copy.storage_mut().data_mut().as_mut_ptr() as *mut f64, &ldb, vwork.as_mut_ptr(), &lwork, &mut info);
+                lapack_sys::dormqr_(
+                    &side,
+                    &trans,
+                    &m,
+                    &nrhs,
+                    &k,
+                    self.qr.storage().data().as_ptr() as *const f64,
+                    &lda,
+                    self.tau.as_ptr() as *const f64,
+                    b_copy.storage_mut().data_mut().as_mut_ptr() as *mut f64,
+                    &ldb,
+                    vwork.as_mut_ptr(),
+                    &lwork,
+                    &mut info,
+                );
 
                 if info == 0 {
                     let uplo = 'U' as i8;
                     let transa = 'N' as i8;
                     let diag = 'N' as i8;
-                    lapack_sys::dtrtrs_(&uplo, &transa, &diag, &n, &nrhs, self.qr.storage().data().as_ptr() as *const f64, &lda, b_copy.storage_mut().data_mut().as_mut_ptr() as *mut f64, &ldb, &mut info);
+                    lapack_sys::dtrtrs_(
+                        &uplo,
+                        &transa,
+                        &diag,
+                        &n,
+                        &nrhs,
+                        self.qr.storage().data().as_ptr() as *const f64,
+                        &lda,
+                        b_copy.storage_mut().data_mut().as_mut_ptr() as *mut f64,
+                        &ldb,
+                        &mut info,
+                    );
                 }
             }
-            
+
             if info != 0 {
                 return Err(format!("LAPACK QR solve failed with info {}", info));
             }
@@ -265,7 +397,7 @@ impl<T: Scalar> LapackQR<T> {
 
             Ok(x)
         }
-        
+
         #[cfg(not(feature = "lapack"))]
         {
             Err("LAPACK feature not enabled".to_string())

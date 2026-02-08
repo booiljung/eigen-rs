@@ -1,9 +1,9 @@
 //! Linear (Fully Connected) layer.
 
+use crate::core::matrix::MatrixX;
+use crate::core::nn::Layer;
 use crate::core::scalar::Scalar;
 use crate::core::tensor::Tensor;
-use crate::core::nn::Layer;
-use crate::core::matrix::MatrixX;
 // use crate::core::storage::Storage;
 // use crate::core::xpr::MatrixXpr;
 
@@ -42,18 +42,18 @@ impl<T: Scalar + 'static> Layer<T> for Linear<T> {
     fn forward(&self, input: &Tensor<T, 2>) -> Result<Tensor<T, 2>, String> {
         let x_mat = input.to_matrix()?;
         let w_mat = self.weight.to_matrix()?;
-        
+
         let m = x_mat.rows();
         let n = w_mat.rows(); // out_features
-        
+
         let mut y_mat = MatrixX::<T>::new_dynamic(m, n)?;
-        
+
         // Y = X * W^T
         let w_t = w_mat.transpose();
         let prod = &x_mat * &w_t;
-        
+
         y_mat.assign(&prod)?;
-        
+
         // Add bias (broadcasting across batch)
         let bias_data = self.bias.data();
         for i in 0..m {
@@ -63,7 +63,7 @@ impl<T: Scalar + 'static> Layer<T> for Linear<T> {
                 }
             }
         }
-        
+
         Ok(Tensor::from_matrix(y_mat))
     }
 }

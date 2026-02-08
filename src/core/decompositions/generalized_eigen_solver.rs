@@ -1,11 +1,11 @@
 //! Generalized Eigenvalue Solver for the problem A*x = lambda*B*x.
 //! Based on the QZ algorithm.
 
-use crate::core::matrix::Matrix;
-use crate::core::storage::{Storage, DynamicStorage};
-use crate::core::scalar::Scalar;
 use crate::core::complex::Complex;
 use crate::core::decompositions::GeneralizedHessenbergTriangular;
+use crate::core::matrix::Matrix;
+use crate::core::scalar::Scalar;
+use crate::core::storage::{DynamicStorage, Storage};
 
 /// Generalized Eigensolver for square complex matrices.
 pub struct GeneralizedEigenSolver<T: Scalar, S: Storage<Complex<T>>> {
@@ -16,10 +16,16 @@ pub struct GeneralizedEigenSolver<T: Scalar, S: Storage<Complex<T>>> {
 
 impl<T: Scalar, S: Storage<Complex<T>>> GeneralizedEigenSolver<T, S> {
     /// Computes the generalized eigenvalues and (optionally) eigenvectors of (A, B).
-    pub fn new(a: &Matrix<Complex<T>, S>, b: &Matrix<Complex<T>, S>, compute_eigenvectors: bool) -> Result<Self, String> {
+    pub fn new(
+        a: &Matrix<Complex<T>, S>,
+        b: &Matrix<Complex<T>, S>,
+        compute_eigenvectors: bool,
+    ) -> Result<Self, String> {
         let n = a.rows();
         if n != a.cols() || n != b.rows() || n != b.cols() {
-            return Err("Generalized eigensolver requires square matrices of the same size".to_string());
+            return Err(
+                "Generalized eigensolver requires square matrices of the same size".to_string(),
+            );
         }
 
         // 1. GHT Reduction: (A, B) -> (H, R)
@@ -41,7 +47,8 @@ impl<T: Scalar, S: Storage<Complex<T>>> GeneralizedEigenSolver<T, S> {
                 // Infinite eigenvalue or poorly conditioned
                 // In a robust solver, we'd return (alpha, beta) pairs.
                 // For now, return a large value or handle as needed.
-                *eigenvalues.get_mut(i, 0).unwrap() = Complex::new(T::from_f64(1e100), T::default()); // Placeholder
+                *eigenvalues.get_mut(i, 0).unwrap() =
+                    Complex::new(T::from_f64(1e100), T::default()); // Placeholder
             } else {
                 *eigenvalues.get_mut(i, 0).unwrap() = s_ii / t_ii;
             }
@@ -51,12 +58,12 @@ impl<T: Scalar, S: Storage<Complex<T>>> GeneralizedEigenSolver<T, S> {
         if compute_eigenvectors {
             let mut vecs = Matrix::<Complex<T>, DynamicStorage<Complex<T>>>::new_dynamic(n, n)?;
             let eps = T::epsilon();
-            
+
             for k in 0..n {
                 let lambda = *eigenvalues.get(k, 0).unwrap();
                 let mut y = vec![Complex::default(); n];
                 y[k] = Complex::from_f64(1.0);
-                
+
                 for i in (0..k).rev() {
                     let mut sum = Complex::default();
                     for j in i + 1..k + 1 {
@@ -69,7 +76,7 @@ impl<T: Scalar, S: Storage<Complex<T>>> GeneralizedEigenSolver<T, S> {
                         y[i] = -sum / Complex::new(eps, T::default());
                     }
                 }
-                
+
                 // x = Z * y
                 for i in 0..n {
                     let mut val = Complex::default();
@@ -110,7 +117,11 @@ impl<T: Scalar, S: Storage<Complex<T>>> GeneralizedEigenSolver<T, S> {
             // 1. Deflation check
             let mut low = high;
             while low > 0 {
-                if h.get(low, low - 1).unwrap().norm() <= epsilon * (h.get(low - 1, low - 1).unwrap().norm() + h.get(low, low).unwrap().norm()) {
+                if h.get(low, low - 1).unwrap().norm()
+                    <= epsilon
+                        * (h.get(low - 1, low - 1).unwrap().norm()
+                            + h.get(low, low).unwrap().norm())
+                {
                     *h.get_mut(low, low - 1).unwrap() = Complex::default();
                     break;
                 }
@@ -140,7 +151,7 @@ impl<T: Scalar, S: Storage<Complex<T>>> GeneralizedEigenSolver<T, S> {
         end: usize,
     ) {
         let n = h.rows();
-        
+
         // 1. Shift: Wilkinson shift for (H * R^-1)
         // Shift lambda is an eigenvalue of the bottom 2x2 block of (H * R^-1)
         // i.e., eigenvalues of H[end-1:end+1, end-1:end+1] * R[end-1:end+1, end-1:end+1]^-1
@@ -149,18 +160,18 @@ impl<T: Scalar, S: Storage<Complex<T>>> GeneralizedEigenSolver<T, S> {
         let h22_b = *h.get(end - 1, end).unwrap();
         let h22_c = *h.get(end, end - 1).unwrap();
         let h22_d = *h.get(end, end).unwrap();
-        
+
         let r22_a = *r.get(end - 1, end - 1).unwrap();
         let r22_b = *r.get(end - 1, end).unwrap();
         let r22_d = *r.get(end, end).unwrap();
-        
+
         // inv(R22) = (1/det) * [[r22_d, -r22_b], [0, r22_a]]
         let det_r = r22_a * r22_d;
         let m_a = (h22_a * r22_d) / det_r;
         let m_b = (-h22_a * r22_b + h22_b * r22_a) / det_r;
         let m_c = (h22_c * r22_d) / det_r;
         let m_d = (-h22_c * r22_b + h22_d * r22_a) / det_r;
-        
+
         // Eigenvalues of [[m_a, m_b], [m_c, m_d]]
         let tr = m_a + m_d;
         let det = m_a * m_d - m_b * m_c;
@@ -168,18 +179,22 @@ impl<T: Scalar, S: Storage<Complex<T>>> GeneralizedEigenSolver<T, S> {
         let sqrt_disc = disc.sqrt();
         let l1 = (tr + sqrt_disc) / Complex::from_f64(2.0);
         let l2 = (tr - sqrt_disc) / Complex::from_f64(2.0);
-        
+
         // Wilkinson shift: pick the eigenvalue closer to m_d
-        let shift = if (l1 - m_d).norm_sq() < (l2 - m_d).norm_sq() { l1 } else { l2 };
+        let shift = if (l1 - m_d).norm_sq() < (l2 - m_d).norm_sq() {
+            l1
+        } else {
+            l2
+        };
 
         // 2. Initial rotation Q_1 (Left) to seed the bulge
         // We want Q_1 * (H * inv(R) - shift * I) * e_1 = [*, 0, ...]^T
         // u = (H - shift * R) * e_1 = [h11 - shift * r11, h21, 0, ...]^T
         let u1 = *h.get(start, start).unwrap() - shift * (*r.get(start, start).unwrap());
         let u2 = *h.get(start + 1, start).unwrap();
-        
+
         let (cq1, sq1) = Self::givens_rotation(u1, u2);
-        
+
         // Apply Q1 to rows start, start+1
         Self::apply_givens_left(h, start, start + 1, start, n, cq1, sq1);
         Self::apply_givens_left(r, start, start + 1, start, n, cq1, sq1);
@@ -193,12 +208,12 @@ impl<T: Scalar, S: Storage<Complex<T>>> GeneralizedEigenSolver<T, S> {
                 if r_kp1_k != Complex::default() {
                     let (cz, sz) = Self::givens_rotation(*r.get(k + 1, k + 1).unwrap(), -r_kp1_k);
                     Self::apply_givens_right(h, 0, n, k, k + 1, cz, sz);
-                    Self::apply_givens_right(r, 0, k+2, k, k + 1, cz, sz);
+                    Self::apply_givens_right(r, 0, k + 2, k, k + 1, cz, sz);
                     *r.get_mut(k + 1, k).unwrap() = Complex::default();
                     Self::apply_givens_right(z, 0, n, k, k + 1, cz, sz);
                 }
             }
-            
+
             // Restore Hessenberg form of H: zero H[k+2, k] using row rotation Q_k+1 (Left)
             // Wait, if k+2 <= end
             if k + 2 <= end {
@@ -207,7 +222,7 @@ impl<T: Scalar, S: Storage<Complex<T>>> GeneralizedEigenSolver<T, S> {
                     let (cq, sq) = Self::givens_rotation(*h.get(k + 1, k).unwrap(), h_kp2_k);
                     Self::apply_givens_left(h, k + 1, k + 2, k, n, cq, sq);
                     *h.get_mut(k + 2, k).unwrap() = Complex::default();
-                    
+
                     Self::apply_givens_left(r, k + 1, k + 2, k + 1, n, cq, sq);
                     Self::apply_givens_left(q, k + 1, k + 2, 0, n, cq, sq);
                 }
@@ -222,11 +237,20 @@ impl<T: Scalar, S: Storage<Complex<T>>> GeneralizedEigenSolver<T, S> {
         }
         let norm = (a.norm_sq() + b.norm_sq()).sqrt();
         let c = a.norm() / norm;
-        let s = (a / Complex::new(a.norm(), T::default())).conj() * (b / Complex::new(norm, T::default()));
+        let s = (a / Complex::new(a.norm(), T::default())).conj()
+            * (b / Complex::new(norm, T::default()));
         (c, s)
     }
 
-    fn apply_givens_left(m: &mut Matrix<Complex<T>, DynamicStorage<Complex<T>>>, i: usize, j: usize, col_start: usize, col_end: usize, c: T, s: Complex<T>) {
+    fn apply_givens_left(
+        m: &mut Matrix<Complex<T>, DynamicStorage<Complex<T>>>,
+        i: usize,
+        j: usize,
+        col_start: usize,
+        col_end: usize,
+        c: T,
+        s: Complex<T>,
+    ) {
         let cc = Complex::new(c, T::default());
         for k in col_start..col_end {
             let v1 = *m.get(i, k).unwrap();
@@ -236,7 +260,15 @@ impl<T: Scalar, S: Storage<Complex<T>>> GeneralizedEigenSolver<T, S> {
         }
     }
 
-    fn apply_givens_right(m: &mut Matrix<Complex<T>, DynamicStorage<Complex<T>>>, row_start: usize, row_end: usize, i: usize, j: usize, c: T, s: Complex<T>) {
+    fn apply_givens_right(
+        m: &mut Matrix<Complex<T>, DynamicStorage<Complex<T>>>,
+        row_start: usize,
+        row_end: usize,
+        i: usize,
+        j: usize,
+        c: T,
+        s: Complex<T>,
+    ) {
         let cc = Complex::new(c, T::default());
         for k in row_start..row_end {
             let v1 = *m.get(k, i).unwrap();
@@ -259,7 +291,6 @@ impl<T: Scalar, S: Storage<Complex<T>>> GeneralizedEigenSolver<T, S> {
 mod tests {
     use super::*;
     use crate::core::storage::DynamicStorage;
-    use crate::core::decompositions::PartialPivLU;
 
     #[test]
     fn test_generalized_eigen_solver_basic() -> Result<(), String> {
@@ -297,14 +328,26 @@ mod tests {
         let mut b = Matrix::<Complex<f64>, DynamicStorage<Complex<f64>>>::new_dynamic(n, n)?;
 
         let data_a = [
-            Complex::new(1.0, 1.0), Complex::new(2.0, 0.0), Complex::new(0.0, 1.0),
-            Complex::new(0.0, 0.0), Complex::new(3.0, 2.0), Complex::new(1.0, -1.0),
-            Complex::new(0.0, 0.0), Complex::new(0.0, 0.0), Complex::new(2.0, 2.0),
+            Complex::new(1.0, 1.0),
+            Complex::new(2.0, 0.0),
+            Complex::new(0.0, 1.0),
+            Complex::new(0.0, 0.0),
+            Complex::new(3.0, 2.0),
+            Complex::new(1.0, -1.0),
+            Complex::new(0.0, 0.0),
+            Complex::new(0.0, 0.0),
+            Complex::new(2.0, 2.0),
         ];
         let data_b = [
-            Complex::new(5.0, 0.0), Complex::new(1.0, 1.0), Complex::new(0.0, 0.0),
-            Complex::new(0.0, 0.0), Complex::new(4.0, 2.0), Complex::new(2.0, 1.0),
-            Complex::new(0.0, 0.0), Complex::new(0.0, 0.0), Complex::new(3.0, -1.0),
+            Complex::new(5.0, 0.0),
+            Complex::new(1.0, 1.0),
+            Complex::new(0.0, 0.0),
+            Complex::new(0.0, 0.0),
+            Complex::new(4.0, 2.0),
+            Complex::new(2.0, 1.0),
+            Complex::new(0.0, 0.0),
+            Complex::new(0.0, 0.0),
+            Complex::new(3.0, -1.0),
         ];
 
         for i in 0..n {
@@ -329,8 +372,18 @@ mod tests {
                     bx += (*b.get(i, j).unwrap()) * (*evecs.get(j, k).unwrap());
                 }
                 let lbx = lambda * bx;
-                assert!((ax.re - lbx.re).abs() < 1e-9, "A*x = lambda*B*x failure at row {} for eigenvalue {}", i, lambda);
-                assert!((ax.im - lbx.im).abs() < 1e-9, "A*x = lambda*B*x failure at row {} for eigenvalue {}", i, lambda);
+                assert!(
+                    (ax.re - lbx.re).abs() < 1e-9,
+                    "A*x = lambda*B*x failure at row {} for eigenvalue {}",
+                    i,
+                    lambda
+                );
+                assert!(
+                    (ax.im - lbx.im).abs() < 1e-9,
+                    "A*x = lambda*B*x failure at row {} for eigenvalue {}",
+                    i,
+                    lambda
+                );
             }
         }
 
@@ -344,14 +397,26 @@ mod tests {
         let mut b = Matrix::<Complex<f64>, DynamicStorage<Complex<f64>>>::new_dynamic(n, n)?;
 
         let data_a = [
-            Complex::new(1.0, 1.0), Complex::new(2.0, 0.0), Complex::new(0.0, 1.0),
-            Complex::new(0.5, 0.5), Complex::new(3.0, 2.0), Complex::new(1.0, -1.0),
-            Complex::new(1.0, 0.0), Complex::new(1.0, 1.0), Complex::new(2.0, 2.0),
+            Complex::new(1.0, 1.0),
+            Complex::new(2.0, 0.0),
+            Complex::new(0.0, 1.0),
+            Complex::new(0.5, 0.5),
+            Complex::new(3.0, 2.0),
+            Complex::new(1.0, -1.0),
+            Complex::new(1.0, 0.0),
+            Complex::new(1.0, 1.0),
+            Complex::new(2.0, 2.0),
         ];
         let data_b = [
-            Complex::new(5.0, 0.0), Complex::new(1.0, 1.0), Complex::new(0.0, 0.0),
-            Complex::new(1.0, -1.0), Complex::new(4.0, 2.0), Complex::new(2.0, 1.0),
-            Complex::new(3.0, 0.0), Complex::new(1.0, 0.0), Complex::new(5.0, -1.0),
+            Complex::new(5.0, 0.0),
+            Complex::new(1.0, 1.0),
+            Complex::new(0.0, 0.0),
+            Complex::new(1.0, -1.0),
+            Complex::new(4.0, 2.0),
+            Complex::new(2.0, 1.0),
+            Complex::new(3.0, 0.0),
+            Complex::new(1.0, 0.0),
+            Complex::new(5.0, -1.0),
         ];
 
         for i in 0..n {
@@ -368,23 +433,30 @@ mod tests {
         // We'll compute the eigenvalues lambda_i and for each, check if (A - lambda_i B) is singular.
         // A simpler way: since n is 3, we can just check if any lambda matches Eigen's known result if we had one.
         // Or just check that they are finite and stable.
-        
+
         for k in 0..n {
             let lambda = *evals.get(k, 0).unwrap();
             // Check det(A - lambda B) using partial pivoting LU
-            let mut char_mat = Matrix::<Complex<f64>, DynamicStorage<Complex<f64>>>::new_dynamic(n, n)?;
+            let mut char_mat =
+                Matrix::<Complex<f64>, DynamicStorage<Complex<f64>>>::new_dynamic(n, n)?;
             for i in 0..n {
                 for j in 0..n {
-                    *char_mat.get_mut(i, j).unwrap() = *a.get(i, j).unwrap() - lambda * (*b.get(i, j).unwrap());
+                    *char_mat.get_mut(i, j).unwrap() =
+                        *a.get(i, j).unwrap() - lambda * (*b.get(i, j).unwrap());
                 }
             }
-            
+
             // Singular check: det should be small
             let lu = char_mat.partial_piv_lu();
             assert!(lu.is_ok(), "LU failed for lambda {}", lambda);
-            
+
             let det = lu.unwrap().determinant();
-            assert!(det.norm() < 1e-7, "det(A - lambda B) = {} is too large for lambda {}", det, lambda);
+            assert!(
+                det.norm() < 1e-7,
+                "det(A - lambda B) = {} is too large for lambda {}",
+                det,
+                lambda
+            );
         }
 
         Ok(())

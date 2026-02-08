@@ -3,18 +3,18 @@ use eigen_rs::unsupported::special_functions::SpecialFunctions;
 #[test]
 fn test_erf() {
     let tol = 1e-6;
-    assert!((0.0f64.erf() - 0.0).abs() < tol);
-    assert!((1.0f64.erf() - 0.84270079).abs() < tol);
-    assert!((-1.0f64.erf() + 0.84270079).abs() < tol);
-    
+    assert!((SpecialFunctions::erf(0.0f64) - 0.0).abs() < tol);
+    assert!((SpecialFunctions::erf(1.0f64) - 0.84270079).abs() < tol);
+    assert!((SpecialFunctions::erf(-1.0f64) + 0.84270079).abs() < tol);
+
     // f32
-    assert!((1.0f32.erf() - 0.84270079f32).abs() < tol as f32);
+    assert!((SpecialFunctions::erf(1.0f32) - 0.84270079f32).abs() < tol as f32);
 }
 
 #[test]
 fn test_erfc() {
     let tol = 1e-6;
-    assert!((1.0f64.erfc() - 0.15729921).abs() < tol);
+    assert!((SpecialFunctions::erfc(1.0f64) - 0.15729921).abs() < tol);
 }
 
 #[test]
@@ -30,7 +30,7 @@ fn test_lgamma() {
 fn test_bessel_j0() {
     let tol = 1e-4;
     assert!((0.0f64.bessel_j0() - 1.0).abs() < tol);
-    assert!((2.4048f64.bessel_j0()).abs() < tol); 
+    assert!((2.4048f64.bessel_j0()).abs() < tol);
 }
 
 #[test]

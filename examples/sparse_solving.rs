@@ -1,8 +1,7 @@
-
-use eigen_rs::core::sparse::sparse_matrix::{SparseMatrix, Triplet, StorageOrder};
-use eigen_rs::core::sparse::solvers::SparseLU;
+use eigen_rs::core::matrix::{DynamicStorage, Matrix};
 use eigen_rs::core::sparse::solvers::bicgstab::BiCGSTAB;
-use eigen_rs::core::matrix::{Matrix, DynamicStorage};
+use eigen_rs::core::sparse::solvers::SparseLU;
+use eigen_rs::core::sparse::sparse_matrix::{SparseMatrix, StorageOrder, Triplet};
 
 fn main() -> Result<(), String> {
     println!("=== Sparse Solving with eigen-rs ===");
@@ -10,23 +9,29 @@ fn main() -> Result<(), String> {
     // 1. Create Sparse Matrix (COO -> CSR)
     let size = 100;
     println!("Creating {}x{} sparse matrix...", size, size);
-    
+
     // Tridiagonal matrix (-1, 2, -1)
     let nnz = 3 * size - 2;
     let mut triplets = Vec::with_capacity(nnz);
     for i in 0..size {
         triplets.push(Triplet::new(i, i, 2.0));
-        if i > 0 { triplets.push(Triplet::new(i, i-1, -1.0)); }
-        if i < size - 1 { triplets.push(Triplet::new(i, i+1, -1.0)); }
+        if i > 0 {
+            triplets.push(Triplet::new(i, i - 1, -1.0));
+        }
+        if i < size - 1 {
+            triplets.push(Triplet::new(i, i + 1, -1.0));
+        }
     }
-    
+
     let mut a = SparseMatrix::<f64>::new(size, size, StorageOrder::ColMajor);
     a.set_from_triplets(triplets);
-    
+
     // Create RHS
     let mut b = Matrix::<f64, DynamicStorage<f64>>::new_dynamic(size, 1).unwrap();
     // b = [1, 1, ..., 1]^T
-    for i in 0..size { *b.get_mut(i, 0).unwrap() = 1.0; }
+    for i in 0..size {
+        *b.get_mut(i, 0).unwrap() = 1.0;
+    }
 
     // 2. Direct Solver: SparseLU
     println!("\n--- SparseLU Direct Solver ---");
@@ -51,11 +56,12 @@ fn main() -> Result<(), String> {
     // 4. Iterative Solver: Conjugate Gradient (CG) - For SPD matrices
     // The tridiagonal matrix (-1, 2, -1) IS Symmetric Positive Definite!
     println!("\n--- Conjugate Gradient Iterative Solver ---");
-    let mut solver_cg = eigen_rs::core::sparse::solvers::conjugate_gradient::ConjugateGradient::new();
+    let mut solver_cg =
+        eigen_rs::core::sparse::solvers::conjugate_gradient::ConjugateGradient::new();
     let x_cg = solver_cg.solve(&a, &b)?; // Note: solve takes &a, &b directly
     let ax_cg = a.mul_dense(&x_cg)?;
     diff.assign(&(&ax_cg - &b)).unwrap();
     println!("Norm of (Ax - b) using CG: {:.6e}", diff.norm());
-    
+
     Ok(())
 }

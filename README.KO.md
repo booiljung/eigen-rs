@@ -60,8 +60,8 @@ let x = llt.solve(&b).expect("Solve failed");
 
 ## 문서 (Documentation)
 
--   [**Benchmarks**](BENCHMARK.md): 방법론 및 성능 결과 (영문).
--   [**벤치마크 (Korean)**](BENCHMARK.KR.md): 벤치마크 방법론 국문 번역.
+-   [**Project Guide & Benchmarks**](GEMINI.md): Project overview and Benchmark Methodology.
+-   [**프로젝트 가이드 (Korean)**](GEMINI.KO.md): Project overview and Benchmark Methodology (Korean).
 -   [**Roadmap**](ROADMAP.md): 핵심 모듈별 기능 동등성 달성 현황.
 
 ## 로드맵 (Roadmap)

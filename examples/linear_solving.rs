@@ -1,8 +1,7 @@
-
-use eigen_rs::core::matrix::{Matrix, DynamicStorage};
+use eigen_rs::core::decompositions::ldlt::LDLT;
 use eigen_rs::core::decompositions::lu::PartialPivLU;
 use eigen_rs::core::decompositions::qr::HouseholderQR;
-use eigen_rs::core::decompositions::ldlt::LDLT;
+use eigen_rs::core::matrix::{DynamicStorage, Matrix};
 
 fn main() -> Result<(), String> {
     println!("=== Linear Solving with eigen-rs ===");
@@ -18,7 +17,7 @@ fn main() -> Result<(), String> {
         }
         *a.get_mut(i, i).unwrap() += 2.0; // Make diagonally dominant-ish
     }
-    
+
     let mut b = Matrix::<f64, DynamicStorage<f64>>::new_dynamic(size, 1).unwrap();
     for i in 0..size {
         *b.get_mut(i, 0).unwrap() = i as f64;
@@ -26,7 +25,7 @@ fn main() -> Result<(), String> {
 
     let lu = PartialPivLU::new(&a)?;
     let x_lu = lu.solve(&b)?;
-    
+
     // Verify A * x = b
     let mut ax = Matrix::<f64, DynamicStorage<f64>>::new_dynamic(size, 1).unwrap();
     ax.assign(&(&a * &x_lu)).unwrap();
@@ -48,10 +47,10 @@ fn main() -> Result<(), String> {
     println!("\n--- Cholesky Decomposition (LDLT) ---");
     // Generate SPD matrix: M = A^T * A
     let at = a.transpose();
-    
+
     // Need explicit intermediate var or correct chaining
     let mut spd_mat = Matrix::<f64, DynamicStorage<f64>>::new_dynamic(size, size).unwrap();
-    spd_mat.assign(&(&at * &a)).unwrap(); 
+    spd_mat.assign(&(&at * &a)).unwrap();
 
     let ldlt = LDLT::new(&spd_mat)?;
     let x_ldlt = ldlt.solve(&b)?;
@@ -66,6 +65,6 @@ fn main() -> Result<(), String> {
     // Use the SPD matrix from above
     let solver = eigen_rs::core::decompositions::SelfAdjointEigenSolver::new(&spd_mat, true)?;
     println!("Eigenvalues:\n{:?}", solver.eigenvalues());
-    
+
     Ok(())
 }

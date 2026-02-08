@@ -1,6 +1,7 @@
 use crate::core::complex::Complex;
 use crate::core::scalar::Scalar;
-use rustfft::{FftPlanner, num_complex::Complex as NumComplex};
+use rustfft::{num_complex::Complex as NumComplex, FftPlanner};
+use alloc::vec::Vec;
 
 /// A wrapper for FFT operations using `rustfft`.
 pub struct FFT<T: Scalar + rustfft::FftNum> {
@@ -25,14 +26,16 @@ impl<T: Scalar + rustfft::FftNum> FFT<T> {
     pub fn forward(&mut self, input: &[Complex<T>]) -> Vec<Complex<T>> {
         let n = input.len();
         let fft = self.planner.plan_fft_forward(n);
-        
-        let mut buffer: Vec<NumComplex<T>> = input.iter()
+
+        let mut buffer: Vec<NumComplex<T>> = input
+            .iter()
             .map(|c| NumComplex { re: c.re, im: c.im })
             .collect();
-            
+
         fft.process(&mut buffer);
-        
-        buffer.into_iter()
+
+        buffer
+            .into_iter()
             .map(|c| Complex { re: c.re, im: c.im })
             .collect()
     }
@@ -41,18 +44,20 @@ impl<T: Scalar + rustfft::FftNum> FFT<T> {
     pub fn inverse(&mut self, input: &[Complex<T>]) -> Vec<Complex<T>> {
         let n = input.len();
         let fft = self.planner.plan_fft_inverse(n);
-        
-        let mut buffer: Vec<NumComplex<T>> = input.iter()
+
+        let mut buffer: Vec<NumComplex<T>> = input
+            .iter()
             .map(|c| NumComplex { re: c.re, im: c.im })
             .collect();
-            
+
         fft.process(&mut buffer);
-        
-        buffer.into_iter()
+
+        buffer
+            .into_iter()
             .map(|c| Complex { re: c.re, im: c.im })
             .collect()
     }
-    
+
     /// Computes the inverse FFT and scales the result by 1/N.
     pub fn inverse_scaled(&mut self, input: &[Complex<T>]) -> Vec<Complex<T>> {
         let n = input.len();
@@ -67,13 +72,13 @@ impl<T: Scalar + rustfft::FftNum> FFT<T> {
 }
 
 use crate::core::matrix::Matrix;
-use crate::core::storage::{Storage, DynamicStorage};
+use crate::core::storage::{DynamicStorage, Storage};
 
 /// Extension trait to add FFT capabilities to Matrix/Vector.
 pub trait FftExtension<T: Scalar + rustfft::FftNum> {
     /// Computes the forward FFT of the vector/matrix (flattened).
     fn fft(&self) -> Vec<Complex<T>>;
-    
+
     /// Computes the inverse FFT of the vector/matrix (flattened).
     fn ifft(&self) -> Vec<Complex<T>>;
 
@@ -86,24 +91,31 @@ pub trait FftExtension<T: Scalar + rustfft::FftNum> {
     fn ifft2(&self) -> Matrix<Complex<T>, DynamicStorage<Complex<T>>>;
 }
 
-impl<T: Scalar + rustfft::FftNum, S: Storage<Complex<T>>> FftExtension<T> for Matrix<Complex<T>, S> {
+impl<T: Scalar + rustfft::FftNum, S: Storage<Complex<T>>> FftExtension<T>
+    for Matrix<Complex<T>, S>
+{
     fn fft(&self) -> Vec<Complex<T>> {
         let mut fft = FFT::new();
-        let data: Vec<Complex<T>> = (0..self.cols()).flat_map(|j| (0..self.rows()).map(move |i| *self.get(i, j).unwrap())).collect();
+        let data: Vec<Complex<T>> = (0..self.cols())
+            .flat_map(|j| (0..self.rows()).map(move |i| *self.get(i, j).unwrap()))
+            .collect();
         fft.forward(&data)
     }
 
     fn ifft(&self) -> Vec<Complex<T>> {
         let mut fft = FFT::new();
-        let data: Vec<Complex<T>> = (0..self.cols()).flat_map(|j| (0..self.rows()).map(move |i| *self.get(i, j).unwrap())).collect();
+        let data: Vec<Complex<T>> = (0..self.cols())
+            .flat_map(|j| (0..self.rows()).map(move |i| *self.get(i, j).unwrap()))
+            .collect();
         fft.inverse_scaled(&data)
     }
 
     fn fft2(&self) -> Matrix<Complex<T>, DynamicStorage<Complex<T>>> {
         let rows = self.rows();
         let cols = self.cols();
-        let mut res = Matrix::<Complex<T>, DynamicStorage<Complex<T>>>::new_dynamic(rows, cols).unwrap();
-        
+        let mut res =
+            Matrix::<Complex<T>, DynamicStorage<Complex<T>>>::new_dynamic(rows, cols).unwrap();
+
         // Copy initial data
         for j in 0..cols {
             for i in 0..rows {
@@ -143,8 +155,9 @@ impl<T: Scalar + rustfft::FftNum, S: Storage<Complex<T>>> FftExtension<T> for Ma
     fn ifft2(&self) -> Matrix<Complex<T>, DynamicStorage<Complex<T>>> {
         let rows = self.rows();
         let cols = self.cols();
-        let mut res = Matrix::<Complex<T>, DynamicStorage<Complex<T>>>::new_dynamic(rows, cols).unwrap();
-        
+        let mut res =
+            Matrix::<Complex<T>, DynamicStorage<Complex<T>>>::new_dynamic(rows, cols).unwrap();
+
         // Copy initial data
         for j in 0..cols {
             for i in 0..rows {

@@ -1,10 +1,10 @@
 //! Simplicial Cholesky (LLT) factorization for sparse symmetric positive-definite matrices.
 
-use crate::core::scalar::Scalar;
-use crate::core::sparse::sparse_matrix::{SparseMatrix, StorageOrder};
-use crate::core::sparse::iterators::InnerIterator;
 use crate::core::matrix::Matrix;
-use crate::core::storage::{Storage, DynamicStorage};
+use crate::core::scalar::Scalar;
+use crate::core::sparse::iterators::InnerIterator;
+use crate::core::sparse::sparse_matrix::{SparseMatrix, StorageOrder};
+use crate::core::storage::{DynamicStorage, Storage};
 
 /// Simplicial Cholesky (LLT) factorization of a sparse symmetric positive-definite matrix.
 pub struct SimplicialLLT<T: Scalar> {
@@ -40,7 +40,7 @@ impl<T: Scalar> SimplicialLLT<T> {
             return Err("Matrix must be square for Cholesky factorization".to_string());
         }
         let n = matrix.rows();
-        
+
         // In a simplicial LLT, we need to know the pattern of L.
         // For symmetric A, L has the same pattern as the lower triangular part of A plus fill-ins.
         // For simplicity in this initial version, we will compute the pattern during factorization
@@ -57,7 +57,7 @@ impl<T: Scalar> SimplicialLLT<T> {
         // We'll store columns of L as they are computed.
         let mut l_cols: Vec<Vec<(usize, T)>> = vec![Vec::new(); n];
         let mut l_dense = vec![T::default(); n]; // Temporary dense column
-        
+
         for j in 0..n {
             // 1. Initialize dense column with A's j-th column (lower part)
             let mut it = InnerIterator::new(matrix, j);
@@ -97,7 +97,7 @@ impl<T: Scalar> SimplicialLLT<T> {
             }
             let l_jj = l_jj_sq.sqrt();
             l_dense[j] = l_jj;
-            
+
             l_cols[j].push((j, l_jj));
             for i in (j + 1)..n {
                 let val = l_dense[i] / l_jj;
@@ -123,7 +123,10 @@ impl<T: Scalar> SimplicialLLT<T> {
     }
 
     /// Solves the linear system Ax = b.
-    pub fn solve<S: Storage<T>>(&self, b: &Matrix<T, S>) -> Result<Matrix<T, DynamicStorage<T>>, String> {
+    pub fn solve<S: Storage<T>>(
+        &self,
+        b: &Matrix<T, S>,
+    ) -> Result<Matrix<T, DynamicStorage<T>>, String> {
         if !self.is_factorized {
             return Err("Solver is not factorized".to_string());
         }
@@ -150,7 +153,7 @@ impl<T: Scalar> SimplicialLLT<T> {
                 } else {
                     return Err("Missing diagonal element in L".to_string());
                 }
-                
+
                 let s_j = sol[j];
                 while it.is_valid() {
                     let r = it.row();
@@ -167,14 +170,14 @@ impl<T: Scalar> SimplicialLLT<T> {
                 // But wait, the j-th row of L^T is the j-th column of L.
                 // No, L^T * x = y means sum(L^T(j, i) * x_i) = y_j for i >= j.
                 // which is sum(L(i, j) * x_i) = y_j.
-                
+
                 let mut it = InnerIterator::new(&self.l, j);
                 let mut l_jj = T::default();
                 if it.is_valid() && it.row() == j {
                     l_jj = it.value();
                     it.next();
                 }
-                
+
                 let mut sum = T::default();
                 while it.is_valid() {
                     sum += it.value() * sol[it.row()];
@@ -209,9 +212,13 @@ mod tests {
         // This is a common SPD matrix (Poisson 1D).
         let mut a = SparseMatrix::<f64>::new(3, 3, StorageOrder::ColMajor);
         a.set_from_triplets(vec![
-            Triplet::new(0, 0, 2.0), Triplet::new(0, 1, -1.0),
-            Triplet::new(1, 0, -1.0), Triplet::new(1, 1, 2.0), Triplet::new(1, 2, -1.0),
-            Triplet::new(2, 1, -1.0), Triplet::new(2, 2, 2.0),
+            Triplet::new(0, 0, 2.0),
+            Triplet::new(0, 1, -1.0),
+            Triplet::new(1, 0, -1.0),
+            Triplet::new(1, 1, 2.0),
+            Triplet::new(1, 2, -1.0),
+            Triplet::new(2, 1, -1.0),
+            Triplet::new(2, 2, 2.0),
         ]);
 
         let mut llt = SimplicialLLT::new();

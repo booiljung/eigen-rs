@@ -8,7 +8,7 @@ fn test_parallel_assign() {
     let mut m1 = MatrixX::<f64>::new_dynamic(size, size).unwrap();
     let m2 = MatrixX::<f64>::new_dynamic(size, size).unwrap();
     let m3 = MatrixX::<f64>::new_dynamic(size, size).unwrap();
-    
+
     // Fill with values
     let mut m2 = m2;
     let mut m3 = m3;
@@ -18,10 +18,10 @@ fn test_parallel_assign() {
             *m3.get_mut(i, j).unwrap() = (i * j) as f64;
         }
     }
-    
+
     // Parallel assign: m1 = m2 + m3
     m1.assign(&(&m2 + &m3)).unwrap();
-    
+
     for i in 0..size {
         for j in 0..size {
             let expected = (i + j) as f64 + (i * j) as f64;
@@ -39,11 +39,11 @@ fn test_parallel_reductions() {
             *m.get_mut(i, j).unwrap() = 1.0;
         }
     }
-    
+
     assert_eq!(m.sum(), (size * size) as f64);
     assert_eq!(m.min(), 1.0);
     assert_eq!(m.max(), 1.0);
-    
+
     // Change one value
     *m.get_mut(500, 500).unwrap() = 2.0;
     assert_eq!(m.max(), 2.0);
@@ -61,17 +61,17 @@ fn test_parallel_spmv() {
         triplets.push(Triplet::new(i, i, 2.0));
     }
     sparse.set_from_triplets(triplets);
-    
+
     let mut dense = MatrixX::<f64>::new_dynamic(cols, 100).unwrap();
     for i in 0..cols {
         for j in 0..100 {
             *dense.get_mut(i, j).unwrap() = 1.0;
         }
     }
-    
+
     // Should trigger parallel SpMV
     let res = sparse.mul_dense(&dense).unwrap();
-    
+
     assert_eq!(res.rows(), rows);
     assert_eq!(res.cols(), 100);
     for i in 0..rows {

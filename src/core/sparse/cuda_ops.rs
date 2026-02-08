@@ -8,22 +8,30 @@ use crate::core::storage::CudaStorage;
 pub mod sys {
     #[repr(C)]
     #[derive(Debug, Copy, Clone)]
-    pub struct cusparseContext { _unused: [u8; 0] }
+    pub struct cusparseContext {
+        _unused: [u8; 0],
+    }
     pub type cusparseHandle_t = *mut cusparseContext;
 
     #[repr(C)]
     #[derive(Debug, Copy, Clone)]
-    pub struct cusparseSpMatDescr { _unused: [u8; 0] }
+    pub struct cusparseSpMatDescr {
+        _unused: [u8; 0],
+    }
     pub type cusparseSpMatDescr_t = *mut cusparseSpMatDescr;
 
     #[repr(C)]
     #[derive(Debug, Copy, Clone)]
-    pub struct cusparseDnVecDescr { _unused: [u8; 0] }
+    pub struct cusparseDnVecDescr {
+        _unused: [u8; 0],
+    }
     pub type cusparseDnVecDescr_t = *mut cusparseDnVecDescr;
 
     #[repr(C)]
     #[derive(Debug, Copy, Clone)]
-    pub struct cusparseDnMatDescr { _unused: [u8; 0] }
+    pub struct cusparseDnMatDescr {
+        _unused: [u8; 0],
+    }
     pub type cusparseDnMatDescr_t = *mut cusparseDnMatDescr;
 
     #[repr(u32)]
@@ -184,7 +192,9 @@ impl CusparseHandle {
 #[cfg(feature = "cuda")]
 impl Drop for CusparseHandle {
     fn drop(&mut self) {
-        unsafe { sys::cusparseDestroy(self.handle); }
+        unsafe {
+            sys::cusparseDestroy(self.handle);
+        }
     }
 }
 
@@ -200,7 +210,7 @@ pub fn spmv_cuda<T: Scalar>(
     #[cfg(feature = "cuda")]
     unsafe {
         let mut mat_a = std::ptr::null_mut();
-        let value_type = if std::mem::size_of::<T>() == 8 { 1 } else { 0 }; 
+        let value_type = if std::mem::size_of::<T>() == 8 { 1 } else { 0 };
 
         let res = sys::cusparseCreateCsr(
             &mut mat_a,
@@ -215,13 +225,25 @@ pub fn spmv_cuda<T: Scalar>(
             0,
             value_type,
         );
-        if res != sys::cusparseStatus_t::Success { return Err("cusparseCreateCsr failed".to_string()); }
+        if res != sys::cusparseStatus_t::Success {
+            return Err("cusparseCreateCsr failed".to_string());
+        }
 
         let mut vec_x = std::ptr::null_mut();
-        sys::cusparseCreateDnVec(&mut vec_x, x.rows() as i64, x.get_ptr(0, 0) as *mut _, value_type);
-        
+        sys::cusparseCreateDnVec(
+            &mut vec_x,
+            x.rows() as i64,
+            x.get_ptr(0, 0) as *mut _,
+            value_type,
+        );
+
         let mut vec_y = std::ptr::null_mut();
-        sys::cusparseCreateDnVec(&mut vec_y, y.rows() as i64, y.get_ptr(0, 0) as *mut _, value_type);
+        sys::cusparseCreateDnVec(
+            &mut vec_y,
+            y.rows() as i64,
+            y.get_ptr(0, 0) as *mut _,
+            value_type,
+        );
 
         let mut buffer_size = 0;
         sys::cusparseSpMV_bufferSize(
@@ -264,8 +286,12 @@ pub fn spmv_cuda<T: Scalar>(
         sys::cusparseDestroySpMat(mat_a);
         sys::cusparseDestroyDnVec(vec_x);
         sys::cusparseDestroyDnVec(vec_y);
-        
-        if res == sys::cusparseStatus_t::Success { Ok(()) } else { Err(format!("cusparseSpMV failed: {:?}", res)) }
+
+        if res == sys::cusparseStatus_t::Success {
+            Ok(())
+        } else {
+            Err(format!("cusparseSpMV failed: {:?}", res))
+        }
     }
     #[cfg(not(feature = "cuda"))]
     {
@@ -286,7 +312,7 @@ pub fn spmm_cuda<T: Scalar>(
     #[cfg(feature = "cuda")]
     unsafe {
         let mut mat_a = std::ptr::null_mut();
-        let value_type = if std::mem::size_of::<T>() == 8 { 1 } else { 0 }; 
+        let value_type = if std::mem::size_of::<T>() == 8 { 1 } else { 0 };
 
         sys::cusparseCreateCsr(
             &mut mat_a,
@@ -303,15 +329,32 @@ pub fn spmm_cuda<T: Scalar>(
         );
 
         let mut mat_b = std::ptr::null_mut();
-        sys::cusparseCreateDnMat(&mut mat_b, b.rows() as i64, b.cols() as i64, b.rows() as i64, b.get_ptr(0, 0) as *mut _, value_type, 1);
-        
+        sys::cusparseCreateDnMat(
+            &mut mat_b,
+            b.rows() as i64,
+            b.cols() as i64,
+            b.rows() as i64,
+            b.get_ptr(0, 0) as *mut _,
+            value_type,
+            1,
+        );
+
         let mut mat_c = std::ptr::null_mut();
-        sys::cusparseCreateDnMat(&mut mat_c, c.rows() as i64, c.cols() as i64, c.rows() as i64, c.get_ptr(0, 0) as *mut _, value_type, 1);
+        sys::cusparseCreateDnMat(
+            &mut mat_c,
+            c.rows() as i64,
+            c.cols() as i64,
+            c.rows() as i64,
+            c.get_ptr(0, 0) as *mut _,
+            value_type,
+            1,
+        );
 
         let mut buffer_size = 0;
         sys::cusparseSpMM_bufferSize(
             handle.handle,
-            0, 0,
+            0,
+            0,
             &alpha as *const T as *const _,
             mat_a,
             mat_b,
@@ -330,7 +373,8 @@ pub fn spmm_cuda<T: Scalar>(
 
         let res = sys::cusparseSpMM(
             handle.handle,
-            0, 0,
+            0,
+            0,
             &alpha as *const T as *const _,
             mat_a,
             mat_b,
@@ -349,8 +393,12 @@ pub fn spmm_cuda<T: Scalar>(
         sys::cusparseDestroySpMat(mat_a);
         sys::cusparseDestroyDnMat(mat_b);
         sys::cusparseDestroyDnMat(mat_c);
-        
-        if res == sys::cusparseStatus_t::Success { Ok(()) } else { Err(format!("cusparseSpMM failed: {:?}", res)) }
+
+        if res == sys::cusparseStatus_t::Success {
+            Ok(())
+        } else {
+            Err(format!("cusparseSpMM failed: {:?}", res))
+        }
     }
     #[cfg(not(feature = "cuda"))]
     {

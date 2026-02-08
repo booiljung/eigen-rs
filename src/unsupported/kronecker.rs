@@ -1,8 +1,8 @@
-use crate::core::matrix::Matrix;
-use crate::core::storage::Storage;
+
+
 use crate::core::scalar::Scalar;
+
 use crate::core::xpr::MatrixXpr;
-use crate::core::arch::Packet;
 
 /// Expression representing the Kronecker product of two matrices.
 ///
@@ -54,24 +54,24 @@ where
         // Local index (p, q) corresponding to element b_pq in RHS
         // row = i * rhs.rows() + p
         // col = j * rhs.cols() + q
-        
+
         // Therefore:
         // i = row / rhs.rows()
         // p = row % rhs.rows()
         // j = col / rhs.cols()
         // q = col % rhs.cols()
-        
+
         let rhs_rows = self.rhs.rows();
         let rhs_cols = self.rhs.cols();
-        
+
         let i = row / rhs_rows;
         let p = row % rhs_rows;
         let j = col / rhs_cols;
         let q = col % rhs_cols;
-        
+
         self.lhs.eval(i, j) * self.rhs.eval(p, q)
     }
-    
+
     // Packet evaluation is hard because memory access is strided/discontinuous for RHS blocks.
     // We explicitly don't implement optimized packet_eval here, falling back to scalar.
 }
@@ -84,7 +84,6 @@ where
 {
     // Default implementation returns false (fallback to CPU)
 }
-
 
 /// Computes the Kronecker product of two matrices.
 pub fn kronecker_product<'a, T, L, R>(lhs: &'a L, rhs: &'a R) -> KroneckerProduct<'a, T, L, R>

@@ -1,10 +1,10 @@
-use eigen_rs::unsupported::fft::FFT;
 use eigen_rs::core::complex::Complex;
+use eigen_rs::unsupported::fft::FFT;
 
 #[test]
 fn test_fft_forward_inverse() {
     let mut fft = FFT::<f64>::new();
-    
+
     // Simple signal: DC + Nyquist
     // x = [1, -1, 1, -1]
     let input = vec![
@@ -13,16 +13,16 @@ fn test_fft_forward_inverse() {
         Complex::new(1.0, 0.0),
         Complex::new(-1.0, 0.0),
     ];
-    
+
     let forward = fft.forward(&input);
-    
+
     // Expected FFT: [0, 0, 4, 0] ? No.
     // DC component: sum = 0.
     // Nyquist component: alternating sum = 4.
     // Let's check magnitude.
-    
+
     let inverse = fft.inverse(&forward);
-    
+
     // Check round trip (unscaled)
     // inverse(forward(x)) = N * x
     let n = input.len() as f64;
@@ -42,10 +42,10 @@ fn test_fft_scaled_inverse() {
         Complex::new(3.0, 0.0),
         Complex::new(4.0, 0.0),
     ];
-    
+
     let forward = fft.forward(&input);
     let result = fft.inverse_scaled(&forward);
-    
+
     for (i, val) in result.iter().enumerate() {
         assert!((val.re - input[i].re).abs() < 1e-10);
         assert!((val.im - input[i].im).abs() < 1e-10);
@@ -74,8 +74,22 @@ fn test_fft_2d() {
         for j in 0..2 {
             let original = mat.get(i, j).unwrap();
             let recovered = ifft2_result.get(i, j).unwrap();
-            assert!((original.re - recovered.re).abs() < 1e-10, "Mismatch at ({},{}): Orig={:?}, Recov={:?}", i, j, original, recovered);
-            assert!((original.im - recovered.im).abs() < 1e-10, "Mismatch at ({},{}): Orig={:?}, Recov={:?}", i, j, original, recovered);
+            assert!(
+                (original.re - recovered.re).abs() < 1e-10,
+                "Mismatch at ({},{}): Orig={:?}, Recov={:?}",
+                i,
+                j,
+                original,
+                recovered
+            );
+            assert!(
+                (original.im - recovered.im).abs() < 1e-10,
+                "Mismatch at ({},{}): Orig={:?}, Recov={:?}",
+                i,
+                j,
+                original,
+                recovered
+            );
         }
     }
 }

@@ -1,10 +1,10 @@
 //! Eigenvalue and eigenvector solver for general square real matrices.
 
-use crate::core::matrix::Matrix;
-use crate::core::storage::{Storage, DynamicStorage};
-use crate::core::scalar::Scalar;
 use crate::core::complex::Complex;
 use crate::core::decompositions::RealSchur;
+use crate::core::matrix::Matrix;
+use crate::core::scalar::Scalar;
+use crate::core::storage::{DynamicStorage, Storage};
 
 /// Eigenvalue and eigenvector solver for general square real matrices.
 pub struct EigenSolver<T: Scalar, S: Storage<T>> {
@@ -30,11 +30,13 @@ impl<T: Scalar, S: Storage<T>> EigenSolver<T, S> {
         let mut eigenvalues = Vec::with_capacity(n);
         let mut i = 0;
         let eps = T::epsilon();
-        
+
         while i < n {
             if i + 1 < n {
                 let h_ip1_i = *t.get(i + 1, i).unwrap();
-                if h_ip1_i.abs() > eps * (t.get(i, i).unwrap().abs() + t.get(i + 1, i + 1).unwrap().abs()) {
+                if h_ip1_i.abs()
+                    > eps * (t.get(i, i).unwrap().abs() + t.get(i + 1, i + 1).unwrap().abs())
+                {
                     // 2x2 block found: complex conjugate pair
                     let a = *t.get(i, i).unwrap();
                     let b = *t.get(i, i + 1).unwrap();
@@ -44,7 +46,7 @@ impl<T: Scalar, S: Storage<T>> EigenSolver<T, S> {
                     let tr = a + d;
                     let det = a * d - b * c;
                     let disc = tr * tr - T::from_f64(4.0) * det;
-                    
+
                     if disc < T::default() {
                         let re = tr / T::from_f64(2.0);
                         let im = (-disc).sqrt() / T::from_f64(2.0);
@@ -71,7 +73,7 @@ impl<T: Scalar, S: Storage<T>> EigenSolver<T, S> {
             // Solve (T - lambda I) y = 0 by back-substitution
             // Then x = Q y
             let mut vecs = Matrix::<Complex<T>, DynamicStorage<Complex<T>>>::new_dynamic(n, n)?;
-            
+
             // Temporary storage for real/imag parts of y
             let mut y_re = vec![T::default(); n];
             let mut y_im = vec![T::default(); n];
@@ -79,12 +81,12 @@ impl<T: Scalar, S: Storage<T>> EigenSolver<T, S> {
             let mut k = 0;
             while k < n {
                 let lambda = eigenvalues[k];
-                
+
                 if lambda.im == T::default() {
                     // Real eigenvalue
                     y_re.fill(T::default());
                     y_re[k] = T::from_f64(1.0);
-                    
+
                     for i in (0..k).rev() {
                         let mut sum = T::default();
                         for j in i + 1..k + 1 {
@@ -97,7 +99,7 @@ impl<T: Scalar, S: Storage<T>> EigenSolver<T, S> {
                             y_re[i] = -sum / (diag + eps);
                         }
                     }
-                    
+
                     // x = Q * y_re
                     for i in 0..n {
                         let mut val = T::default();
@@ -111,16 +113,19 @@ impl<T: Scalar, S: Storage<T>> EigenSolver<T, S> {
                     // Complex conjugate pair
                     y_re.fill(T::default());
                     y_im.fill(T::default());
-                    
+
                     let t21 = *t.get(k + 1, k).unwrap();
                     let t22 = *t.get(k + 1, k + 1).unwrap();
-                    
+
                     let y2 = Complex::new(T::from_f64(1.0), T::default());
-                    let y1 = (Complex::new(lambda.re - t22, lambda.im)) / Complex::new(t21, T::default());
-                    
-                    y_re[k] = y1.re; y_im[k] = y1.im;
-                    y_re[k + 1] = y2.re; y_im[k + 1] = y2.im;
-                    
+                    let y1 = (Complex::new(lambda.re - t22, lambda.im))
+                        / Complex::new(t21, T::default());
+
+                    y_re[k] = y1.re;
+                    y_im[k] = y1.im;
+                    y_re[k + 1] = y2.re;
+                    y_im[k + 1] = y2.im;
+
                     for i in (0..k).rev() {
                         let mut sum_re = T::default();
                         let mut sum_im = T::default();
@@ -133,7 +138,7 @@ impl<T: Scalar, S: Storage<T>> EigenSolver<T, S> {
                         y_re[i] = (-sum_re * diag - sum_im * lambda.im) / den;
                         y_im[i] = (-sum_im * diag + sum_re * lambda.im) / den;
                     }
-                    
+
                     for i in 0..n {
                         let mut val_re = T::default();
                         let mut val_im = T::default();
@@ -175,11 +180,7 @@ mod tests {
     fn test_eigen_solver_eigenvectors() -> Result<(), String> {
         let n = 3;
         let mut a = Matrix::<f64, DynamicStorage<f64>>::new_dynamic(n, n)?;
-        let data = [
-            1.0, 2.0, 3.0,
-            0.0, 4.0, 5.0,
-            0.0, 0.0, 6.0,
-        ];
+        let data = [1.0, 2.0, 3.0, 0.0, 4.0, 5.0, 0.0, 0.0, 6.0];
         for i in 0..n {
             for j in 0..n {
                 *a.get_mut(i, j).unwrap() = data[i * n + j];
@@ -213,11 +214,7 @@ mod tests {
         let n = 3;
         let mut a = Matrix::<f64, DynamicStorage<f64>>::new_dynamic(n, n)?;
         // Matrix with eigenvalues 1, 2, 3
-        let data = [
-            2.0, 0.0, 0.0,
-            0.0, 3.0, 0.0,
-            0.0, 0.0, 1.0,
-        ];
+        let data = [2.0, 0.0, 0.0, 0.0, 3.0, 0.0, 0.0, 0.0, 1.0];
         for i in 0..n {
             for j in 0..n {
                 *a.get_mut(i, j).unwrap() = data[i * n + j];
@@ -226,14 +223,14 @@ mod tests {
 
         let solver = EigenSolver::new(&a, false)?;
         let evs = solver.eigenvalues();
-        
+
         let mut vals: Vec<f64> = evs.iter().map(|c| c.re).collect();
         vals.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        
+
         assert!((vals[0] - 1.0).abs() < 1e-10);
         assert!((vals[1] - 2.0).abs() < 1e-10);
         assert!((vals[2] - 3.0).abs() < 1e-10);
-        
+
         Ok(())
     }
 
@@ -242,10 +239,7 @@ mod tests {
         let n = 2;
         let mut a = Matrix::<f64, DynamicStorage<f64>>::new_dynamic(n, n)?;
         // Rotation matrix: eigenvalues +/- i
-        let data = [
-            0.0, -1.0,
-            1.0,  0.0,
-        ];
+        let data = [0.0, -1.0, 1.0, 0.0];
         for i in 0..n {
             for j in 0..n {
                 *a.get_mut(i, j).unwrap() = data[i * n + j];
@@ -254,15 +248,19 @@ mod tests {
 
         let solver = EigenSolver::new(&a, false)?;
         let evs = solver.eigenvalues();
-        
+
         assert_eq!(evs.len(), 2);
         // Expect (0, 1) and (0, -1)
-        let has_pos_i = evs.iter().any(|c| (c.re).abs() < 1e-10 && (c.im - 1.0).abs() < 1e-10);
-        let has_neg_i = evs.iter().any(|c| (c.re).abs() < 1e-10 && (c.im + 1.0).abs() < 1e-10);
-        
+        let has_pos_i = evs
+            .iter()
+            .any(|c| (c.re).abs() < 1e-10 && (c.im - 1.0).abs() < 1e-10);
+        let has_neg_i = evs
+            .iter()
+            .any(|c| (c.re).abs() < 1e-10 && (c.im + 1.0).abs() < 1e-10);
+
         assert!(has_pos_i);
         assert!(has_neg_i);
-        
+
         Ok(())
     }
 }

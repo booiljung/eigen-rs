@@ -2,9 +2,9 @@
 //! Best suited for symmetric/Hermitian positive definite matrices.
 
 use crate::core::matrix::Matrix;
-use crate::core::storage::Storage;
 use crate::core::scalar::Scalar;
 use crate::core::storage::DynamicStorage;
+use crate::core::storage::Storage;
 
 /// Result of an LLT Cholesky decomposition.
 pub struct LLT<T: Scalar, S: Storage<T>> {
@@ -31,12 +31,12 @@ impl<T: Scalar + 'static, S: Storage<T> + 'static> LLT<T, S> {
                 let l_jk = *l.get(j, k).unwrap();
                 s += l_jk * l_jk;
             }
-            
+
             let diag = *l.get(j, j).unwrap() - s;
             if diag <= T::from_usize(0) {
                 return Err("Matrix is not positive definite".to_string());
             }
-            
+
             let l_jj = diag.sqrt();
             *l.get_mut(j, j).unwrap() = l_jj;
 
@@ -63,7 +63,10 @@ impl<T: Scalar + 'static, S: Storage<T> + 'static> LLT<T, S> {
     }
 
     /// Solves Ax = b for x using the LLT decomposition.
-    pub fn solve<S2: Storage<T> + 'static>(&self, b: &Matrix<T, S2>) -> Result<Matrix<T, DynamicStorage<T>>, String> {
+    pub fn solve<S2: Storage<T> + 'static>(
+        &self,
+        b: &Matrix<T, S2>,
+    ) -> Result<Matrix<T, DynamicStorage<T>>, String> {
         let rows = self.l.rows();
         if b.rows() != rows {
             return Err("Dimension mismatch in LLT solve".to_string());
@@ -85,7 +88,7 @@ impl<T: Scalar + 'static, S: Storage<T> + 'static> LLT<T, S> {
                 *x.get_mut(i, j).unwrap() = val / l_ii;
             }
         }
-        
+
         // Solve L^T x = y (Backward substitution)
         // L^T is upper triangular.
         for i in (0..rows).rev() {

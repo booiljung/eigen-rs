@@ -1,6 +1,6 @@
 use crate::core::matrix::Matrix;
-use crate::core::storage::FixedStorage;
 use crate::core::scalar::Scalar;
+use crate::core::storage::FixedStorage;
 
 /// Represents an affine transformation in space.
 /// Internally stored as a NxN matrix (where N = DIM + 1).
@@ -14,7 +14,11 @@ impl<T: Scalar, const N: usize, const DIM: usize, const SIZE: usize> Transform<T
         let mut matrix = Matrix::<T, FixedStorage<T, N, N, SIZE>>::new_fixed();
         for i in 0..N {
             for j in 0..N {
-                *matrix.get_mut(i, j).unwrap() = if i == j { T::from_usize(1) } else { T::default() };
+                *matrix.get_mut(i, j).unwrap() = if i == j {
+                    T::from_usize(1)
+                } else {
+                    T::default()
+                };
             }
         }
         Self { matrix }
@@ -44,7 +48,10 @@ impl<T: Scalar, const N: usize, const DIM: usize, const SIZE: usize> Transform<T
     }
 
     /// Applies the transformation to a point (as a vector with implicit 1 in the last component).
-    pub fn transform_point<const VSIZE: usize>(&self, p: &Matrix<T, FixedStorage<T, DIM, 1, VSIZE>>) -> Matrix<T, FixedStorage<T, DIM, 1, VSIZE>> {
+    pub fn transform_point<const VSIZE: usize>(
+        &self,
+        p: &Matrix<T, FixedStorage<T, DIM, 1, VSIZE>>,
+    ) -> Matrix<T, FixedStorage<T, DIM, 1, VSIZE>> {
         let mut res = Matrix::<T, FixedStorage<T, DIM, 1, VSIZE>>::new_fixed();
         for i in 0..DIM {
             let mut sum = *self.matrix.get(i, DIM).unwrap(); // Translation part
@@ -86,13 +93,15 @@ impl<T: Scalar> Transform<T, 4, 3, 16> {
         tf
     }
 
-    pub fn from_parts(t: crate::core::geometry::Translation<T, 3>, r: crate::core::geometry::Quaternion<T>) -> Self {
+    pub fn from_parts(
+        t: crate::core::geometry::Translation<T, 3>,
+        r: crate::core::geometry::Quaternion<T>,
+    ) -> Self {
         let tf_t = Self::from_translation(&t);
         let tf_r = Self::from_rotation(&r);
         tf_t.mul(&tf_r) // Translation * Rotation
     }
 }
-
 
 pub type Transform2<T> = Transform<T, 3, 2, 9>;
 pub type Transform3<T> = Transform<T, 4, 3, 16>;

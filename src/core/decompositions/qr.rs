@@ -1,18 +1,18 @@
 //! Householder QR decomposition (A = QR).
 
 use crate::core::matrix::Matrix;
-use crate::core::storage::{Storage, DynamicStorage};
 use crate::core::scalar::Scalar;
+use crate::core::storage::{DynamicStorage, Storage};
 
 /// Result of a Householder QR decomposition.
-/// 
+///
 /// The result is stored in a compact way compatible with LAPACK/Eigen:
 /// - The upper triangular part of `qr` is the matrix R.
 /// - The strict lower triangular part of `qr` contains the Householder vectors v.
 /// - `h_coeffs` contains the Householder coefficients tau.
 pub struct HouseholderQR<T: Scalar, S: Storage<T>> {
     qr: Matrix<T, DynamicStorage<T>>,
-    h_coeffs: Vec<T>, 
+    h_coeffs: Vec<T>,
     _phantom: std::marker::PhantomData<S>,
 }
 
@@ -29,7 +29,6 @@ impl<T: Scalar, S: Storage<T>> HouseholderQR<T, S> {
         let mut h_coeffs = vec![T::default(); size];
 
         for k in 0..size {
-            
             // 1. Compute norm of the tail of column k
             let mut norm_sq = T::default();
             for i in k..rows {
@@ -37,22 +36,26 @@ impl<T: Scalar, S: Storage<T>> HouseholderQR<T, S> {
                 norm_sq += val * val;
             }
             let norm = norm_sq.sqrt();
-            
+
             if norm != T::default() {
                 let v0 = *qr.get(k, k).unwrap();
-                let sigma = if v0 >= T::default() { norm } else { T::default() - norm };
-                
+                let sigma = if v0 >= T::default() {
+                    norm
+                } else {
+                    T::default() - norm
+                };
+
                 let v0_new = v0 + sigma;
                 // Correct tau for normalized v (where v[0] = 1)
                 let tau = v0_new / sigma;
                 h_coeffs[k] = tau;
-                
+
                 // Scale remaining elements of column k by (v0 + sigma)^-1
                 let inv_v0_new = v0_new.recip();
                 for i in k + 1..rows {
                     *qr.get_mut(i, k).unwrap() *= inv_v0_new;
                 }
-                
+
                 // R[k, k] = -sigma
                 *qr.get_mut(k, k).unwrap() = T::default() - sigma;
 
@@ -62,7 +65,7 @@ impl<T: Scalar, S: Storage<T>> HouseholderQR<T, S> {
                     for i in k + 1..rows {
                         dot += (*qr.get(i, k).unwrap()) * (*qr.get(i, j).unwrap());
                     }
-                    
+
                     let factor = tau * dot;
                     *qr.get_mut(k, j).unwrap() -= factor;
                     for i in k + 1..rows {
@@ -87,7 +90,7 @@ impl<T: Scalar, S: Storage<T>> HouseholderQR<T, S> {
         let rows = self.qr.rows();
         let cols = self.qr.cols();
         let mut r = Matrix::<T, DynamicStorage<T>>::new_dynamic(rows, cols).unwrap();
-        
+
         for i in 0..rows {
             for j in 0..cols {
                 if j >= i {
@@ -106,14 +109,18 @@ impl<T: Scalar, S: Storage<T>> HouseholderQR<T, S> {
         let cols = self.qr.cols();
         let size = std::cmp::min(rows, cols);
         let mut q = Matrix::<T, DynamicStorage<T>>::new_dynamic(rows, rows).unwrap();
-        
+
         // Initialize Q as Identity
         for i in 0..rows {
             for j in 0..rows {
-                *q.get_mut(i, j).unwrap() = if i == j { T::from_usize(1) } else { T::default() };
+                *q.get_mut(i, j).unwrap() = if i == j {
+                    T::from_usize(1)
+                } else {
+                    T::default()
+                };
             }
         }
-        
+
         // Q = H1 * H2 * ... * Hn
         // We apply them in reverse order to build Q from I.
         for k in (0..size).rev() {
@@ -127,7 +134,7 @@ impl<T: Scalar, S: Storage<T>> HouseholderQR<T, S> {
                     for i in k + 1..rows {
                         dot += (*self.qr.get(i, k).unwrap()) * (*q.get(i, j).unwrap());
                     }
-                    
+
                     let factor = tau * dot;
                     *q.get_mut(k, j).unwrap() -= factor;
                     for i in k + 1..rows {
@@ -141,11 +148,18 @@ impl<T: Scalar, S: Storage<T>> HouseholderQR<T, S> {
     }
 
     /// Solves the system Ax = b using the QR decomposition.
-    pub fn solve<S2: Storage<T>>(&self, b: &Matrix<T, S2>) -> Result<Matrix<T, DynamicStorage<T>>, String> {
+    pub fn solve<S2: Storage<T>>(
+        &self,
+        b: &Matrix<T, S2>,
+    ) -> Result<Matrix<T, DynamicStorage<T>>, String> {
         let rows = self.qr.rows();
         let cols = self.qr.cols();
         if b.rows() != rows {
-            return Err(format!("Dimension mismatch in QR solve: b.rows() {} != A.rows() {}", b.rows(), rows));
+            return Err(format!(
+                "Dimension mismatch in QR solve: b.rows() {} != A.rows() {}",
+                b.rows(),
+                rows
+            ));
         }
 
         let mut x = Matrix::<T, DynamicStorage<T>>::new_dynamic(rows, b.cols())?;
@@ -163,7 +177,7 @@ impl<T: Scalar, S: Storage<T>> HouseholderQR<T, S> {
                     for i in k + 1..rows {
                         dot += (*self.qr.get(i, k).unwrap()) * (*x.get(i, j).unwrap());
                     }
-                    
+
                     let factor = tau * dot;
                     *x.get_mut(k, j).unwrap() -= factor;
                     for i in k + 1..rows {
@@ -180,14 +194,17 @@ impl<T: Scalar, S: Storage<T>> HouseholderQR<T, S> {
             for i in (0..size).rev() {
                 let diag = *self.qr.get(i, i).unwrap();
                 if diag.abs().to_f64() < 1e-18 {
-                    return Err(format!("QR solve failed: singular matrix (zero diagonal at {})", i));
+                    return Err(format!(
+                        "QR solve failed: singular matrix (zero diagonal at {})",
+                        i
+                    ));
                 }
 
                 let mut sum = T::default();
                 for k in i + 1..cols {
                     sum += (*self.qr.get(i, k).unwrap()) * (*x.get(k, j).unwrap());
                 }
-                
+
                 let val = (*x.get(i, j).unwrap() - sum) / diag;
                 *x.get_mut(i, j).unwrap() = val;
             }

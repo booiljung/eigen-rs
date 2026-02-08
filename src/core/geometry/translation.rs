@@ -1,5 +1,5 @@
-use crate::core::scalar::Scalar;
 use crate::core::matrix::Matrix;
+use crate::core::scalar::Scalar;
 use crate::core::storage::FixedStorage;
 
 use std::ops::Mul;
@@ -16,7 +16,9 @@ impl<T: Scalar, const RANK: usize> Translation<T, RANK> {
     }
 
     pub fn identity() -> Self {
-        Self { vector: Matrix::zeros() }
+        Self {
+            vector: Matrix::zeros(),
+        }
     }
 
     pub fn inverse(&self) -> Self {
@@ -26,14 +28,16 @@ impl<T: Scalar, const RANK: usize> Translation<T, RANK> {
         }
         Self { vector: inv }
     }
-    
+
     pub fn vector(&self) -> &Matrix<T, FixedStorage<T, RANK, 1, RANK>> {
         &self.vector
     }
 }
 
 // Translation * Vector (Apply translation)
-impl<'a, T: Scalar, const RANK: usize> Mul<&'a Matrix<T, FixedStorage<T, RANK, 1, RANK>>> for &'a Translation<T, RANK> {
+impl<'a, T: Scalar, const RANK: usize> Mul<&'a Matrix<T, FixedStorage<T, RANK, 1, RANK>>>
+    for &'a Translation<T, RANK>
+{
     type Output = Matrix<T, FixedStorage<T, RANK, 1, RANK>>;
 
     fn mul(self, rhs: &'a Matrix<T, FixedStorage<T, RANK, 1, RANK>>) -> Self::Output {

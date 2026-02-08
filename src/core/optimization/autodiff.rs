@@ -1,10 +1,10 @@
 //! Automatic differentiation using Dual numbers.
 
-use crate::core::scalar::Scalar;
 use crate::core::matrix::MatrixX;
 use crate::core::optimization::Functor;
+use crate::core::scalar::Scalar;
 use crate::core::xpr::MatrixXpr;
-use std::ops::{Add, Sub, Mul, Div, Neg, AddAssign, SubAssign, MulAssign, DivAssign};
+use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 
 /// A dual number for forward-mode automatic differentiation.
 /// Value = real + epsilon * grad
@@ -29,11 +29,17 @@ impl<T: Scalar> Dual<T> {
     }
 
     pub fn constant(real: T) -> Self {
-        Self { real, grad: T::default() }
+        Self {
+            real,
+            grad: T::default(),
+        }
     }
 
     pub fn variable(real: T) -> Self {
-        Self { real, grad: T::from_f64(1.0) }
+        Self {
+            real,
+            grad: T::from_f64(1.0),
+        }
     }
 }
 
@@ -61,7 +67,10 @@ impl<T: Scalar> Mul for Dual<T> {
     type Output = Self;
     fn mul(self, rhs: Self) -> Self {
         // (a + be)(c + de) = ac + (ad + bc)e
-        Self::new(self.real * rhs.real, self.real * rhs.grad + self.grad * rhs.real)
+        Self::new(
+            self.real * rhs.real,
+            self.real * rhs.grad + self.grad * rhs.real,
+        )
     }
 }
 
@@ -70,7 +79,10 @@ impl<T: Scalar> Div for Dual<T> {
     fn div(self, rhs: Self) -> Self {
         // (a + be)/(c + de) = a/c + (bc - ad)/c^2 e
         let c2 = rhs.real * rhs.real;
-        Self::new(self.real / rhs.real, (self.grad * rhs.real - self.real * rhs.grad) / c2)
+        Self::new(
+            self.real / rhs.real,
+            (self.grad * rhs.real - self.real * rhs.grad) / c2,
+        )
     }
 }
 
@@ -82,59 +94,75 @@ impl<T: Scalar> Neg for Dual<T> {
 }
 
 impl<T: Scalar> AddAssign for Dual<T> {
-    fn add_assign(&mut self, rhs: Self) { *self = *self + rhs; }
+    fn add_assign(&mut self, rhs: Self) {
+        *self = *self + rhs;
+    }
 }
 impl<T: Scalar> SubAssign for Dual<T> {
-    fn sub_assign(&mut self, rhs: Self) { *self = *self - rhs; }
+    fn sub_assign(&mut self, rhs: Self) {
+        *self = *self - rhs;
+    }
 }
 impl<T: Scalar> MulAssign for Dual<T> {
-    fn mul_assign(&mut self, rhs: Self) { *self = *self * rhs; }
+    fn mul_assign(&mut self, rhs: Self) {
+        *self = *self * rhs;
+    }
 }
 impl<T: Scalar> DivAssign for Dual<T> {
-    fn div_assign(&mut self, rhs: Self) { *self = *self / rhs; }
+    fn div_assign(&mut self, rhs: Self) {
+        *self = *self / rhs;
+    }
 }
 
 impl<T: Scalar> Scalar for Dual<T> {
-    fn from_usize(v: usize) -> Self { Self::constant(T::from_usize(v)) }
-    fn from_f64(v: f64) -> Self { Self::constant(T::from_f64(v)) }
-    
-    fn abs(self) -> Self {
-        if self.real >= T::default() { self } else { -self }
+    fn from_usize(v: usize) -> Self {
+        Self::constant(T::from_usize(v))
     }
-    
+    fn from_f64(v: f64) -> Self {
+        Self::constant(T::from_f64(v))
+    }
+
+    fn abs(self) -> Self {
+        if self.real >= T::default() {
+            self
+        } else {
+            -self
+        }
+    }
+
     fn sqrt(self) -> Self {
         let s = self.real.sqrt();
         Self::new(s, self.grad / (T::from_f64(2.0) * s))
     }
-    
+
     fn recip(self) -> Self {
         let r = self.real.recip();
         Self::new(r, -self.grad * r * r)
     }
-    
+
     fn sin(self) -> Self {
         Self::new(self.real.sin(), self.grad * self.real.cos())
     }
-    
+
     fn cos(self) -> Self {
         Self::new(self.real.cos(), -self.grad * self.real.sin())
     }
-    
+
     fn asin(self) -> Self {
         let val = T::from_f64(1.0) - self.real * self.real;
         Self::new(self.real.asin(), self.grad / val.sqrt())
     }
-    
+
     fn acos(self) -> Self {
         let val = T::from_f64(1.0) - self.real * self.real;
         Self::new(self.real.acos(), -self.grad / val.sqrt())
     }
-    
+
     fn atan2(self, _other: Self) -> Self {
         // Simplified atan2 gradient if needed, but LM mostly uses simple ops
         unimplemented!("atan2 for Dual not implemented yet")
     }
-    
+
     fn powf(self, n: Self) -> Self {
         // (u^v)' = u^v * (v' ln u + v u' / u)
         // If n is constant (grad=0): v u^(v-1) u'
@@ -151,20 +179,27 @@ impl<T: Scalar> Scalar for Dual<T> {
         let e = self.real.exp();
         Self::new(e, e * self.grad)
     }
-    
+
     fn ln(self) -> Self {
         Self::new(self.real.ln(), self.grad / self.real)
     }
-    
-    fn epsilon() -> Self { Self::constant(T::epsilon()) }
-    fn conj(self) -> Self { self }
-    fn norm_sq(self) -> Self { self * self }
-    fn to_f64(self) -> f64 { self.real.to_f64() }
+
+    fn epsilon() -> Self {
+        Self::constant(T::epsilon())
+    }
+    fn conj(self) -> Self {
+        self
+    }
+    fn norm_sq(self) -> Self {
+        self * self
+    }
+    fn to_f64(self) -> f64 {
+        self.real.to_f64()
+    }
 }
 
 // Trick for atan2 placeholder to avoid compilation error if not used
-impl<T: Scalar> Dual<T> {
-}
+impl<T: Scalar> Dual<T> {}
 
 /// A trait for functions that can be evaluated with any Scalar type (including Dual).
 pub trait AdResiduals<T: Scalar> {
@@ -189,8 +224,12 @@ impl<F: AdResiduals<T>, T: Scalar> AutoDiff<F, T> {
 }
 
 impl<F: AdResiduals<T>, T: Scalar + 'static> Functor<T> for AutoDiff<F, T> {
-    fn inputs(&self) -> usize { self.func.inputs() }
-    fn values(&self) -> usize { self.func.values() }
+    fn inputs(&self) -> usize {
+        self.func.inputs()
+    }
+    fn values(&self) -> usize {
+        self.func.values()
+    }
 
     fn operator(&self, x: &MatrixX<T>, fvec: &mut MatrixX<T>) -> Result<(), String> {
         self.func.operator(x, fvec)
@@ -205,18 +244,22 @@ impl<F: AdResiduals<T>, T: Scalar + 'static> Functor<T> for AutoDiff<F, T> {
             let mut x_dual = MatrixX::<Dual<T>>::new_dynamic(n, 1)?;
             for i in 0..n {
                 let val = *x.get(i, 0).unwrap();
-                let grad = if i == j { T::from_f64(1.0) } else { T::default() };
+                let grad = if i == j {
+                    T::from_f64(1.0)
+                } else {
+                    T::default()
+                };
                 *x_dual.get_mut(i, 0).unwrap() = Dual::new(val, grad);
             }
-            
+
             let mut fvec_dual = MatrixX::<Dual<T>>::new_dynamic(m, 1)?;
             self.func.operator(&x_dual, &mut fvec_dual)?;
-            
+
             for i in 0..m {
                 *fjac.get_mut(i, j).unwrap() = fvec_dual.eval(i, 0).grad;
             }
         }
-        
+
         Ok(())
     }
 }

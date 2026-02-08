@@ -1,10 +1,10 @@
-use std::ops::{Add, Sub, Mul};
 use crate::core::scalar::Scalar;
-use crate::core::tensor::Tensor;
 use crate::core::tensor::xpr::{
-    CwiseTensorAddOp, CwiseTensorSubOp, CwiseTensorScalarMulOp, 
-    CwiseTensorScalarAddOp, CwiseTensorScalarSubOp, TensorXpr
+    CwiseTensorAddOp, CwiseTensorScalarAddOp, CwiseTensorScalarMulOp, CwiseTensorScalarSubOp,
+    CwiseTensorSubOp, TensorXpr,
 };
+use crate::core::tensor::Tensor;
+use std::ops::{Add, Mul, Sub};
 
 // --- Add ---
 
@@ -25,8 +25,11 @@ impl<'a, T: Scalar, const RANK: usize> Add<T> for &'a Tensor<T, RANK> {
 }
 
 // (Add Xpr) + &Tensor
-impl<'a, T: Scalar, const RANK: usize, L, R> Add<&'a Tensor<T, RANK>> for CwiseTensorAddOp<T, RANK, L, R> 
-where L: TensorXpr<T, RANK>, R: TensorXpr<T, RANK>
+impl<'a, T: Scalar, const RANK: usize, L, R> Add<&'a Tensor<T, RANK>>
+    for CwiseTensorAddOp<T, RANK, L, R>
+where
+    L: TensorXpr<T, RANK>,
+    R: TensorXpr<T, RANK>,
 {
     type Output = CwiseTensorAddOp<T, RANK, CwiseTensorAddOp<T, RANK, L, R>, &'a Tensor<T, RANK>>;
     fn add(self, rhs: &'a Tensor<T, RANK>) -> Self::Output {
@@ -36,7 +39,9 @@ where L: TensorXpr<T, RANK>, R: TensorXpr<T, RANK>
 
 // (Add Xpr) + T (Broadcasting)
 impl<T: Scalar, const RANK: usize, L, R> Add<T> for CwiseTensorAddOp<T, RANK, L, R>
-where L: TensorXpr<T, RANK>, R: TensorXpr<T, RANK>
+where
+    L: TensorXpr<T, RANK>,
+    R: TensorXpr<T, RANK>,
 {
     type Output = CwiseTensorScalarAddOp<T, RANK, CwiseTensorAddOp<T, RANK, L, R>>;
     fn add(self, rhs: T) -> Self::Output {
@@ -63,8 +68,11 @@ impl<'a, T: Scalar, const RANK: usize> Sub<T> for &'a Tensor<T, RANK> {
 }
 
 // (Sub Xpr) - &Tensor
-impl<'a, T: Scalar, const RANK: usize, L, R> Sub<&'a Tensor<T, RANK>> for CwiseTensorSubOp<T, RANK, L, R> 
-where L: TensorXpr<T, RANK>, R: TensorXpr<T, RANK>
+impl<'a, T: Scalar, const RANK: usize, L, R> Sub<&'a Tensor<T, RANK>>
+    for CwiseTensorSubOp<T, RANK, L, R>
+where
+    L: TensorXpr<T, RANK>,
+    R: TensorXpr<T, RANK>,
 {
     type Output = CwiseTensorSubOp<T, RANK, CwiseTensorSubOp<T, RANK, L, R>, &'a Tensor<T, RANK>>;
     fn sub(self, rhs: &'a Tensor<T, RANK>) -> Self::Output {
@@ -84,7 +92,9 @@ impl<'a, T: Scalar, const RANK: usize> Mul<T> for &'a Tensor<T, RANK> {
 
 // (Add Xpr) * T
 impl<T: Scalar, const RANK: usize, L, R> Mul<T> for CwiseTensorAddOp<T, RANK, L, R>
-where L: TensorXpr<T, RANK>, R: TensorXpr<T, RANK>
+where
+    L: TensorXpr<T, RANK>,
+    R: TensorXpr<T, RANK>,
 {
     type Output = CwiseTensorScalarMulOp<T, RANK, CwiseTensorAddOp<T, RANK, L, R>>;
     fn mul(self, rhs: T) -> Self::Output {
@@ -94,7 +104,9 @@ where L: TensorXpr<T, RANK>, R: TensorXpr<T, RANK>
 
 // (Sub Xpr) * T
 impl<T: Scalar, const RANK: usize, L, R> Mul<T> for CwiseTensorSubOp<T, RANK, L, R>
-where L: TensorXpr<T, RANK>, R: TensorXpr<T, RANK>
+where
+    L: TensorXpr<T, RANK>,
+    R: TensorXpr<T, RANK>,
 {
     type Output = CwiseTensorScalarMulOp<T, RANK, CwiseTensorSubOp<T, RANK, L, R>>;
     fn mul(self, rhs: T) -> Self::Output {

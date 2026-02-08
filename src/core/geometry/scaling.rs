@@ -1,5 +1,5 @@
-use crate::core::scalar::Scalar;
 use crate::core::matrix::Matrix;
+use crate::core::scalar::Scalar;
 use crate::core::storage::FixedStorage;
 
 use std::ops::Mul;
@@ -14,7 +14,7 @@ impl<T: Scalar, const RANK: usize> Scaling<T, RANK> {
     pub fn new(coeffs: Matrix<T, FixedStorage<T, RANK, 1, RANK>>) -> Self {
         Self { coeffs }
     }
-    
+
     pub fn uniform(s: T) -> Self {
         let mut coeffs = Matrix::zeros();
         for i in 0..RANK {
@@ -38,7 +38,9 @@ impl<T: Scalar, const RANK: usize> Scaling<T, RANK> {
 }
 
 // Scaling * Vector (Apply scaling)
-impl<'a, T: Scalar, const RANK: usize> Mul<&'a Matrix<T, FixedStorage<T, RANK, 1, RANK>>> for &'a Scaling<T, RANK> {
+impl<'a, T: Scalar, const RANK: usize> Mul<&'a Matrix<T, FixedStorage<T, RANK, 1, RANK>>>
+    for &'a Scaling<T, RANK>
+{
     type Output = Matrix<T, FixedStorage<T, RANK, 1, RANK>>;
 
     fn mul(self, rhs: &'a Matrix<T, FixedStorage<T, RANK, 1, RANK>>) -> Self::Output {

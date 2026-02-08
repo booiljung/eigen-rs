@@ -1,11 +1,11 @@
 //! Operator implementations for sparse matrices.
 
-use crate::core::scalar::Scalar;
-use crate::core::sparse::sparse_matrix::{SparseMatrix, StorageOrder};
-use crate::core::sparse::iterators::InnerIterator;
 use crate::core::matrix::Matrix;
-use crate::core::storage::{Storage, DynamicStorage};
-use std::ops::{Add, Sub, Mul};
+use crate::core::scalar::Scalar;
+use crate::core::sparse::iterators::InnerIterator;
+use crate::core::sparse::sparse_matrix::{SparseMatrix, StorageOrder};
+use crate::core::storage::{DynamicStorage, Storage};
+use std::ops::{Add, Mul, Sub};
 
 impl<T: Scalar> Add for &SparseMatrix<T> {
     type Output = Result<SparseMatrix<T>, String>;
@@ -45,7 +45,7 @@ impl<T: Scalar> Mul for &SparseMatrix<T> {
 
         let mut res_values = Vec::new();
         let mut res_inner = Vec::new();
-        
+
         match self.order() {
             StorageOrder::RowMajor => {
                 let mut res_outer = vec![0; outer_dim_lhs + 1];
@@ -58,12 +58,12 @@ impl<T: Scalar> Mul for &SparseMatrix<T> {
                     while it_a.is_valid() {
                         let val_a = it_a.value();
                         let k = it_a.index();
-                        
+
                         let mut it_b = InnerIterator::new(rhs, k);
                         while it_b.is_valid() {
                             let val_b = it_b.value();
                             let j = it_b.index();
-                            
+
                             workspace[j] += val_a * val_b;
                             if !marker[j] {
                                 marker[j] = true;
@@ -87,7 +87,14 @@ impl<T: Scalar> Mul for &SparseMatrix<T> {
                     active_cols.clear();
                     res_outer[i + 1] = res_values.len();
                 }
-                Ok(SparseMatrix::from_raw(self.rows(), rhs.cols(), res_values, res_inner, res_outer, StorageOrder::RowMajor))
+                Ok(SparseMatrix::from_raw(
+                    self.rows(),
+                    rhs.cols(),
+                    res_values,
+                    res_inner,
+                    res_outer,
+                    StorageOrder::RowMajor,
+                ))
             }
             StorageOrder::ColMajor => {
                 let mut res_outer = vec![0; outer_dim_rhs + 1];
@@ -100,12 +107,12 @@ impl<T: Scalar> Mul for &SparseMatrix<T> {
                     while it_b.is_valid() {
                         let val_b = it_b.value();
                         let k = it_b.index();
-                        
+
                         let mut it_a = InnerIterator::new(self, k);
                         while it_a.is_valid() {
                             let val_a = it_a.value();
                             let i = it_a.index();
-                            
+
                             workspace[i] += val_a * val_b;
                             if !marker[i] {
                                 marker[i] = true;
@@ -129,7 +136,14 @@ impl<T: Scalar> Mul for &SparseMatrix<T> {
                     active_rows.clear();
                     res_outer[j + 1] = res_values.len();
                 }
-                Ok(SparseMatrix::from_raw(self.rows(), rhs.cols(), res_values, res_inner, res_outer, StorageOrder::ColMajor))
+                Ok(SparseMatrix::from_raw(
+                    self.rows(),
+                    rhs.cols(),
+                    res_values,
+                    res_inner,
+                    res_outer,
+                    StorageOrder::ColMajor,
+                ))
             }
         }
     }
@@ -143,8 +157,10 @@ impl<T: Scalar, S: Storage<T>> Mul<&Matrix<T, S>> for &SparseMatrix<T> {
 }
 
 impl<T: Scalar> SparseMatrix<T> {
-    fn binary_op<F>(&self, rhs: &Self, op: F) -> Result<Self, String> 
-    where F: Fn(T, T) -> T {
+    fn binary_op<F>(&self, rhs: &Self, op: F) -> Result<Self, String>
+    where
+        F: Fn(T, T) -> T,
+    {
         if self.rows() != rhs.rows() || self.cols() != rhs.cols() {
             return Err("Incompatible dimensions for sparse operation".to_string());
         }
@@ -152,8 +168,12 @@ impl<T: Scalar> SparseMatrix<T> {
             return Err("Sparse operation requires same storage order".to_string());
         }
 
-        let outer_limit = if self.order() == StorageOrder::RowMajor { self.rows() } else { self.cols() };
-        
+        let outer_limit = if self.order() == StorageOrder::RowMajor {
+            self.rows()
+        } else {
+            self.cols()
+        };
+
         let mut res_values = Vec::new();
         let mut res_inner = Vec::new();
         let mut res_outer = vec![0; outer_limit + 1];
@@ -196,6 +216,13 @@ impl<T: Scalar> SparseMatrix<T> {
             res_outer[i + 1] = res_values.len();
         }
 
-        Ok(SparseMatrix::from_raw(self.rows(), self.cols(), res_values, res_inner, res_outer, self.order()))
+        Ok(SparseMatrix::from_raw(
+            self.rows(),
+            self.cols(),
+            res_values,
+            res_inner,
+            res_outer,
+            self.order(),
+        ))
     }
 }

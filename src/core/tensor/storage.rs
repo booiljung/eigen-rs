@@ -1,7 +1,7 @@
 //! Storage and indexing for Tensors.
 
 use crate::core::scalar::Scalar;
-use crate::core::storage::{AlignedStorage};
+use crate::core::storage::AlignedStorage;
 
 /// Storage for a Tensor, managing its dimensions and flat memory.
 pub struct TensorStorage<T: Scalar, const RANK: usize> {

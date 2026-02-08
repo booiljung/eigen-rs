@@ -25,7 +25,10 @@ impl Permutation {
         for (i, &p) in indices.iter().enumerate() {
             inv_indices[p] = i;
         }
-        Self { indices, inv_indices }
+        Self {
+            indices,
+            inv_indices,
+        }
     }
 
     pub fn indices(&self) -> &[usize] {

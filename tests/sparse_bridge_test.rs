@@ -1,7 +1,7 @@
-#[cfg(feature = "suitesparse")]
-use eigen_rs::core::sparse::bridges::suitesparse::CholmodLLT;
 #[cfg(feature = "mkl")]
 use eigen_rs::core::sparse::bridges::mkl::MklPardiso;
+#[cfg(feature = "suitesparse")]
+use eigen_rs::core::sparse::bridges::suitesparse::CholmodLLT;
 
 #[test]
 fn test_cholmod_bridge_init() {

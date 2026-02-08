@@ -17,22 +17,22 @@ impl SpecialFunctions for f32 {
     fn erf(self) -> Self {
         libm::erff(self)
     }
-    
+
     #[inline]
     fn erfc(self) -> Self {
         libm::erfcf(self)
     }
-    
+
     #[inline]
     fn lgamma(self) -> Self {
         libm::lgammaf(self)
     }
-    
+
     #[inline]
     fn bessel_j0(self) -> Self {
         libm::j0f(self)
     }
-    
+
     #[inline]
     fn bessel_j1(self) -> Self {
         libm::j1f(self)
@@ -44,22 +44,22 @@ impl SpecialFunctions for f64 {
     fn erf(self) -> Self {
         libm::erf(self)
     }
-    
+
     #[inline]
     fn erfc(self) -> Self {
         libm::erfc(self)
     }
-    
+
     #[inline]
     fn lgamma(self) -> Self {
         libm::lgamma(self)
     }
-    
+
     #[inline]
     fn bessel_j0(self) -> Self {
         libm::j0(self)
     }
-    
+
     #[inline]
     fn bessel_j1(self) -> Self {
         libm::j1(self)

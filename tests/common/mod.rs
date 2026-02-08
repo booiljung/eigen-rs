@@ -1,16 +1,17 @@
-use std::process::Command;
-use std::path::Path;
 use std::fs;
+use std::path::Path;
+use std::process::Command;
 
 /// Compiles and runs a C++ harness, returning the parsed output as (row, col, value).
+#[allow(dead_code)]
 pub fn run_cpp_harness(cpp_file: &str) -> Result<Vec<(usize, usize, f32)>, String> {
     let cpp_path = Path::new(cpp_file);
     let bin_path = cpp_path.with_extension("bin");
-    
+
     // 1. Compile C++ code with Eigen include path
     let status = Command::new("g++")
         .arg("-I")
-        .arg("external/eigen") // Relative to project root
+        .arg("eigen-src") // Relative to project root
         .arg("-O3")
         .arg(cpp_file)
         .arg("-o")
@@ -40,9 +41,15 @@ pub fn run_cpp_harness(cpp_file: &str) -> Result<Vec<(usize, usize, f32)>, Strin
     for line in stdout.lines() {
         let parts: Vec<&str> = line.split(',').collect();
         if parts.len() == 3 {
-            let r: usize = parts[0].parse().map_err(|e| format!("Parse error: {}", e))?;
-            let c: usize = parts[1].parse().map_err(|e| format!("Parse error: {}", e))?;
-            let v: f32 = parts[2].parse().map_err(|e| format!("Parse error: {}", e))?;
+            let r: usize = parts[0]
+                .parse()
+                .map_err(|e| format!("Parse error: {}", e))?;
+            let c: usize = parts[1]
+                .parse()
+                .map_err(|e| format!("Parse error: {}", e))?;
+            let v: f32 = parts[2]
+                .parse()
+                .map_err(|e| format!("Parse error: {}", e))?;
             results.push((r, c, v));
         }
     }
@@ -51,16 +58,21 @@ pub fn run_cpp_harness(cpp_file: &str) -> Result<Vec<(usize, usize, f32)>, Strin
 }
 
 /// Runs a C++ harness and returns the raw stdout.
+#[allow(dead_code)]
 pub fn run_cpp_harness_stdout(cpp_file: &str) -> Result<String, String> {
     let cpp_path = Path::new(cpp_file);
     // Use a unique name to avoid "Text file busy" in parallel tests
     let thread_id = std::thread::current().id();
-    let bin_name = format!("{}_{:?}.bin", cpp_path.file_stem().unwrap().to_str().unwrap(), thread_id);
+    let bin_name = format!(
+        "{}_{:?}.bin",
+        cpp_path.file_stem().unwrap().to_str().unwrap(),
+        thread_id
+    );
     let bin_path = cpp_path.parent().unwrap().join(bin_name);
-    
+
     let status = Command::new("g++")
         .arg("-I")
-        .arg("external/eigen")
+        .arg("eigen-src")
         .arg("-O3")
         .arg(cpp_file)
         .arg("-o")

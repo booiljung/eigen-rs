@@ -1,22 +1,27 @@
 //! Base trait and common implementations for preconditioners used by iterative solvers.
 
-use crate::core::scalar::Scalar;
-use crate::core::sparse::sparse_matrix::SparseMatrix;
 use crate::core::matrix::Matrix;
-use crate::core::storage::{Storage, DynamicStorage};
+use crate::core::scalar::Scalar;
 use crate::core::sparse::iterators::InnerIterator;
+use crate::core::sparse::sparse_matrix::SparseMatrix;
+use crate::core::storage::{DynamicStorage, Storage};
 
 /// Trait for preconditioners that can be used with iterative solvers.
 /// A preconditioner M is an approximation of A such that M^-1 * A has a better condition number.
 pub trait Preconditioner<T: Scalar> {
     /// Checks if the preconditioner is ready for use.
-    fn is_initialized(&self) -> bool { true }
+    fn is_initialized(&self) -> bool {
+        true
+    }
 
     /// Sets up the preconditioner for the given matrix A.
     fn compute(&mut self, matrix: &SparseMatrix<T>) -> Result<(), String>;
 
     /// Solves the preconditioning system M * x = b.
-    fn solve<S: Storage<T>>(&self, b: &Matrix<T, S>) -> Result<Matrix<T, DynamicStorage<T>>, String>;
+    fn solve<S: Storage<T>>(
+        &self,
+        b: &Matrix<T, S>,
+    ) -> Result<Matrix<T, DynamicStorage<T>>, String>;
 }
 
 /// Identity preconditioner (M = I). Does nothing.
@@ -34,7 +39,10 @@ impl<T: Scalar> Preconditioner<T> for IdentityPreconditioner {
         Ok(())
     }
 
-    fn solve<S: Storage<T>>(&self, b: &Matrix<T, S>) -> Result<Matrix<T, DynamicStorage<T>>, String> {
+    fn solve<S: Storage<T>>(
+        &self,
+        b: &Matrix<T, S>,
+    ) -> Result<Matrix<T, DynamicStorage<T>>, String> {
         // Return a copy of b
         let mut x = Matrix::<T, DynamicStorage<T>>::new_dynamic(b.rows(), b.cols())?;
         for j in 0..b.cols() {
@@ -70,7 +78,7 @@ impl<T: Scalar> Preconditioner<T> for DiagonalPreconditioner<T> {
     fn compute(&mut self, matrix: &SparseMatrix<T>) -> Result<(), String> {
         let n = matrix.rows();
         self.inv_diag = vec![T::default(); n];
-        
+
         for j in 0..n {
             let mut it = InnerIterator::new(matrix, j);
             let mut found = false;
@@ -90,12 +98,15 @@ impl<T: Scalar> Preconditioner<T> for DiagonalPreconditioner<T> {
                 return Err(format!("Missing diagonal element at index {}", j));
             }
         }
-        
+
         self.is_initialized = true;
         Ok(())
     }
 
-    fn solve<S: Storage<T>>(&self, b: &Matrix<T, S>) -> Result<Matrix<T, DynamicStorage<T>>, String> {
+    fn solve<S: Storage<T>>(
+        &self,
+        b: &Matrix<T, S>,
+    ) -> Result<Matrix<T, DynamicStorage<T>>, String> {
         if !self.is_initialized {
             return Err("Preconditioner not initialized".to_string());
         }

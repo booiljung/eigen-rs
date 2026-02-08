@@ -1,6 +1,6 @@
+use crate::core::geometry::quaternion::Quaternion;
 use crate::core::matrix::Vector3;
 use crate::core::scalar::Scalar;
-use crate::core::geometry::quaternion::Quaternion;
 
 /// Represents a rotation defined by an axis and an angle.
 pub struct AngleAxis<T: Scalar> {
@@ -14,8 +14,12 @@ impl<T: Scalar> AngleAxis<T> {
         Self { axis, angle }
     }
 
-    pub fn axis(&self) -> &Vector3<T> { &self.axis }
-    pub fn angle(&self) -> T { self.angle }
+    pub fn axis(&self) -> &Vector3<T> {
+        &self.axis
+    }
+    pub fn angle(&self) -> T {
+        self.angle
+    }
 
     /// Converts this rotation to a Quaternion.
     pub fn to_quaternion(&self) -> Quaternion<T> {
@@ -27,7 +31,7 @@ impl<T: Scalar> AngleAxis<T> {
             *self.axis.get(0, 0).unwrap() * s,
             *self.axis.get(1, 0).unwrap() * s,
             *self.axis.get(2, 0).unwrap() * s,
-            c
+            c,
         )
     }
 

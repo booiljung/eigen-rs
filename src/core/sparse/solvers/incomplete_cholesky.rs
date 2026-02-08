@@ -1,11 +1,11 @@
 //! Incomplete Cholesky (IC) preconditioner.
 
-use crate::core::scalar::Scalar;
-use crate::core::sparse::sparse_matrix::SparseMatrix;
 use crate::core::matrix::Matrix;
-use crate::core::storage::{Storage, DynamicStorage};
-use crate::core::sparse::solvers::iterative_solver_base::Preconditioner;
+use crate::core::scalar::Scalar;
 use crate::core::sparse::iterators::InnerIterator;
+use crate::core::sparse::solvers::iterative_solver_base::Preconditioner;
+use crate::core::sparse::sparse_matrix::SparseMatrix;
+use crate::core::storage::{DynamicStorage, Storage};
 
 /// Incomplete Cholesky (IC) preconditioner.
 pub struct IncompleteCholesky<T: Scalar> {
@@ -36,7 +36,7 @@ impl<T: Scalar> Preconditioner<T> for IncompleteCholesky<T> {
     fn compute(&mut self, matrix: &SparseMatrix<T>) -> Result<(), String> {
         let n = matrix.rows();
         self.l = SparseMatrix::new(n, n, crate::core::sparse::StorageOrder::ColMajor);
-        
+
         // IC(0) - Sparsity(L) = Sparsity(lower(A))
         // We need to keep track of the sparsity pattern.
         let mut pattern = vec![Vec::new(); n];
@@ -69,10 +69,10 @@ impl<T: Scalar> Preconditioner<T> for IncompleteCholesky<T> {
             for k in 0..j {
                 // Find L_jk
                 let mut l_jk = T::default();
-                // We need efficient access to L_jk. 
+                // We need efficient access to L_jk.
                 // Since l_values[k] contains rows starting from k, we can search for j.
                 // In IC(0), if (j, k) is in the pattern, it exists.
-                
+
                 // Let's optimize: we only care about k such that L_jk is in the pattern of A.
                 // But Cholesky is more complex. Let's find l_jk in l_values[k].
                 // The rows in l_values[k] correspond to pattern[k].
@@ -99,10 +99,14 @@ impl<T: Scalar> Preconditioner<T> for IncompleteCholesky<T> {
             let l_jj_sq = workspace[j];
             if l_jj_sq.to_f64() <= 1e-18 {
                 // Not positive definite or too small, fallback/fail
-                return Err(format!("IC(0) failed at column {}: diagonal element {} is not positive", j, l_jj_sq.to_f64()));
+                return Err(format!(
+                    "IC(0) failed at column {}: diagonal element {} is not positive",
+                    j,
+                    l_jj_sq.to_f64()
+                ));
             }
             let l_jj = l_jj_sq.sqrt();
-            
+
             for &i in &pattern[j] {
                 let val = if i == j { l_jj } else { workspace[i] / l_jj };
                 l_values[j].push(val);
@@ -121,22 +125,25 @@ impl<T: Scalar> Preconditioner<T> for IncompleteCholesky<T> {
         self.is_initialized = true;
         Ok(())
     }
-    
-    fn solve<S: Storage<T>>(&self, b: &Matrix<T, S>) -> Result<Matrix<T, DynamicStorage<T>>, String> {
+
+    fn solve<S: Storage<T>>(
+        &self,
+        b: &Matrix<T, S>,
+    ) -> Result<Matrix<T, DynamicStorage<T>>, String> {
         if !self.is_initialized {
             return Err("Preconditioner not initialized".to_string());
         }
-        
+
         let n = b.rows();
         let mut x = Matrix::<T, DynamicStorage<T>>::new_dynamic(n, b.cols())?;
-        
+
         for k in 0..b.cols() {
             // Forward solve L*y = b
             let mut y = vec![T::default(); n];
             for i in 0..n {
                 y[i] = *b.get(i, k).unwrap();
             }
-            
+
             for j in 0..n {
                 let mut it = InnerIterator::new(&self.l, j);
                 let mut diag = T::from_f64(1.0);
@@ -147,11 +154,11 @@ impl<T: Scalar> Preconditioner<T> for IncompleteCholesky<T> {
                     }
                     it.next();
                 }
-                
+
                 if diag.abs().to_f64() > 1e-18 {
                     y[j] /= diag;
                 }
-                
+
                 let val_j = y[j];
                 let mut it = InnerIterator::new(&self.l, j);
                 while it.is_valid() {
@@ -162,7 +169,7 @@ impl<T: Scalar> Preconditioner<T> for IncompleteCholesky<T> {
                     it.next();
                 }
             }
-            
+
             // Backward solve L^T * x = y
             for j in (0..n).rev() {
                 // For L^T, row j is column j of L? No.
@@ -186,13 +193,12 @@ impl<T: Scalar> Preconditioner<T> for IncompleteCholesky<T> {
                     y[j] /= diag;
                 }
             }
-            
+
             for i in 0..n {
                 *x.get_mut(i, k).unwrap() = y[i];
             }
         }
-        
+
         Ok(x)
     }
 }
-

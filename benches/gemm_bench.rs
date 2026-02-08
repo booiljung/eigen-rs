@@ -1,9 +1,9 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId, Throughput};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use eigen_rs::core::matrix::MatrixX;
 
 fn bench_gemm_large(c: &mut Criterion) {
     let sizes = [256, 512, 1024, 2048];
-    
+
     let mut group = c.benchmark_group("GEMM Large");
     group.sample_size(10); // Reduce sample size for large matrices
 
@@ -20,7 +20,8 @@ fn bench_gemm_large(c: &mut Criterion) {
             group.throughput(Throughput::Elements((size * size * size) as u64));
             group.bench_with_input(BenchmarkId::new("f32_opt", size), &size, |bencher, _| {
                 bencher.iter(|| {
-                    res.assign_product(&(black_box(&a) * black_box(&b))).unwrap();
+                    res.assign_product(&(black_box(&a) * black_box(&b)))
+                        .unwrap();
                 });
             });
 
@@ -44,7 +45,8 @@ fn bench_gemm_large(c: &mut Criterion) {
             group.throughput(Throughput::Elements((size * size * size) as u64));
             group.bench_with_input(BenchmarkId::new("f64_opt", size), &size, |bencher, _| {
                 bencher.iter(|| {
-                    res.assign_product(&(black_box(&a) * black_box(&b))).unwrap();
+                    res.assign_product(&(black_box(&a) * black_box(&b)))
+                        .unwrap();
                 });
             });
 

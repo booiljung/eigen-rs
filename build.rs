@@ -1,31 +1,33 @@
-use std::process::Command;
 use std::path::Path;
+use std::process::Command;
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=src/core/cuda/kernels.cu");
 
     // Detect CUDA installation
-    let cuda_path = std::env::var("CUDA_PATH").ok()
-        .or_else(|| {
-            if Path::new("/usr/local/cuda").exists() {
-                Some("/usr/local/cuda".to_string())
-            } else {
-                // Try to find nvcc and guess path
-                Command::new("which")
-                    .arg("nvcc")
-                    .output()
-                    .ok()
-                    .and_then(|out| {
-                        if out.status.success() {
-                            let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                            Path::new(&s).parent().and_then(|p| p.parent()).map(|p| p.to_string_lossy().to_string())
-                        } else {
-                            None
-                        }
-                    })
-            }
-        });
+    let cuda_path = std::env::var("CUDA_PATH").ok().or_else(|| {
+        if Path::new("/usr/local/cuda").exists() {
+            Some("/usr/local/cuda".to_string())
+        } else {
+            // Try to find nvcc and guess path
+            Command::new("which")
+                .arg("nvcc")
+                .output()
+                .ok()
+                .and_then(|out| {
+                    if out.status.success() {
+                        let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                        Path::new(&s)
+                            .parent()
+                            .and_then(|p| p.parent())
+                            .map(|p| p.to_string_lossy().to_string())
+                    } else {
+                        None
+                    }
+                })
+        }
+    });
 
     let out_dir = std::env::var("OUT_DIR").unwrap();
     let ptx_path = Path::new(&out_dir).join("kernels.ptx");

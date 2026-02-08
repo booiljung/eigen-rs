@@ -13,7 +13,7 @@ pub trait GemmKernel {
     const NR_DIV: usize = 1;
 
     /// Execute the micro-kernel: C += A * B
-    /// 
+    ///
     /// - `kc`: Depths (common dimension)
     /// - `alpha`: Scaling factor
     /// - `a`: Packed LHS (MC x KC)

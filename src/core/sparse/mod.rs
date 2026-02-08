@@ -1,16 +1,16 @@
 //! Sparse Linear Algebra module.
 
-pub mod sparse_matrix;
-pub mod iterators;
-pub mod solvers;
-pub mod ordering;
-pub mod cuda_storage;
-pub mod cuda_ops;
-pub mod ops;
 pub mod bridges;
+pub mod cuda_ops;
+pub mod cuda_storage;
+pub mod iterators;
+pub mod ops;
+pub mod ordering;
+pub mod solvers;
+pub mod sparse_matrix;
 
-pub use sparse_matrix::{SparseMatrix, Triplet, StorageOrder};
-pub use iterators::InnerIterator;
-pub use ordering::{Ordering, Permutation, NaturalOrdering};
 #[cfg(feature = "cuda")]
 pub use cuda_storage::CudaSparseStorage;
+pub use iterators::InnerIterator;
+pub use ordering::{NaturalOrdering, Ordering, Permutation};
+pub use sparse_matrix::{SparseMatrix, StorageOrder, Triplet};

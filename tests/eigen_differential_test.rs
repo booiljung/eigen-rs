@@ -11,10 +11,7 @@ fn test_matrix_eigen_differential() {
     // 2. Setup Rust matrix (4x4)
     let mut m = Matrix::<f32, DynamicStorage<f32>>::new_dynamic(4, 4).unwrap();
     let data = [
-        10.0, 1.0, 2.0, 3.0,
-        1.0, 20.0, 4.0, 5.0,
-        2.0, 4.0, 30.0, 6.0,
-        3.0, 5.0, 6.0, 40.0,
+        10.0, 1.0, 2.0, 3.0, 1.0, 20.0, 4.0, 5.0, 2.0, 4.0, 30.0, 6.0, 3.0, 5.0, 6.0, 40.0,
     ];
     for i in 0..4 {
         for j in 0..4 {
@@ -23,7 +20,9 @@ fn test_matrix_eigen_differential() {
     }
 
     // 3. Compute in Rust
-    let solver = m.self_adjoint_eigen_solver(true).expect("Rust solver failed");
+    let solver = m
+        .self_adjoint_eigen_solver(true)
+        .expect("Rust solver failed");
     let rust_vals = solver.eigenvalues();
     let rust_vecs = solver.eigenvectors().unwrap();
 
@@ -38,13 +37,13 @@ fn test_matrix_eigen_differential() {
                 let idx: usize = parts[1].parse().unwrap();
                 let val: f32 = parts[2].parse().unwrap();
                 cpp_vals[idx] = val;
-            },
+            }
             "VEC" => {
                 let row: usize = parts[1].parse().unwrap();
                 let col: usize = parts[2].parse().unwrap();
                 let val: f32 = parts[3].parse().unwrap();
                 cpp_vecs[row][col] = val;
-            },
+            }
             _ => {}
         }
     }
@@ -53,7 +52,13 @@ fn test_matrix_eigen_differential() {
     for i in 0..4 {
         let rv = *rust_vals.get(i, 0).unwrap();
         let cv = cpp_vals[i];
-        assert!((rv - cv).abs() < 1e-4, "Eigenvalue mismatch at {}: Rust={} C++={}", i, rv, cv);
+        assert!(
+            (rv - cv).abs() < 1e-4,
+            "Eigenvalue mismatch at {}: Rust={} C++={}",
+            i,
+            rv,
+            cv
+        );
     }
 
     // 6. Compare Eigenvectors (Careful with sign flip!)
@@ -68,10 +73,15 @@ fn test_matrix_eigen_differential() {
             diff_pos += (rv - cv).abs();
             diff_neg += (rv + cv).abs();
         }
-        
+
         // Sum of absolute differences should be small for one of the cases
-        assert!(diff_pos < 1e-4 || diff_neg < 1e-4, 
-            "Eigenvector mismatch at column {}: diff_pos={}, diff_neg={}", j, diff_pos, diff_neg);
+        assert!(
+            diff_pos < 1e-4 || diff_neg < 1e-4,
+            "Eigenvector mismatch at column {}: diff_pos={}, diff_neg={}",
+            j,
+            diff_pos,
+            diff_neg
+        );
     }
 }
 #[test]
@@ -86,10 +96,22 @@ fn test_complex_schur_differential() {
     let mut m = Matrix::<Complex<f64>, DynamicStorage<Complex<f64>>>::new_dynamic(n, n).unwrap();
     // Same values as in C++
     let data = [
-        Complex::new(0.35, 0.45), Complex::new(0.45, -0.14), Complex::new(-0.14, 0.25), Complex::new(-0.17, 0.11),
-        Complex::new(0.09, 0.07), Complex::new(0.07, 0.35), Complex::new(-0.54, -0.13), Complex::new(0.35, 0.17),
-        Complex::new(-0.44, -0.33), Complex::new(-0.33, 0.11), Complex::new(-0.03, 0.17), Complex::new(0.17, 0.09),
-        Complex::new(0.25, -0.32), Complex::new(-0.32, 0.09), Complex::new(-0.13, 0.07), Complex::new(0.11, 0.11),
+        Complex::new(0.35, 0.45),
+        Complex::new(0.45, -0.14),
+        Complex::new(-0.14, 0.25),
+        Complex::new(-0.17, 0.11),
+        Complex::new(0.09, 0.07),
+        Complex::new(0.07, 0.35),
+        Complex::new(-0.54, -0.13),
+        Complex::new(0.35, 0.17),
+        Complex::new(-0.44, -0.33),
+        Complex::new(-0.33, 0.11),
+        Complex::new(-0.03, 0.17),
+        Complex::new(0.17, 0.09),
+        Complex::new(0.25, -0.32),
+        Complex::new(-0.32, 0.09),
+        Complex::new(-0.13, 0.07),
+        Complex::new(0.11, 0.11),
     ];
     for i in 0..n {
         for j in 0..n {
@@ -99,7 +121,7 @@ fn test_complex_schur_differential() {
 
     let schur = ComplexSchur::new(&m).expect("Rust Schur failed");
     let rust_t = schur.matrix_t();
-    let rust_u = schur.matrix_u();
+    let _rust_u = schur.matrix_u();
 
     let mut cpp_vals = Vec::new();
     for line in cpp_output.lines() {
@@ -122,8 +144,20 @@ fn test_complex_schur_differential() {
     for i in 0..n {
         let rv = rv_vals[i];
         let cv = cpp_vals[i];
-        assert!((rv.re - cv.re).abs() < 1e-8, "Eigenvalue mismatch at {}: Rust={} C++={}", i, rv, cv);
-        assert!((rv.im - cv.im).abs() < 1e-8, "Eigenvalue mismatch at {}: Rust={} C++={}", i, rv, cv);
+        assert!(
+            (rv.re - cv.re).abs() < 1e-8,
+            "Eigenvalue mismatch at {}: Rust={} C++={}",
+            i,
+            rv,
+            cv
+        );
+        assert!(
+            (rv.im - cv.im).abs() < 1e-8,
+            "Eigenvalue mismatch at {}: Rust={} C++={}",
+            i,
+            rv,
+            cv
+        );
     }
 }
 
@@ -132,24 +166,49 @@ fn test_generalized_eigen_differential() {
     use eigen_rs::core::complex::Complex;
     use eigen_rs::core::decompositions::GeneralizedEigenSolver;
 
-    let cpp_output = common::run_cpp_harness_stdout("tests/cpp_harness/matrix_generalized_eigen_verify.cpp")
-        .expect("Failed to run C++ harness");
+    let cpp_output =
+        common::run_cpp_harness_stdout("tests/cpp_harness/matrix_generalized_eigen_verify.cpp")
+            .expect("Failed to run C++ harness");
 
     let n = 4;
     let mut a = Matrix::<Complex<f64>, DynamicStorage<Complex<f64>>>::new_dynamic(n, n).unwrap();
     let mut b = Matrix::<Complex<f64>, DynamicStorage<Complex<f64>>>::new_dynamic(n, n).unwrap();
-    
+
     let data_a = [
-        Complex::new(1.0, 1.0), Complex::new(2.0, 0.0), Complex::new(0.0, 1.0), Complex::new(0.5, 0.5),
-        Complex::new(0.5, 0.5), Complex::new(3.0, 2.0), Complex::new(1.0, -1.0), Complex::new(0.1, 0.2),
-        Complex::new(1.0, 0.0), Complex::new(1.0, 1.0), Complex::new(2.0, 2.0), Complex::new(0.3, 0.4),
-        Complex::new(0.2, 0.3), Complex::new(0.4, 0.5), Complex::new(0.6, 0.1), Complex::new(1.5, 1.2),
+        Complex::new(1.0, 1.0),
+        Complex::new(2.0, 0.0),
+        Complex::new(0.0, 1.0),
+        Complex::new(0.5, 0.5),
+        Complex::new(0.5, 0.5),
+        Complex::new(3.0, 2.0),
+        Complex::new(1.0, -1.0),
+        Complex::new(0.1, 0.2),
+        Complex::new(1.0, 0.0),
+        Complex::new(1.0, 1.0),
+        Complex::new(2.0, 2.0),
+        Complex::new(0.3, 0.4),
+        Complex::new(0.2, 0.3),
+        Complex::new(0.4, 0.5),
+        Complex::new(0.6, 0.1),
+        Complex::new(1.5, 1.2),
     ];
     let data_b = [
-        Complex::new(5.0, 0.0), Complex::new(1.0, 1.0), Complex::new(0.0, 0.0), Complex::new(0.1, 0.1),
-        Complex::new(1.0, -1.0), Complex::new(4.0, 2.0), Complex::new(2.0, 1.0), Complex::new(0.2, 0.3),
-        Complex::new(3.0, 0.0), Complex::new(1.0, 0.0), Complex::new(5.0, -1.0), Complex::new(0.5, 0.5),
-        Complex::new(0.1, 0.2), Complex::new(0.2, 0.1), Complex::new(0.3, 0.4), Complex::new(2.0, 1.0),
+        Complex::new(5.0, 0.0),
+        Complex::new(1.0, 1.0),
+        Complex::new(0.0, 0.0),
+        Complex::new(0.1, 0.1),
+        Complex::new(1.0, -1.0),
+        Complex::new(4.0, 2.0),
+        Complex::new(2.0, 1.0),
+        Complex::new(0.2, 0.3),
+        Complex::new(3.0, 0.0),
+        Complex::new(1.0, 0.0),
+        Complex::new(5.0, -1.0),
+        Complex::new(0.5, 0.5),
+        Complex::new(0.1, 0.2),
+        Complex::new(0.2, 0.1),
+        Complex::new(0.3, 0.4),
+        Complex::new(2.0, 1.0),
     ];
 
     for i in 0..n {
@@ -182,14 +241,26 @@ fn test_generalized_eigen_differential() {
     for i in 0..n {
         let rv = rv_sorted[i];
         let cv = cpp_vals[i];
-        assert!((rv.re - cv.re).abs() < 1e-8, "Eigenvalue real mismatch at {}: Rust={} C++={}", i, rv, cv);
-        assert!((rv.im - cv.im).abs() < 1e-8, "Eigenvalue imag mismatch at {}: Rust={} C++={}", i, rv, cv);
+        assert!(
+            (rv.re - cv.re).abs() < 1e-8,
+            "Eigenvalue real mismatch at {}: Rust={} C++={}",
+            i,
+            rv,
+            cv
+        );
+        assert!(
+            (rv.im - cv.im).abs() < 1e-8,
+            "Eigenvalue imag mismatch at {}: Rust={} C++={}",
+            i,
+            rv,
+            cv
+        );
     }
 }
 
 #[test]
 fn test_sparse_ops_differential() {
-    use eigen_rs::core::sparse::{SparseMatrix, Triplet, StorageOrder};
+    use eigen_rs::core::sparse::{SparseMatrix, StorageOrder, Triplet};
 
     let cpp_output = common::run_cpp_harness_stdout("tests/cpp_harness/sparse_ops_verify.cpp")
         .expect("Failed to run C++ harness");
@@ -212,15 +283,23 @@ fn test_sparse_ops_differential() {
     let rust_sub = (&a - &b).unwrap();
     let rust_scale = &a * 2.5;
     let rust_transpose = a.transpose();
-    
+
     let mut b2 = SparseMatrix::<f64>::new(3, 2, StorageOrder::RowMajor);
-    b2.set_from_triplets(vec![Triplet::new(0, 0, 10.0), Triplet::new(0, 1, 5.0), Triplet::new(2, 0, 1.0)]);
+    b2.set_from_triplets(vec![
+        Triplet::new(0, 0, 10.0),
+        Triplet::new(0, 1, 5.0),
+        Triplet::new(2, 0, 1.0),
+    ]);
     let rust_mul = (&a * &b2).unwrap();
 
     // Helper to get value from sparse matrix (for testing only, inefficient)
     let get_val = |m: &SparseMatrix<f64>, r: usize, c: usize| {
         use eigen_rs::core::sparse::InnerIterator;
-        let outer = if m.order() == StorageOrder::RowMajor { r } else { c };
+        let outer = if m.order() == StorageOrder::RowMajor {
+            r
+        } else {
+            c
+        };
         let mut it = InnerIterator::new(m, outer);
         while it.is_valid() {
             if it.row() == r && it.col() == c {
@@ -233,8 +312,10 @@ fn test_sparse_ops_differential() {
 
     for line in cpp_output.lines() {
         let parts: Vec<&str> = line.split(',').collect();
-        if parts.len() < 4 || !parts[0].ends_with("_VAL") { continue; }
-        
+        if parts.len() < 4 || !parts[0].ends_with("_VAL") {
+            continue;
+        }
+
         let prefix = parts[0].split('_').next().unwrap();
         let r: usize = parts[1].parse().unwrap();
         let c: usize = parts[2].parse().unwrap();
@@ -249,15 +330,23 @@ fn test_sparse_ops_differential() {
             _ => panic!("Unknown prefix"),
         };
 
-        assert!((rv - cv).abs() < 1e-10, "{} mismatch at ({}, {}): Rust={} C++={}", prefix, r, c, rv, cv);
+        assert!(
+            (rv - cv).abs() < 1e-10,
+            "{} mismatch at ({}, {}): Rust={} C++={}",
+            prefix,
+            r,
+            c,
+            rv,
+            cv
+        );
     }
 }
 
 #[test]
 fn test_sparse_llt_differential() {
-    use eigen_rs::core::sparse::solvers::SimplicialLLT;
-    use eigen_rs::core::sparse::{SparseMatrix, Triplet, StorageOrder, InnerIterator};
     use eigen_rs::core::matrix::Matrix;
+    use eigen_rs::core::sparse::solvers::SimplicialLLT;
+    use eigen_rs::core::sparse::{InnerIterator, SparseMatrix, StorageOrder, Triplet};
     use eigen_rs::core::storage::DynamicStorage;
 
     let cpp_output = common::run_cpp_harness_stdout("tests/cpp_harness/sparse_llt_verify.cpp")
@@ -270,15 +359,21 @@ fn test_sparse_llt_differential() {
 
     for line in cpp_output.lines() {
         let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.is_empty() { continue; }
+        if parts.is_empty() {
+            continue;
+        }
         match parts[0] {
             "L_VAL" => {
                 let r = parts[1].parse::<usize>().unwrap();
                 let c = parts[2].parse::<usize>().unwrap();
                 let v = parts[3].parse::<f64>().unwrap();
                 expected_l_triplets.push(Triplet::new(r, c, v));
-                if r + 1 > n { n = r + 1; }
-                if c + 1 > n { n = c + 1; }
+                if r + 1 > n {
+                    n = r + 1;
+                }
+                if c + 1 > n {
+                    n = c + 1;
+                }
             }
             "B_VAL" => {
                 let v = parts[2].parse::<f64>().unwrap();
@@ -303,10 +398,10 @@ fn test_sparse_llt_differential() {
         }
     }
     m.set_from_triplets(triplets);
-    
+
     let mt = m.transpose_reordered();
     let res_m_mt = (&m * &mt).unwrap();
-    
+
     // Add I to M*Mt
     let mut a_triplets = Vec::new();
     for j in 0..n {
@@ -325,7 +420,7 @@ fn test_sparse_llt_differential() {
             a_triplets.push(Triplet::new(j, j, 1.0));
         }
     }
-    
+
     let mut final_a = SparseMatrix::<f64>::new(n, n, StorageOrder::ColMajor);
     final_a.set_from_triplets(a_triplets);
 
@@ -336,35 +431,52 @@ fn test_sparse_llt_differential() {
     // Verify L
     let mut expected_l = SparseMatrix::<f64>::new(n, n, StorageOrder::ColMajor);
     expected_l.set_from_triplets(expected_l_triplets);
-    
+
     for j in 0..n {
         let mut it_rust = InnerIterator::new(rust_l, j);
         let mut it_expected = InnerIterator::new(&expected_l, j);
         while it_rust.is_valid() && it_expected.is_valid() {
             assert_eq!(it_rust.row(), it_expected.row());
-            assert!((it_rust.value() - it_expected.value()).abs() < 1e-10, "L mismatch at ({}, {}): Rust={} C++={}", it_rust.row(), j, it_rust.value(), it_expected.value());
+            assert!(
+                (it_rust.value() - it_expected.value()).abs() < 1e-10,
+                "L mismatch at ({}, {}): Rust={} C++={}",
+                it_rust.row(),
+                j,
+                it_rust.value(),
+                it_expected.value()
+            );
             it_rust.next();
             it_expected.next();
         }
-        assert!(!it_rust.is_valid() && !it_expected.is_valid(), "L structure mismatch at column {}", j);
+        assert!(
+            !it_rust.is_valid() && !it_expected.is_valid(),
+            "L structure mismatch at column {}",
+            j
+        );
     }
 
     // Verify Solve
     let b = Matrix::<f64, DynamicStorage<f64>>::from_vec(n, 1, expected_b).unwrap();
     let x = llt.solve(&b).expect("Rust solve failed");
-    
+
     for i in 0..n {
         let rv = *x.get(i, 0).unwrap();
         let cv = expected_x[i];
-        assert!((rv - cv).abs() < 1e-10, "Solution mismatch at index {}: Rust={} C++={}", i, rv, cv);
+        assert!(
+            (rv - cv).abs() < 1e-10,
+            "Solution mismatch at index {}: Rust={} C++={}",
+            i,
+            rv,
+            cv
+        );
     }
 }
 
 #[test]
 fn test_sparse_lu_differential() {
-    use eigen_rs::core::sparse::solvers::SparseLU;
-    use eigen_rs::core::sparse::{SparseMatrix, Triplet, StorageOrder};
     use eigen_rs::core::matrix::Matrix;
+    use eigen_rs::core::sparse::solvers::SparseLU;
+    use eigen_rs::core::sparse::{SparseMatrix, StorageOrder, Triplet};
     use eigen_rs::core::storage::DynamicStorage;
 
     let cpp_output = common::run_cpp_harness_stdout("tests/cpp_harness/sparse_lu_verify.cpp")
@@ -376,7 +488,9 @@ fn test_sparse_lu_differential() {
 
     for line in cpp_output.lines() {
         let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.is_empty() { continue; }
+        if parts.is_empty() {
+            continue;
+        }
         match parts[0] {
             "B_VAL" => {
                 let v = parts[2].parse::<f64>().unwrap();
@@ -414,19 +528,26 @@ fn test_sparse_lu_differential() {
     for i in 0..n {
         let rv = *x.get(i, 0).unwrap();
         let cv = expected_x[i];
-        assert!((rv - cv).abs() < 1e-10, "SparseLU Solution mismatch at index index {}: Rust={} C++={}", i, rv, cv);
+        assert!(
+            (rv - cv).abs() < 1e-10,
+            "SparseLU Solution mismatch at index index {}: Rust={} C++={}",
+            i,
+            rv,
+            cv
+        );
     }
 }
 
 #[test]
 fn test_sparse_iterative_differential() {
-    use eigen_rs::core::sparse::solvers::{ConjugateGradient, BiCGSTAB, DiagonalPreconditioner};
-    use eigen_rs::core::sparse::{SparseMatrix, Triplet, StorageOrder};
     use eigen_rs::core::matrix::Matrix;
+    use eigen_rs::core::sparse::solvers::{BiCGSTAB, ConjugateGradient, DiagonalPreconditioner};
+    use eigen_rs::core::sparse::{SparseMatrix, StorageOrder, Triplet};
     use eigen_rs::core::storage::DynamicStorage;
 
-    let cpp_output = common::run_cpp_harness_stdout("tests/cpp_harness/sparse_iterative_verify.cpp")
-        .expect("Failed to run C++ harness");
+    let cpp_output =
+        common::run_cpp_harness_stdout("tests/cpp_harness/sparse_iterative_verify.cpp")
+            .expect("Failed to run C++ harness");
 
     let mut cg_b = Vec::new();
     let mut cg_x = Vec::new();
@@ -435,7 +556,9 @@ fn test_sparse_iterative_differential() {
 
     for line in cpp_output.lines() {
         let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.is_empty() { continue; }
+        if parts.is_empty() {
+            continue;
+        }
         match parts[0] {
             "CG_B_VAL" => cg_b.push(parts[2].parse::<f64>().unwrap()),
             "CG_X_VAL" => cg_x.push(parts[2].parse::<f64>().unwrap()),
@@ -469,7 +592,13 @@ fn test_sparse_iterative_differential() {
     for i in 0..n {
         let rv = *x_cg_rust.get(i, 0).unwrap();
         let cv = cg_x[i];
-        assert!((rv - cv).abs() < 1e-9, "CG Solution mismatch at index index {}: Rust={} C++={}", i, rv, cv);
+        assert!(
+            (rv - cv).abs() < 1e-9,
+            "CG Solution mismatch at index index {}: Rust={} C++={}",
+            i,
+            rv,
+            cv
+        );
     }
 
     // 2. BiCGSTAB Test
@@ -494,6 +623,12 @@ fn test_sparse_iterative_differential() {
     for i in 0..n {
         let rv = *x_bicg_rust.get(i, 0).unwrap();
         let cv = bicg_x[i];
-        assert!((rv - cv).abs() < 1e-9, "BiCGSTAB Solution mismatch at index index {}: Rust={} C++={}", i, rv, cv);
+        assert!(
+            (rv - cv).abs() < 1e-9,
+            "BiCGSTAB Solution mismatch at index index {}: Rust={} C++={}",
+            i,
+            rv,
+            cv
+        );
     }
 }

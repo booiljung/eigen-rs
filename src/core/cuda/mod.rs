@@ -1,8 +1,8 @@
+use crate::core::scalar::Scalar;
+use crate::core::storage::CudaStorage;
+use crate::core::storage::Storage;
 #[cfg(feature = "cuda")]
 use cuda_sys::cuda::*;
-use crate::core::scalar::Scalar;
-use crate::core::storage::Storage;
-use crate::core::storage::CudaStorage;
 
 /// Trait for expressions that can be accelerated on CUDA.
 pub trait CudaDispatcher<T: Scalar> {
@@ -11,7 +11,10 @@ pub trait CudaDispatcher<T: Scalar> {
         None
     }
 
-    fn try_assign_cuda<S: Storage<T>>(&self, _dest: &mut crate::core::matrix::Matrix<T, S>) -> Result<bool, String> {
+    fn try_assign_cuda<S: Storage<T>>(
+        &self,
+        _dest: &mut crate::core::matrix::Matrix<T, S>,
+    ) -> Result<bool, String> {
         Ok(false)
     }
 }
@@ -33,7 +36,10 @@ static CUDA_CONTEXT: std::sync::OnceLock<Result<CudaContext, String>> = std::syn
 
 #[cfg(feature = "cuda")]
 pub fn get_cuda_context() -> Result<&'static CudaContext, String> {
-    CUDA_CONTEXT.get_or_init(CudaContext::init).as_ref().map_err(|e| e.clone())
+    CUDA_CONTEXT
+        .get_or_init(CudaContext::init)
+        .as_ref()
+        .map_err(|e| e.clone())
 }
 
 #[cfg(feature = "cuda")]
@@ -42,7 +48,7 @@ impl CudaContext {
         unsafe {
             let mut device: CUdevice = 0;
             let mut context: CUcontext = std::ptr::null_mut();
-            
+
             if cuInit(0) != CUresult::CUDA_SUCCESS {
                 return Err("Failed to initialize CUDA".to_string());
             }
@@ -61,12 +67,18 @@ impl CudaContext {
 
             let ptx_c_str = std::ffi::CString::new(ptx).map_err(|e| e.to_string())?;
             let mut module: CUmodule = std::ptr::null_mut();
-            
-            if cuModuleLoadData(&mut module, ptx_c_str.as_ptr() as *const _) != CUresult::CUDA_SUCCESS {
+
+            if cuModuleLoadData(&mut module, ptx_c_str.as_ptr() as *const _)
+                != CUresult::CUDA_SUCCESS
+            {
                 return Err("Failed to load CUDA module".to_string());
             }
 
-            Ok(Self { device, context, module })
+            Ok(Self {
+                device,
+                context,
+                module,
+            })
         }
     }
 
@@ -74,7 +86,9 @@ impl CudaContext {
         let name_c_str = std::ffi::CString::new(name).map_err(|e| e.to_string())?;
         let mut func: CUfunction = std::ptr::null_mut();
         unsafe {
-            if cuModuleGetFunction(&mut func, self.module, name_c_str.as_ptr()) != CUresult::CUDA_SUCCESS {
+            if cuModuleGetFunction(&mut func, self.module, name_c_str.as_ptr())
+                != CUresult::CUDA_SUCCESS
+            {
                 return Err(format!("Failed to get function: {}", name));
             }
         }
@@ -89,7 +103,7 @@ impl CudaContext {
         n: i32,
     ) -> Result<(), String> {
         let func = self.get_function("add_kernel_f32")?;
-        
+
         let mut n_val = n;
         let mut args: [*mut std::ffi::c_void; 4] = [
             &a as *const _ as *mut _,
@@ -129,7 +143,12 @@ impl CudaContext {
         let threads_per_block = 256;
         let blocks_per_grid = (n as u32 + threads_per_block - 1) / threads_per_block;
         unsafe {
-            self.launch_kernel(func, (blocks_per_grid, 1, 1), (threads_per_block, 1, 1), &mut args)
+            self.launch_kernel(
+                func,
+                (blocks_per_grid, 1, 1),
+                (threads_per_block, 1, 1),
+                &mut args,
+            )
         }
     }
 
@@ -152,7 +171,12 @@ impl CudaContext {
         let threads_per_block = 256;
         let blocks_per_grid = (n as u32 + threads_per_block - 1) / threads_per_block;
         unsafe {
-            self.launch_kernel(func, (blocks_per_grid, 1, 1), (threads_per_block, 1, 1), &mut args)
+            self.launch_kernel(
+                func,
+                (blocks_per_grid, 1, 1),
+                (threads_per_block, 1, 1),
+                &mut args,
+            )
         }
     }
 
@@ -167,20 +191,26 @@ impl CudaContext {
         unsafe {
             if cuLaunchKernel(
                 func,
-                grid_dim.0, grid_dim.1, grid_dim.2,
-                block_dim.0, block_dim.1, block_dim.2,
-                0, std::ptr::null_mut(),
+                grid_dim.0,
+                grid_dim.1,
+                grid_dim.2,
+                block_dim.0,
+                block_dim.1,
+                block_dim.2,
+                0,
+                std::ptr::null_mut(),
                 args.as_mut_ptr(),
-                std::ptr::null_mut()
-            ) != CUresult::CUDA_SUCCESS {
+                std::ptr::null_mut(),
+            ) != CUresult::CUDA_SUCCESS
+            {
                 return Err("Failed to launch CUDA kernel".to_string());
             }
-            
+
             if cuCtxSynchronize() != CUresult::CUDA_SUCCESS {
                 return Err("CUDA synchronization failed".to_string());
             }
         }
-        
+
         Ok(())
     }
 }

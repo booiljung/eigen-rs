@@ -1,7 +1,7 @@
 //! Complex number implementation for eigen-rs.
 
 use crate::core::scalar::Scalar;
-use std::ops::{Add, Sub, Mul, Div, AddAssign, SubAssign, MulAssign, DivAssign, Neg};
+use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Complex<T: Scalar> {
@@ -30,7 +30,10 @@ impl<T: Scalar> Complex<T> {
     }
 
     pub fn conj(self) -> Self {
-        Self { re: self.re, im: -self.im }
+        Self {
+            re: self.re,
+            im: -self.im,
+        }
     }
 
     pub fn norm_sq(self) -> T {
@@ -45,14 +48,20 @@ impl<T: Scalar> Complex<T> {
 impl<T: Scalar> Add for Complex<T> {
     type Output = Self;
     fn add(self, rhs: Self) -> Self {
-        Self { re: self.re + rhs.re, im: self.im + rhs.im }
+        Self {
+            re: self.re + rhs.re,
+            im: self.im + rhs.im,
+        }
     }
 }
 
 impl<T: Scalar> Sub for Complex<T> {
     type Output = Self;
     fn sub(self, rhs: Self) -> Self {
-        Self { re: self.re - rhs.re, im: self.im - rhs.im }
+        Self {
+            re: self.re - rhs.re,
+            im: self.im - rhs.im,
+        }
     }
 }
 
@@ -80,7 +89,10 @@ impl<T: Scalar> Div for Complex<T> {
 impl<T: Scalar> Neg for Complex<T> {
     type Output = Self;
     fn neg(self) -> Self {
-        Self { re: -self.re, im: -self.im }
+        Self {
+            re: -self.re,
+            im: -self.im,
+        }
     }
 }
 
@@ -114,7 +126,7 @@ impl<T: Scalar> PartialEq for Complex<T> {
     }
 }
 
-// Complex numbers are not naturally ordered, but we implement PartialOrd 
+// Complex numbers are not naturally ordered, but we implement PartialOrd
 // lexicographically to satisfy the Scalar trait requirements.
 impl<T: Scalar> PartialOrd for Complex<T> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
@@ -126,9 +138,15 @@ impl<T: Scalar> PartialOrd for Complex<T> {
 }
 
 impl<T: Scalar> Scalar for Complex<T> {
-    fn from_usize(v: usize) -> Self { Self::new(T::from_usize(v), T::default()) }
-    fn from_f64(v: f64) -> Self { Self::new(T::from_f64(v), T::default()) }
-    fn abs(self) -> Self { Self::new(self.norm(), T::default()) }
+    fn from_usize(v: usize) -> Self {
+        Self::new(T::from_usize(v), T::default())
+    }
+    fn from_f64(v: f64) -> Self {
+        Self::new(T::from_f64(v), T::default())
+    }
+    fn abs(self) -> Self {
+        Self::new(self.norm(), T::default())
+    }
     fn sqrt(self) -> Self {
         let r = self.norm();
         let re = ((r + self.re) / T::from_f64(2.0)).sqrt();
@@ -139,8 +157,10 @@ impl<T: Scalar> Scalar for Complex<T> {
             Self::new(re, im)
         }
     }
-    fn recip(self) -> Self { Self::from_usize(1) / self }
-    
+    fn recip(self) -> Self {
+        Self::from_usize(1) / self
+    }
+
     // Minimal implementations for transcendents, can be expanded
     fn sin(self) -> Self {
         unimplemented!("Trigonometric functions for Complex not yet required")
@@ -167,8 +187,16 @@ impl<T: Scalar> Scalar for Complex<T> {
     fn ln(self) -> Self {
         Self::new(self.norm().ln(), self.im.atan2(self.re))
     }
-    fn epsilon() -> Self { Self::new(T::epsilon(), T::default()) }
-    fn conj(self) -> Self { self.conj() }
-    fn norm_sq(self) -> Self { Self::new(self.norm_sq(), T::default()) }
-    fn to_f64(self) -> f64 { self.norm().to_f64() }
+    fn epsilon() -> Self {
+        Self::new(T::epsilon(), T::default())
+    }
+    fn conj(self) -> Self {
+        self.conj()
+    }
+    fn norm_sq(self) -> Self {
+        Self::new(self.norm_sq(), T::default())
+    }
+    fn to_f64(self) -> f64 {
+        self.norm().to_f64()
+    }
 }

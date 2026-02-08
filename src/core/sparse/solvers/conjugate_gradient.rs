@@ -1,10 +1,10 @@
 //! Conjugate Gradient (CG) solver for symmetric positive-definite (SPD) matrices.
 
-use crate::core::scalar::Scalar;
-use crate::core::sparse::sparse_matrix::SparseMatrix;
 use crate::core::matrix::Matrix;
-use crate::core::storage::{Storage, DynamicStorage};
-use crate::core::sparse::solvers::iterative_solver_base::{Preconditioner, IdentityPreconditioner};
+use crate::core::scalar::Scalar;
+use crate::core::sparse::solvers::iterative_solver_base::{IdentityPreconditioner, Preconditioner};
+use crate::core::sparse::sparse_matrix::SparseMatrix;
+use crate::core::storage::{DynamicStorage, Storage};
 
 /// Conjugate Gradient solver.
 /// Solves Ax = b for symmetric positive-definite matrices A.
@@ -53,7 +53,11 @@ impl<T: Scalar, P: Preconditioner<T>> ConjugateGradient<T, P> {
     }
 
     /// Solves Ax = b iteratively.
-    pub fn solve<S: Storage<T>>(&mut self, matrix: &SparseMatrix<T>, b: &Matrix<T, S>) -> Result<Matrix<T, DynamicStorage<T>>, String> {
+    pub fn solve<S: Storage<T>>(
+        &mut self,
+        matrix: &SparseMatrix<T>,
+        b: &Matrix<T, S>,
+    ) -> Result<Matrix<T, DynamicStorage<T>>, String> {
         let n = matrix.rows();
         if b.rows() != n {
             return Err("Incompatible dimensions".to_string());
@@ -62,7 +66,7 @@ impl<T: Scalar, P: Preconditioner<T>> ConjugateGradient<T, P> {
         self.preconditioner.compute(matrix)?;
 
         let mut x = Matrix::<T, DynamicStorage<T>>::new_dynamic(n, b.cols())?; // Initial x = 0
-        
+
         for k in 0..b.cols() {
             // b_vec = b[:, k]
             let mut b_vec = Matrix::<T, DynamicStorage<T>>::new_dynamic(n, 1)?;
@@ -72,13 +76,13 @@ impl<T: Scalar, P: Preconditioner<T>> ConjugateGradient<T, P> {
 
             // r = b - A*x (since x=0, r=b)
             let mut r = b_vec.clone();
-            
+
             // z = M^-1 * r
             let mut z = self.preconditioner.solve(&r)?;
-            
+
             // p = z
             let mut p = z.clone();
-            
+
             // rho = r^T * z
             let mut rho = self.dot_product(&r, &z);
             let b_norm = r.norm_f64();
@@ -89,21 +93,23 @@ impl<T: Scalar, P: Preconditioner<T>> ConjugateGradient<T, P> {
             for _iter in 0..self.max_iterations {
                 // v = A * p
                 let v = matrix.mul_dense(&p)?;
-                
+
                 // alpha = rho / (p^T * v)
                 let p_dot_v = self.dot_product(&p, &v);
                 let alpha = rho / p_dot_v;
-                
+
                 // x = x + alpha * p
                 for i in 0..n {
-                    *x.get_mut(i, k).unwrap() = *x.get(i, k).unwrap() + alpha * *p.get(i, 0).unwrap();
+                    *x.get_mut(i, k).unwrap() =
+                        *x.get(i, k).unwrap() + alpha * *p.get(i, 0).unwrap();
                 }
-                
+
                 // r = r - alpha * v
                 for i in 0..n {
-                    *r.get_mut(i, 0).unwrap() = *r.get(i, 0).unwrap() - alpha * *v.get(i, 0).unwrap();
+                    *r.get_mut(i, 0).unwrap() =
+                        *r.get(i, 0).unwrap() - alpha * *v.get(i, 0).unwrap();
                 }
-                
+
                 let err = r.norm_f64() / b_norm;
                 if err < self.tolerance {
                     break;
@@ -111,18 +117,19 @@ impl<T: Scalar, P: Preconditioner<T>> ConjugateGradient<T, P> {
 
                 // z = M^-1 * r
                 z = self.preconditioner.solve(&r)?;
-                
+
                 // rho_next = r^T * z
                 let rho_next = self.dot_product(&r, &z);
-                
+
                 // beta = rho_next / rho
                 let beta = rho_next / rho;
-                
+
                 // p = z + beta * p
                 for i in 0..n {
-                    *p.get_mut(i, 0).unwrap() = *z.get(i, 0).unwrap() + beta * *p.get(i, 0).unwrap();
+                    *p.get_mut(i, 0).unwrap() =
+                        *z.get(i, 0).unwrap() + beta * *p.get(i, 0).unwrap();
                 }
-                
+
                 rho = rho_next;
             }
         }
@@ -130,7 +137,11 @@ impl<T: Scalar, P: Preconditioner<T>> ConjugateGradient<T, P> {
         Ok(x)
     }
 
-    fn dot_product<S1: Storage<T>, S2: Storage<T>>(&self, a: &Matrix<T, S1>, b: &Matrix<T, S2>) -> T {
+    fn dot_product<S1: Storage<T>, S2: Storage<T>>(
+        &self,
+        a: &Matrix<T, S1>,
+        b: &Matrix<T, S2>,
+    ) -> T {
         let mut sum = T::default();
         for i in 0..a.rows() {
             sum += a.get(i, 0).unwrap().conj() * *b.get(i, 0).unwrap();

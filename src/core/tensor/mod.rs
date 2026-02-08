@@ -3,11 +3,11 @@
 use crate::core::scalar::Scalar;
 use crate::core::storage::Storage;
 
-pub mod storage;
-pub mod ops;
-pub mod xpr;
-pub mod contraction;
 pub mod broadcasting;
+pub mod contraction;
+pub mod ops;
+pub mod storage;
+pub mod xpr;
 
 pub use storage::TensorStorage;
 pub use xpr::TensorXpr;
@@ -56,7 +56,7 @@ impl<T: Scalar, const RANK: usize> Tensor<T, RANK> {
 
         let dims = self.dims();
         let size = self.size();
-        
+
         for i in 0..size {
             let mut indices = [0; RANK];
             let mut temp = i;
@@ -73,9 +73,10 @@ impl<T: Scalar, const RANK: usize> Tensor<T, RANK> {
         &self,
         rhs: &Tensor<T, RANK2>,
         lhs_dim: usize,
-        rhs_dim: usize
+        rhs_dim: usize,
     ) -> Tensor<T, OUT_RANK> {
-        let contraction = contraction::TensorContraction::new(self, rhs, [lhs_dim, 0], [rhs_dim, 0]);
+        let contraction =
+            contraction::TensorContraction::new(self, rhs, [lhs_dim, 0], [rhs_dim, 0]);
         contraction.eval()
     }
 
@@ -85,7 +86,7 @@ impl<T: Scalar, const RANK: usize> Tensor<T, RANK> {
         // Here we materialize it for simplicity and correctness verification.
         let broadcast_view = broadcasting::BroadcastedTensor::new(self, target_dims)?;
         let mut res = Tensor::<T, RANK>::new(target_dims)?;
-        
+
         let size = res.size();
         for i in 0..size {
             let mut indices = [0; RANK];

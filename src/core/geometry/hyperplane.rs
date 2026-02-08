@@ -1,7 +1,7 @@
-use crate::core::scalar::Scalar;
-use crate::core::matrix::Matrix;
-use crate::core::storage::FixedStorage;
 use crate::core::geometry::ray::Ray;
+use crate::core::matrix::Matrix;
+use crate::core::scalar::Scalar;
+use crate::core::storage::FixedStorage;
 
 /// A hyperplane is defined by the equation `normal . x + offset = 0`.
 #[derive(Clone, Debug, PartialEq)]
@@ -18,8 +18,11 @@ impl<T: Scalar, const RANK: usize> Hyperplane<T, RANK> {
         // We'll store as is.
         Self { normal, offset }
     }
-    
-    pub fn from_normal_and_point(normal: Matrix<T, FixedStorage<T, RANK, 1, RANK>>, point: &Matrix<T, FixedStorage<T, RANK, 1, RANK>>) -> Self {
+
+    pub fn from_normal_and_point(
+        normal: Matrix<T, FixedStorage<T, RANK, 1, RANK>>,
+        point: &Matrix<T, FixedStorage<T, RANK, 1, RANK>>,
+    ) -> Self {
         // n . p + d = 0  => d = - n . p
         let mut dot = T::default();
         for i in 0..RANK {
@@ -28,7 +31,7 @@ impl<T: Scalar, const RANK: usize> Hyperplane<T, RANK> {
         let offset = -dot;
         Self { normal, offset }
     }
-    
+
     pub fn normalize(&mut self) {
         let mut norm_sq = T::default();
         for i in 0..RANK {
@@ -52,8 +55,11 @@ impl<T: Scalar, const RANK: usize> Hyperplane<T, RANK> {
         }
         dot + self.offset
     }
-    
-    pub fn projection(&self, point: &Matrix<T, FixedStorage<T, RANK, 1, RANK>>) -> Matrix<T, FixedStorage<T, RANK, 1, RANK>> {
+
+    pub fn projection(
+        &self,
+        point: &Matrix<T, FixedStorage<T, RANK, 1, RANK>>,
+    ) -> Matrix<T, FixedStorage<T, RANK, 1, RANK>> {
         let dist = self.signed_distance(point);
         let mut proj = *point;
         // p_proj = p - dist * n
@@ -63,15 +69,15 @@ impl<T: Scalar, const RANK: usize> Hyperplane<T, RANK> {
         }
         proj
     }
-    
+
     pub fn intersection_with_ray(&self, ray: &Ray<T, RANK>) -> Option<T> {
         ray.intersects_plane(self)
     }
-    
+
     pub fn normal(&self) -> &Matrix<T, FixedStorage<T, RANK, 1, RANK>> {
         &self.normal
     }
-    
+
     pub fn offset(&self) -> T {
         self.offset
     }

@@ -1,7 +1,8 @@
-use crate::core::scalar::Scalar;
-use crate::core::matrix::MatrixX;
 use crate::core::complex::Complex;
 use crate::core::decompositions::EigenSolver;
+use crate::core::matrix::MatrixX;
+use crate::core::scalar::Scalar;
+use alloc::vec::Vec;
 
 pub mod jenkins_traub;
 pub use jenkins_traub::JenkinsTraubSolver;
@@ -39,7 +40,7 @@ impl<T: Scalar> PolynomialSolver<T> {
     /// `poly`: coefficients in ascending order (c0 + c1*x + ... + cn*x^n).
     pub fn compute(&mut self, poly: &[T]) -> Result<(), String> {
         if poly.is_empty() {
-             return Err("Empty polynomial".to_string());
+            return Err("Empty polynomial".to_string());
         }
 
         // Find the effective degree (ignore trailing zeros)
@@ -47,7 +48,7 @@ impl<T: Scalar> PolynomialSolver<T> {
         while n > 0 && poly[n] == T::from_usize(0) {
             n -= 1;
         }
-        
+
         if n == 0 {
             // Constant polynomial: no roots
             self.roots.clear();
@@ -55,10 +56,10 @@ impl<T: Scalar> PolynomialSolver<T> {
         }
 
         let leading = poly[n];
-        
+
         if leading == T::from_usize(0) {
-             // Should not happen due to loop above, but if n=0 and poly[0]=0, logic holds.
-             return Ok(());
+            // Should not happen due to loop above, but if n=0 and poly[0]=0, logic holds.
+            return Ok(());
         }
 
         // Companion Matrix logic
@@ -74,26 +75,26 @@ impl<T: Scalar> PolynomialSolver<T> {
 
         let mut companion = MatrixX::<T>::new_dynamic(n, n).map_err(|e| e.to_string())?;
         companion.set_zero();
-        
+
         for i in 0..n {
-             // Subdiagonal ones
-             if i > 0 {
-                 *companion.get_mut(i, i - 1).unwrap() = T::from_usize(1);
-             }
-             
-             // Last column: -c_i / leading
-             let coeff = poly[i];
-             let val = -(coeff / leading);
-             *companion.get_mut(i, n - 1).unwrap() = val;
+            // Subdiagonal ones
+            if i > 0 {
+                *companion.get_mut(i, i - 1).unwrap() = T::from_usize(1);
+            }
+
+            // Last column: -c_i / leading
+            let coeff = poly[i];
+            let val = -(coeff / leading);
+            *companion.get_mut(i, n - 1).unwrap() = val;
         }
 
         // Solve eigenvalues
         let solver = EigenSolver::new(&companion, false)?;
         self.roots = solver.eigenvalues().to_vec();
-        
+
         Ok(())
     }
-    
+
     /// Returns the computed roots.
     pub fn roots(&self) -> &[Complex<T>] {
         &self.roots

@@ -2,9 +2,9 @@
 //! Robust decomposition that avoids square roots and handles semi-definite matrices.
 
 use crate::core::matrix::Matrix;
-use crate::core::storage::Storage;
 use crate::core::scalar::Scalar;
 use crate::core::storage::DynamicStorage;
+use crate::core::storage::Storage;
 
 /// Result of an LDLT Cholesky decomposition.
 pub struct LDLT<T: Scalar, S: Storage<T>> {
@@ -25,7 +25,7 @@ impl<T: Scalar + 'static, S: Storage<T> + 'static> LDLT<T, S> {
 
         let mut mat = Matrix::<T, DynamicStorage<T>>::new_dynamic(rows, cols)?;
         mat.assign(matrix)?;
-        
+
         let mut d = vec![T::from_usize(0); rows];
         let mut p = (0..rows).collect::<Vec<_>>();
 
@@ -44,7 +44,7 @@ impl<T: Scalar + 'static, S: Storage<T> + 'static> LDLT<T, S> {
             if max_idx != j {
                 // Swap rows and columns max_idx and j
                 p.swap(j, max_idx);
-                
+
                 // Swap rows
                 for k in 0..rows {
                     let tmp = *mat.get(j, k).unwrap();
@@ -65,7 +65,7 @@ impl<T: Scalar + 'static, S: Storage<T> + 'static> LDLT<T, S> {
                 let l_jk = *mat.get(j, k).unwrap();
                 s += l_jk * l_jk * d[k];
             }
-            
+
             let dj = *mat.get(j, j).unwrap() - s;
             d[j] = dj;
             *mat.get_mut(j, j).unwrap() = T::from_usize(1);
@@ -98,12 +98,21 @@ impl<T: Scalar + 'static, S: Storage<T> + 'static> LDLT<T, S> {
         })
     }
 
-    pub fn matrix_l(&self) -> &Matrix<T, DynamicStorage<T>> { &self.l }
-    pub fn vector_d(&self) -> &[T] { &self.d }
-    pub fn permutation(&self) -> &[usize] { &self.p }
+    pub fn matrix_l(&self) -> &Matrix<T, DynamicStorage<T>> {
+        &self.l
+    }
+    pub fn vector_d(&self) -> &[T] {
+        &self.d
+    }
+    pub fn permutation(&self) -> &[usize] {
+        &self.p
+    }
 
     /// Solves Ax = b for x using the LDLT decomposition.
-    pub fn solve<S2: Storage<T> + 'static>(&self, b: &Matrix<T, S2>) -> Result<Matrix<T, DynamicStorage<T>>, String> {
+    pub fn solve<S2: Storage<T> + 'static>(
+        &self,
+        b: &Matrix<T, S2>,
+    ) -> Result<Matrix<T, DynamicStorage<T>>, String> {
         let rows = self.l.rows();
         if b.rows() != rows {
             return Err("Dimension mismatch in LDLT solve".to_string());
@@ -111,7 +120,7 @@ impl<T: Scalar + 'static, S: Storage<T> + 'static> LDLT<T, S> {
 
         let b_cols = b.cols();
         let mut x = Matrix::<T, DynamicStorage<T>>::new_dynamic(rows, b_cols)?;
-        
+
         // Apply permutation P to b: x = P * b
         for i in 0..rows {
             let src_idx = self.p[i];
@@ -130,7 +139,7 @@ impl<T: Scalar + 'static, S: Storage<T> + 'static> LDLT<T, S> {
                 *x.get_mut(i, j).unwrap() = val;
             }
         }
-        
+
         // Solve D z = y
         for i in 0..rows {
             let di = self.d[i];

@@ -1,11 +1,11 @@
 //! Schur decomposition of a square complex matrix.
 //! A = U * T * U^*
 
-use crate::core::matrix::Matrix;
-use crate::core::storage::{Storage, DynamicStorage};
-use crate::core::scalar::Scalar;
 use crate::core::complex::Complex;
 use crate::core::decompositions::HessenbergDecomposition;
+use crate::core::matrix::Matrix;
+use crate::core::scalar::Scalar;
+use crate::core::storage::{DynamicStorage, Storage};
 
 /// Schur decomposition of a square complex matrix.
 /// For complex matrices, the result T is always strictly upper triangular.
@@ -39,7 +39,10 @@ impl<T: Scalar, S: Storage<Complex<T>>> ComplexSchur<T, S> {
         })
     }
 
-    fn compute_inplace(h: &mut Matrix<Complex<T>, DynamicStorage<Complex<T>>>, u: &mut Matrix<Complex<T>, DynamicStorage<Complex<T>>>) -> Result<(), String> {
+    fn compute_inplace(
+        h: &mut Matrix<Complex<T>, DynamicStorage<Complex<T>>>,
+        u: &mut Matrix<Complex<T>, DynamicStorage<Complex<T>>>,
+    ) -> Result<(), String> {
         let n = h.rows();
         let max_iter = 40 * n;
         let mut iter = 0;
@@ -84,7 +87,10 @@ impl<T: Scalar, S: Storage<Complex<T>>> ComplexSchur<T, S> {
         Ok(())
     }
 
-    fn wilkinson_shift(h: &Matrix<Complex<T>, DynamicStorage<Complex<T>>>, end: usize) -> Complex<T> {
+    fn wilkinson_shift(
+        h: &Matrix<Complex<T>, DynamicStorage<Complex<T>>>,
+        end: usize,
+    ) -> Complex<T> {
         let d1 = *h.get(end - 1, end - 1).unwrap();
         let d2 = *h.get(end, end).unwrap();
         let h12 = *h.get(end - 1, end).unwrap();
@@ -106,9 +112,15 @@ impl<T: Scalar, S: Storage<Complex<T>>> ComplexSchur<T, S> {
         }
     }
 
-    fn qr_step(h: &mut Matrix<Complex<T>, DynamicStorage<Complex<T>>>, u: &mut Matrix<Complex<T>, DynamicStorage<Complex<T>>>, start: usize, end: usize, shift: Complex<T>) {
+    fn qr_step(
+        h: &mut Matrix<Complex<T>, DynamicStorage<Complex<T>>>,
+        u: &mut Matrix<Complex<T>, DynamicStorage<Complex<T>>>,
+        start: usize,
+        end: usize,
+        shift: Complex<T>,
+    ) {
         let n = h.rows();
-        
+
         // Initial reflection to create bulge
         let x = *h.get(start, start).unwrap() - shift;
         let y = *h.get(start + 1, start).unwrap();
@@ -129,7 +141,7 @@ impl<T: Scalar, S: Storage<Complex<T>>> ComplexSchur<T, S> {
             Self::apply_householder_left(h, k + 1, k + 2, k, n, tau, &v);
             *h.get_mut(k + 1, k).unwrap() = Complex::default() - sigma;
             *h.get_mut(k + 2, k).unwrap() = Complex::default();
-            
+
             Self::apply_householder_right(h, 0, n, k + 1, k + 2, tau.conj(), &v);
             Self::apply_householder_right(u, 0, n, k + 1, k + 2, tau.conj(), &v);
         }
@@ -139,9 +151,13 @@ impl<T: Scalar, S: Storage<Complex<T>>> ComplexSchur<T, S> {
         let x1 = v[0];
         let norm = (v[0].norm_sq() + v[1].norm_sq()).sqrt();
         if norm == T::default() {
-            return (Complex::default(), vec![Complex::from_f64(1.0), Complex::default()], Complex::default());
+            return (
+                Complex::default(),
+                vec![Complex::from_f64(1.0), Complex::default()],
+                Complex::default(),
+            );
         }
-        
+
         let sigma = if x1.re == T::default() && x1.im == T::default() {
             Complex::new(norm, T::default())
         } else {
@@ -152,7 +168,7 @@ impl<T: Scalar, S: Storage<Complex<T>>> ComplexSchur<T, S> {
         let v1 = x1 + sigma;
         let tau = v1.conj() / sigma.conj();
         let h_v = vec![Complex::from_f64(1.0), v[1] / v1];
-        
+
         (tau, h_v, sigma)
     }
 
@@ -161,7 +177,15 @@ impl<T: Scalar, S: Storage<Complex<T>>> ComplexSchur<T, S> {
         (tau, h_v)
     }
 
-    fn apply_householder_left(h: &mut Matrix<Complex<T>, DynamicStorage<Complex<T>>>, r1: usize, r2: usize, col_start: usize, col_end: usize, tau: Complex<T>, v: &[Complex<T>]) {
+    fn apply_householder_left(
+        h: &mut Matrix<Complex<T>, DynamicStorage<Complex<T>>>,
+        r1: usize,
+        r2: usize,
+        col_start: usize,
+        col_end: usize,
+        tau: Complex<T>,
+        v: &[Complex<T>],
+    ) {
         for j in col_start..col_end {
             let dot = *h.get(r1, j).unwrap() + v[1].conj() * (*h.get(r2, j).unwrap());
             let factor = tau * dot;
@@ -170,7 +194,15 @@ impl<T: Scalar, S: Storage<Complex<T>>> ComplexSchur<T, S> {
         }
     }
 
-    fn apply_householder_right(h: &mut Matrix<Complex<T>, DynamicStorage<Complex<T>>>, row_start: usize, row_end: usize, c1: usize, c2: usize, tau: Complex<T>, v: &[Complex<T>]) {
+    fn apply_householder_right(
+        h: &mut Matrix<Complex<T>, DynamicStorage<Complex<T>>>,
+        row_start: usize,
+        row_end: usize,
+        c1: usize,
+        c2: usize,
+        tau: Complex<T>,
+        v: &[Complex<T>],
+    ) {
         for i in row_start..row_end {
             let dot = *h.get(i, c1).unwrap() + (*h.get(i, c2).unwrap()) * v[1];
             let factor = tau * dot;
@@ -199,9 +231,15 @@ mod tests {
         let mut a = Matrix::<Complex<f64>, DynamicStorage<Complex<f64>>>::new_dynamic(n, n)?;
         // Non-symmetric complex matrix
         let data = [
-            Complex::new(1.0, 2.0), Complex::new(2.0, -1.0), Complex::new(0.0, 1.0),
-            Complex::new(1.0, 1.0), Complex::new(4.0, 0.0),  Complex::new(2.0, 3.0),
-            Complex::new(0.0, 0.0), Complex::new(1.0, 2.0),  Complex::new(5.0, -2.0),
+            Complex::new(1.0, 2.0),
+            Complex::new(2.0, -1.0),
+            Complex::new(0.0, 1.0),
+            Complex::new(1.0, 1.0),
+            Complex::new(4.0, 0.0),
+            Complex::new(2.0, 3.0),
+            Complex::new(0.0, 0.0),
+            Complex::new(1.0, 2.0),
+            Complex::new(5.0, -2.0),
         ];
         for i in 0..n {
             for j in 0..n {
@@ -210,17 +248,22 @@ mod tests {
         }
 
         let schur = ComplexSchur::new(&a)?;
-        
+
         // Diagnostic: Verify Hessenberg first
         let hess = HessenbergDecomposition::new(&a)?;
         let hh = hess.matrix_h();
         let hq = hess.matrix_q();
-        
+
         // 0. Check H is upper Hessenberg
         for i in 0..n {
             for j in 0..n {
                 if i > j + 1 {
-                    assert!(hh.get(i, j).unwrap().norm_sq() < 1e-15, "H is not upper Hessenberg at ({}, {})", i, j);
+                    assert!(
+                        hh.get(i, j).unwrap().norm_sq() < 1e-15,
+                        "H is not upper Hessenberg at ({}, {})",
+                        i,
+                        j
+                    );
                 }
             }
         }
@@ -232,9 +275,23 @@ mod tests {
                 for k in 0..n {
                     sum += hq.get(k, i).unwrap().conj() * (*hq.get(k, j).unwrap());
                 }
-                let expected = if i == j { Complex::new(1.0, 0.0) } else { Complex::default() };
-                assert!((sum.re - expected.re).abs() < 1e-10, "HQ Unitarity mismatch at ({}, {})", i, j);
-                assert!((sum.im - expected.im).abs() < 1e-10, "HQ Unitarity mismatch at ({}, {})", i, j);
+                let expected = if i == j {
+                    Complex::new(1.0, 0.0)
+                } else {
+                    Complex::default()
+                };
+                assert!(
+                    (sum.re - expected.re).abs() < 1e-10,
+                    "HQ Unitarity mismatch at ({}, {})",
+                    i,
+                    j
+                );
+                assert!(
+                    (sum.im - expected.im).abs() < 1e-10,
+                    "HQ Unitarity mismatch at ({}, {})",
+                    i,
+                    j
+                );
             }
         }
 
@@ -247,8 +304,22 @@ mod tests {
                     ahq += (*a.get(i, k).unwrap()) * (*hq.get(k, j).unwrap());
                     hqh += (*hq.get(i, k).unwrap()) * (*hh.get(k, j).unwrap());
                 }
-                assert!((ahq.re - hqh.re).abs() < 1e-10, "Hessenberg Real mismatch at ({}, {}): {} vs {}", i, j, ahq.re, hqh.re);
-                assert!((ahq.im - hqh.im).abs() < 1e-10, "Hessenberg Imag mismatch at ({}, {}): {} vs {}", i, j, ahq.im, hqh.im);
+                assert!(
+                    (ahq.re - hqh.re).abs() < 1e-10,
+                    "Hessenberg Real mismatch at ({}, {}): {} vs {}",
+                    i,
+                    j,
+                    ahq.re,
+                    hqh.re
+                );
+                assert!(
+                    (ahq.im - hqh.im).abs() < 1e-10,
+                    "Hessenberg Imag mismatch at ({}, {}): {} vs {}",
+                    i,
+                    j,
+                    ahq.im,
+                    hqh.im
+                );
             }
         }
 
@@ -267,7 +338,10 @@ mod tests {
                 let diff_re = (au.re - ut.re).abs();
                 let diff_im = (au.im - ut.im).abs();
                 if diff_re > 1e-8 || diff_im > 1e-8 {
-                    eprintln!("Mismatch at ({}, {}): A*U = {}, U*T = {}, diff = ({}, {})", i, j, au, ut, diff_re, diff_im);
+                    eprintln!(
+                        "Mismatch at ({}, {}): A*U = {}, U*T = {}, diff = ({}, {})",
+                        i, j, au, ut, diff_re, diff_im
+                    );
                 }
                 assert!(diff_re < 1e-8, "Real mismatch at ({}, {})", i, j);
                 assert!(diff_im < 1e-8, "Imag mismatch at ({}, {})", i, j);
@@ -281,7 +355,11 @@ mod tests {
                 for k in 0..n {
                     sum += u.get(k, i).unwrap().conj() * (*u.get(k, j).unwrap());
                 }
-                let expected = if i == j { Complex::new(1.0, 0.0) } else { Complex::default() };
+                let expected = if i == j {
+                    Complex::new(1.0, 0.0)
+                } else {
+                    Complex::default()
+                };
                 assert!((sum.re - expected.re).abs() < 1e-10);
                 assert!((sum.im - expected.im).abs() < 1e-10);
             }
@@ -304,8 +382,10 @@ mod tests {
         let n = 2;
         let mut a = Matrix::<Complex<f64>, DynamicStorage<Complex<f64>>>::new_dynamic(n, n)?;
         let data = [
-            Complex::new(1.0, 2.0), Complex::new(3.0, 4.0),
-            Complex::new(5.0, 6.0), Complex::new(7.0, 8.0),
+            Complex::new(1.0, 2.0),
+            Complex::new(3.0, 4.0),
+            Complex::new(5.0, 6.0),
+            Complex::new(7.0, 8.0),
         ];
         for i in 0..n {
             for j in 0..n {

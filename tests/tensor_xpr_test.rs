@@ -4,7 +4,7 @@ use eigen_rs::core::tensor::Tensor;
 fn test_tensor_lazy_add() {
     let mut a = Tensor::<f64, 2>::new([2, 2]).unwrap();
     let mut b = Tensor::<f64, 2>::new([2, 2]).unwrap();
-    
+
     *a.get_mut([0, 0]).unwrap() = 1.0;
     *a.get_mut([1, 1]).unwrap() = 2.0;
     *b.get_mut([0, 0]).unwrap() = 10.0;
@@ -23,7 +23,7 @@ fn test_tensor_lazy_add() {
 fn test_tensor_chained_xpr() {
     let mut a = Tensor::<f64, 2>::new([2, 2]).unwrap();
     let mut b = Tensor::<f64, 2>::new([2, 2]).unwrap();
-    
+
     *a.get_mut([0, 0]).unwrap() = 1.0;
     *b.get_mut([0, 0]).unwrap() = 10.0;
 

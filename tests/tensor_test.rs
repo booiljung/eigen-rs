@@ -14,7 +14,7 @@ fn test_tensor_contraction_simple() {
             *a.get_mut([i, j]).unwrap() = (i + j) as f64;
         }
     }
-    
+
     // B: 3x2 tensor
     let mut b = Tensor::<f64, 2>::new([3, 2]).unwrap();
     // Fill B
@@ -23,14 +23,14 @@ fn test_tensor_contraction_simple() {
             *b.get_mut([i, j]).unwrap() = (i * j) as f64;
         }
     }
-    
+
     // Contract A along dim 1 (size 3) and B along dim 0 (size 3)
     // Result should be 2x2.
     // C[i, j] = Sum_k A[i, k] * B[k, j] (Matrix Multiplication A * B)
     let c: Tensor<f64, 2> = a.contract(&b, 1, 0);
-    
+
     assert_eq!(c.dims(), [2, 2]);
-    
+
     // Expected:
     // A = [[0, 1, 2], [1, 2, 3]]
     // B = [[0, 0], [0, 1], [0, 2]]
@@ -39,7 +39,7 @@ fn test_tensor_contraction_simple() {
     // c[0,1] = 0*0 + 1*1 + 2*2 = 5
     // c[1,0] = 1*0 + 2*0 + 3*0 = 0
     // c[1,1] = 1*0 + 2*1 + 3*2 = 8
-    
+
     assert!((c.get([0, 0]).unwrap() - 0.0).abs() < 1e-10);
     assert!((c.get([0, 1]).unwrap() - 5.0).abs() < 1e-10);
     assert!((c.get([1, 0]).unwrap() - 0.0).abs() < 1e-10);
@@ -63,4 +63,3 @@ fn test_tensor_broadcasting() {
     assert_eq!(*b.get([1, 0]).unwrap(), 2.0);
     assert_eq!(*b.get([1, 1]).unwrap(), 2.0);
 }
-

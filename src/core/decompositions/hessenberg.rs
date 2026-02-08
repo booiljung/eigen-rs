@@ -2,8 +2,8 @@
 //! A = Q * H * Q^T
 
 use crate::core::matrix::Matrix;
-use crate::core::storage::{Storage, DynamicStorage};
 use crate::core::scalar::Scalar;
+use crate::core::storage::{DynamicStorage, Storage};
 
 /// Hessenberg decomposition of a square matrix.
 pub struct HessenbergDecomposition<T: Scalar, S: Storage<T>> {
@@ -38,28 +38,32 @@ impl<T: Scalar, S: Storage<T>> HessenbergDecomposition<T, S> {
 
     fn hessenberg_inplace(mat_a: &mut Matrix<T, DynamicStorage<T>>, h_coeffs: &mut [T]) {
         let n = mat_a.rows();
-        
-        for i in 0..n-2 {
+
+        for i in 0..n - 2 {
             // 1. Compute Householder reflection for column i starting from i+1
             let mut norm_sq = T::default();
-            for k in i+1..n {
+            for k in i + 1..n {
                 let val = *mat_a.get(k, i).unwrap();
                 norm_sq += val.norm_sq();
             }
             let norm = norm_sq.sqrt();
-            
+
             if norm != T::default() {
                 let v0 = *mat_a.get(i + 1, i).unwrap();
-                let sigma = if v0 >= T::default() { norm } else { T::default() - norm };
-                
+                let sigma = if v0 >= T::default() {
+                    norm
+                } else {
+                    T::default() - norm
+                };
+
                 let v0_plus_sigma = v0 + sigma;
                 let inv_v0_plus_sigma = v0_plus_sigma.recip();
-                
+
                 // Scale Householder vector: v[0] becomes 1, rest stored in mat_a
                 for k in i + 2..n {
                     *mat_a.get_mut(k, i).unwrap() *= inv_v0_plus_sigma;
                 }
-                
+
                 // Householder coefficient tau
                 let tau = v0_plus_sigma.conj() / sigma;
                 h_coeffs[i] = tau;
@@ -67,12 +71,12 @@ impl<T: Scalar, S: Storage<T>> HessenbergDecomposition<T, S> {
                 // 2. Apply reflection from the left: A = (I - tau v v^T) A
                 // A[i+1:n, i+1:n] = (I - tau v v^T) A[i+1:n, i+1:n]
                 // Note: We also apply it to the i-th column's tail (below i+1) but carefully.
-                for j in i+1..n {
+                for j in i + 1..n {
                     let mut dot = *mat_a.get(i + 1, j).unwrap();
                     for k in i + 2..n {
                         dot += (*mat_a.get(k, i).unwrap()).conj() * (*mat_a.get(k, j).unwrap());
                     }
-                    
+
                     let factor = tau * dot;
                     *mat_a.get_mut(i + 1, j).unwrap() -= factor;
                     for k in i + 2..n {
@@ -90,7 +94,7 @@ impl<T: Scalar, S: Storage<T>> HessenbergDecomposition<T, S> {
                     for k in i + 2..n {
                         dot += (*mat_a.get(j, k).unwrap()) * (*mat_a.get(k, i).unwrap());
                     }
-                    
+
                     let factor = tau_conj * dot;
                     *mat_a.get_mut(j, i + 1).unwrap() -= factor;
                     for k in i + 2..n {
@@ -111,7 +115,7 @@ impl<T: Scalar, S: Storage<T>> HessenbergDecomposition<T, S> {
     pub fn matrix_h(&self) -> Matrix<T, DynamicStorage<T>> {
         let n = self.packed_matrix.rows();
         let mut h = Matrix::<T, DynamicStorage<T>>::new_dynamic(n, n).unwrap();
-        
+
         for j in 0..n {
             for i in 0..n {
                 if i <= j + 1 {
@@ -128,37 +132,42 @@ impl<T: Scalar, S: Storage<T>> HessenbergDecomposition<T, S> {
     pub fn matrix_q(&self) -> Matrix<T, DynamicStorage<T>> {
         let n = self.packed_matrix.rows();
         let mut q = Matrix::<T, DynamicStorage<T>>::new_dynamic(n, n).unwrap();
-        
+
         for i in 0..n {
             for j in 0..n {
-                *q.get_mut(i, j).unwrap() = if i == j { T::from_usize(1) } else { T::default() };
+                *q.get_mut(i, j).unwrap() = if i == j {
+                    T::from_usize(1)
+                } else {
+                    T::default()
+                };
             }
         }
-        
+
         // Q = H0 * H1 * ... * H_{n-3}
         if n > 2 {
-            for i in (0..n-2).rev() {
+            for i in (0..n - 2).rev() {
                 let tau = self.h_coeffs[i];
                 if tau != T::default() {
-                let tau_conj = tau.conj();
-                for j in i+1..n {
-                    let mut dot = *q.get(i + 1, j).unwrap();
-                    for k in i + 2..n {
-                        dot += (*self.packed_matrix.get(k, i).unwrap()).conj() * (*q.get(k, j).unwrap());
-                    }
-                    
-                    let factor = tau_conj * dot;
-                    *q.get_mut(i + 1, j).unwrap() -= factor;
-                    for k in i + 2..n {
-                        let vk = *self.packed_matrix.get(k, i).unwrap();
-                        *q.get_mut(k, j).unwrap() -= factor * vk;
+                    let tau_conj = tau.conj();
+                    for j in i + 1..n {
+                        let mut dot = *q.get(i + 1, j).unwrap();
+                        for k in i + 2..n {
+                            dot += (*self.packed_matrix.get(k, i).unwrap()).conj()
+                                * (*q.get(k, j).unwrap());
+                        }
+
+                        let factor = tau_conj * dot;
+                        *q.get_mut(i + 1, j).unwrap() -= factor;
+                        for k in i + 2..n {
+                            let vk = *self.packed_matrix.get(k, i).unwrap();
+                            *q.get_mut(k, j).unwrap() -= factor * vk;
+                        }
                     }
                 }
             }
         }
+        q
     }
-    q
-}
 }
 
 #[cfg(test)]
@@ -171,10 +180,7 @@ mod tests {
         let n = 4;
         let mut a = Matrix::<f64, DynamicStorage<f64>>::new_dynamic(n, n)?;
         let data = [
-            4.0, 1.0, 2.0, 3.0,
-            1.0, 5.0, 1.0, 2.0,
-            2.0, 1.0, 6.0, 1.0,
-            3.0, 2.0, 1.0, 7.0,
+            4.0, 1.0, 2.0, 3.0, 1.0, 5.0, 1.0, 2.0, 2.0, 1.0, 6.0, 1.0, 3.0, 2.0, 1.0, 7.0,
         ];
         for i in 0..n {
             for j in 0..n {
@@ -197,7 +203,7 @@ mod tests {
                 *qtq.get_mut(i, j).unwrap() = sum;
             }
         }
-        
+
         for i in 0..n {
             for j in 0..n {
                 let expected = if i == j { 1.0 } else { 0.0 };
@@ -231,7 +237,14 @@ mod tests {
 
         for i in 0..n {
             for j in 0..n {
-                assert!((qtaq.get(i, j).unwrap() - h.get(i, j).unwrap()).abs() < 1e-10, "Mismatch at ({}, {}): {} != {}", i, j, qtaq.get(i, j).unwrap(), h.get(i, j).unwrap());
+                assert!(
+                    (qtaq.get(i, j).unwrap() - h.get(i, j).unwrap()).abs() < 1e-10,
+                    "Mismatch at ({}, {}): {} != {}",
+                    i,
+                    j,
+                    qtaq.get(i, j).unwrap(),
+                    h.get(i, j).unwrap()
+                );
             }
         }
 
@@ -239,7 +252,13 @@ mod tests {
         for i in 0..n {
             for j in 0..n {
                 if i > j + 1 {
-                    assert!(h.get(i, j).unwrap().abs() < 1e-10, "H is not upper Hessenberg at ({}, {}): {}", i, j, h.get(i, j).unwrap());
+                    assert!(
+                        h.get(i, j).unwrap().abs() < 1e-10,
+                        "H is not upper Hessenberg at ({}, {}): {}",
+                        i,
+                        j,
+                        h.get(i, j).unwrap()
+                    );
                 }
             }
         }
@@ -257,7 +276,7 @@ mod tests {
 
         let decomp = HessenbergDecomposition::new(&a)?;
         let h = decomp.matrix_h();
-        
+
         for i in 0..n {
             for j in 0..n {
                 let expected = if i == j { 1.0 } else { 0.0 };
@@ -274,7 +293,8 @@ mod tests {
         // Simple "random" deterministic matrix
         for i in 0..n {
             for j in 0..n {
-                *a.get_mut(i, j).unwrap() = (i as f64 * 1.1 + j as f64 * 0.7 + (i * j) as f64 * 0.1).sin();
+                *a.get_mut(i, j).unwrap() =
+                    (i as f64 * 1.1 + j as f64 * 0.7 + (i * j) as f64 * 0.1).sin();
             }
         }
 

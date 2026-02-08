@@ -1,6 +1,5 @@
-
+use eigen_rs::core::geometry::{AngleAxis, Isometry3, Quaternion, Translation3};
 use eigen_rs::core::matrix::Vector3;
-use eigen_rs::core::geometry::{Quaternion, AngleAxis, Translation3, Isometry3};
 
 fn main() -> Result<(), String> {
     println!("=== Geometry Operations with eigen-rs ===");
@@ -11,7 +10,7 @@ fn main() -> Result<(), String> {
     let angle = std::f64::consts::PI / 2.0;
     let axis = Vector3::from_array([0.0, 0.0, 1.0]);
     // AngleAxis
-    let aa = AngleAxis::new(angle, axis);
+    let _aa = AngleAxis::new(angle, axis);
     // Convert to Quaternion
     let q = Quaternion::from_angle_axis(angle, axis);
     println!("Quaternion (90 deg Z): {:?}", q);
@@ -25,13 +24,13 @@ fn main() -> Result<(), String> {
     let t_vec = Vector3::from_array([1.0, 2.0, 3.0]);
     let t = Translation3::new(t_vec);
     let r = q; // Rotation
-    
+
     // Combine: T * R
     // Use Isometry3 (Transform3 alias)
-    
+
     let iso = Isometry3::from_parts(t, r);
     println!("Isometry:\n{:?}", iso.matrix());
-    
+
     let v2 = Vector3::from_array([1.0, 0.0, 0.0]);
     let v2_trans = iso.transform_point(&v2);
     println!("Transformed vector (1,0,0) -> {:?}", v2_trans);
@@ -42,6 +41,6 @@ fn main() -> Result<(), String> {
     // Placeholder API check
     // let euler = q.to_euler_angles(0, 1, 2); // ZYX
     // println!("Euler angles: {:?}", euler);
-    
+
     Ok(())
 }

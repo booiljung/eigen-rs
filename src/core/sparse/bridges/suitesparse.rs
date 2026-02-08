@@ -1,17 +1,19 @@
 //! Bridge to SuiteSparse solvers (CHOLMOD and UMFPACK).
 
+use crate::core::matrix::Matrix;
 use crate::core::scalar::Scalar;
 use crate::core::sparse::sparse_matrix::{SparseMatrix, StorageOrder};
-use crate::core::matrix::Matrix;
-use crate::core::storage::{Storage, DynamicStorage};
+use crate::core::storage::{DynamicStorage, Storage};
 
 #[cfg(feature = "suitesparse")]
 pub mod sys {
-    use std::os::raw::{c_int, c_long, c_double, c_void};
+    use std::os::raw::{c_double, c_int, c_long, c_void};
 
     #[repr(C)]
-    pub struct cholmod_common { _unused: [u8; 0] }
-    
+    pub struct cholmod_common {
+        _unused: [u8; 0],
+    }
+
     #[repr(C)]
     pub struct cholmod_sparse {
         pub nrow: usize,
@@ -29,14 +31,26 @@ pub mod sys {
     }
 
     #[repr(C)]
-    pub struct cholmod_factor { _unused: [u8; 0] }
+    pub struct cholmod_factor {
+        _unused: [u8; 0],
+    }
 
     extern "C" {
         pub fn cholmod_start(common: *mut cholmod_common) -> c_int;
         pub fn cholmod_finish(common: *mut cholmod_common) -> c_int;
-        pub fn cholmod_analyze(sparse: *mut cholmod_sparse, common: *mut cholmod_common) -> *mut cholmod_factor;
-        pub fn cholmod_factorize(sparse: *mut cholmod_sparse, factor: *mut cholmod_factor, common: *mut cholmod_common) -> c_int;
-        pub fn cholmod_free_factor(factor: *mut *mut cholmod_factor, common: *mut cholmod_common) -> c_int;
+        pub fn cholmod_analyze(
+            sparse: *mut cholmod_sparse,
+            common: *mut cholmod_common,
+        ) -> *mut cholmod_factor;
+        pub fn cholmod_factorize(
+            sparse: *mut cholmod_sparse,
+            factor: *mut cholmod_factor,
+            common: *mut cholmod_common,
+        ) -> c_int;
+        pub fn cholmod_free_factor(
+            factor: *mut *mut cholmod_factor,
+            common: *mut cholmod_common,
+        ) -> c_int;
     }
 }
 
@@ -63,7 +77,7 @@ impl<T: Scalar> CholmodLLT<T> {
     pub fn compute(&mut self, _matrix: &SparseMatrix<T>) -> Result<(), String> {
         #[cfg(not(feature = "suitesparse"))]
         return Err("SuiteSparse feature not enabled".to_string());
-        
+
         #[cfg(feature = "suitesparse")]
         {
             // Transition eigen-rs CSR/CSC to CHOLMOD format and call solve

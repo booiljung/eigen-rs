@@ -1,9 +1,9 @@
 //! Sparse matrix implementation using Compressed Storage formats (CSR/CSC).
 
-use crate::core::scalar::Scalar;
 use crate::core::matrix::Matrix;
-use crate::core::storage::{Storage, DynamicStorage};
+use crate::core::scalar::Scalar;
 use crate::core::sparse::iterators::InnerIterator;
+use crate::core::storage::{DynamicStorage, Storage};
 
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
@@ -57,10 +57,18 @@ impl<T: Scalar> SparseMatrix<T> {
         }
     }
 
-    pub fn rows(&self) -> usize { self.rows }
-    pub fn cols(&self) -> usize { self.cols }
-    pub fn non_zeros(&self) -> usize { self.values.len() }
-    pub fn order(&self) -> StorageOrder { self.order }
+    pub fn rows(&self) -> usize {
+        self.rows
+    }
+    pub fn cols(&self) -> usize {
+        self.cols
+    }
+    pub fn non_zeros(&self) -> usize {
+        self.values.len()
+    }
+    pub fn order(&self) -> StorageOrder {
+        self.order
+    }
     pub fn outer_size(&self) -> usize {
         match self.order {
             StorageOrder::RowMajor => self.rows,
@@ -74,7 +82,11 @@ impl<T: Scalar> SparseMatrix<T> {
         if triplets.is_empty() {
             self.values.clear();
             self.inner_indices.clear();
-            let outer_size = if self.order == StorageOrder::RowMajor { self.rows } else { self.cols };
+            let outer_size = if self.order == StorageOrder::RowMajor {
+                self.rows
+            } else {
+                self.cols
+            };
             self.outer_starts = vec![0; outer_size + 1];
             return;
         }
@@ -82,14 +94,10 @@ impl<T: Scalar> SparseMatrix<T> {
         // 1. Sort triplets based on storage order
         match self.order {
             StorageOrder::RowMajor => {
-                triplets.sort_by(|a, b| {
-                    a.row.cmp(&b.row).then(a.col.cmp(&b.col))
-                });
+                triplets.sort_by(|a, b| a.row.cmp(&b.row).then(a.col.cmp(&b.col)));
             }
             StorageOrder::ColMajor => {
-                triplets.sort_by(|a, b| {
-                    a.col.cmp(&b.col).then(a.row.cmp(&b.row))
-                });
+                triplets.sort_by(|a, b| a.col.cmp(&b.col).then(a.row.cmp(&b.row)));
             }
         }
 
@@ -109,7 +117,11 @@ impl<T: Scalar> SparseMatrix<T> {
         }
 
         // 3. Populate compressed structure
-        let outer_limit = if self.order == StorageOrder::RowMajor { self.rows } else { self.cols };
+        let outer_limit = if self.order == StorageOrder::RowMajor {
+            self.rows
+        } else {
+            self.cols
+        };
         self.values = Vec::with_capacity(unique_triplets.len());
         self.inner_indices = Vec::with_capacity(unique_triplets.len());
         self.outer_starts = vec![0; outer_limit + 1];
@@ -138,15 +150,27 @@ impl<T: Scalar> SparseMatrix<T> {
     }
 
     /// Returns the raw values.
-    pub fn value_ptr(&self) -> *const T { self.values.as_ptr() }
+    pub fn value_ptr(&self) -> *const T {
+        self.values.as_ptr()
+    }
     /// Returns the inner indices.
-    pub fn inner_index_ptr(&self) -> *const usize { self.inner_indices.as_ptr() }
+    pub fn inner_index_ptr(&self) -> *const usize {
+        self.inner_indices.as_ptr()
+    }
     /// Returns the outer starts.
-    pub fn outer_start_ptr(&self) -> *const usize { self.outer_starts.as_ptr() }
-    
-    pub fn values(&self) -> &[T] { &self.values }
-    pub fn inner_indices(&self) -> &[usize] { &self.inner_indices }
-    pub fn outer_starts(&self) -> &[usize] { &self.outer_starts }
+    pub fn outer_start_ptr(&self) -> *const usize {
+        self.outer_starts.as_ptr()
+    }
+
+    pub fn values(&self) -> &[T] {
+        &self.values
+    }
+    pub fn inner_indices(&self) -> &[usize] {
+        &self.inner_indices
+    }
+    pub fn outer_starts(&self) -> &[usize] {
+        &self.outer_starts
+    }
 
     /// Returns the transpose of the sparse matrix.
     /// If the matrix is RowMajor (CSR), the transpose will be ColMajor (CSC) with the same data, and vice-versa.
@@ -197,17 +221,34 @@ impl<T: Scalar> SparseMatrix<T> {
         }
     }
 
-    pub(crate) fn from_raw(rows: usize, cols: usize, values: Vec<T>, inner_indices: Vec<usize>, outer_starts: Vec<usize>, order: StorageOrder) -> Self {
-        Self { rows, cols, values, inner_indices, outer_starts, order }
+    pub(crate) fn from_raw(
+        rows: usize,
+        cols: usize,
+        values: Vec<T>,
+        inner_indices: Vec<usize>,
+        outer_starts: Vec<usize>,
+        order: StorageOrder,
+    ) -> Self {
+        Self {
+            rows,
+            cols,
+            values,
+            inner_indices,
+            outer_starts,
+            order,
+        }
     }
 
     /// Multiplies this sparse matrix by a dense matrix.
-    pub fn mul_dense<S: Storage<T>>(&self, rhs: &Matrix<T, S>) -> Result<Matrix<T, DynamicStorage<T>>, String> {
+    pub fn mul_dense<S: Storage<T>>(
+        &self,
+        rhs: &Matrix<T, S>,
+    ) -> Result<Matrix<T, DynamicStorage<T>>, String> {
         if self.cols != rhs.rows() {
             return Err("Incompatible dimensions for sparse-dense product".to_string());
         }
         let mut res = Matrix::<T, DynamicStorage<T>>::new_dynamic(self.rows, rhs.cols())?;
-        
+
         #[cfg(feature = "parallel")]
         {
             if self.non_zeros() > 50000 || (self.rows * rhs.cols() > 10000) {
@@ -223,7 +264,8 @@ impl<T: Scalar> SparseMatrix<T> {
                         let val = it.value();
                         let col = it.index();
                         for j in 0..rhs.cols() {
-                            *res.get_mut(i, j).unwrap() = *res.get(i, j).unwrap() + val * (*rhs.get(col, j).unwrap());
+                            *res.get_mut(i, j).unwrap() =
+                                *res.get(i, j).unwrap() + val * (*rhs.get(col, j).unwrap());
                         }
                         it.next();
                     }
@@ -236,7 +278,8 @@ impl<T: Scalar> SparseMatrix<T> {
                         let val = it.value();
                         let row = it.index();
                         for k in 0..rhs.cols() {
-                            *res.get_mut(row, k).unwrap() = *res.get(row, k).unwrap() + val * (*rhs.get(j, k).unwrap());
+                            *res.get_mut(row, k).unwrap() =
+                                *res.get(row, k).unwrap() + val * (*rhs.get(j, k).unwrap());
                         }
                         it.next();
                     }
@@ -248,8 +291,12 @@ impl<T: Scalar> SparseMatrix<T> {
 
     /// Parallel multiplication by a dense matrix.
     #[cfg(feature = "parallel")]
-    pub fn par_mul_dense<S: Storage<T> + Sync>(&self, rhs: &Matrix<T, S>) -> Result<Matrix<T, DynamicStorage<T>>, String>
-    where T: Scalar + Send + Sync + 'static
+    pub fn par_mul_dense<S: Storage<T> + Sync>(
+        &self,
+        rhs: &Matrix<T, S>,
+    ) -> Result<Matrix<T, DynamicStorage<T>>, String>
+    where
+        T: Scalar + Send + Sync + 'static,
     {
         if self.cols != rhs.rows() {
             return Err("Incompatible dimensions for parallel sparse-dense product".to_string());
@@ -440,10 +487,14 @@ mod tests {
     fn test_sparse_sparse_mul() {
         let mut a = SparseMatrix::<f64>::new(2, 3, StorageOrder::RowMajor);
         a.set_from_triplets(vec![Triplet::new(0, 0, 1.0), Triplet::new(0, 2, 3.0)]);
-        
+
         let mut b = SparseMatrix::<f64>::new(3, 2, StorageOrder::RowMajor);
-        b.set_from_triplets(vec![Triplet::new(0, 0, 10.0), Triplet::new(0, 1, 5.0), Triplet::new(2, 0, 1.0)]);
-        
+        b.set_from_triplets(vec![
+            Triplet::new(0, 0, 10.0),
+            Triplet::new(0, 1, 5.0),
+            Triplet::new(2, 0, 1.0),
+        ]);
+
         let res = (&a * &b).unwrap();
         assert_eq!(res.rows(), 2);
         assert_eq!(res.cols(), 2);

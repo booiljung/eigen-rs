@@ -1,11 +1,11 @@
 //! Incomplete LU with Thresholding (ILUT) preconditioner.
 
-use crate::core::scalar::Scalar;
-use crate::core::sparse::sparse_matrix::SparseMatrix;
 use crate::core::matrix::Matrix;
-use crate::core::storage::{Storage, DynamicStorage};
-use crate::core::sparse::solvers::iterative_solver_base::Preconditioner;
+use crate::core::scalar::Scalar;
 use crate::core::sparse::iterators::InnerIterator;
+use crate::core::sparse::solvers::iterative_solver_base::Preconditioner;
+use crate::core::sparse::sparse_matrix::SparseMatrix;
+use crate::core::storage::{DynamicStorage, Storage};
 
 /// Incomplete LU with Thresholding (ILUT) preconditioner.
 pub struct IncompleteLUT<T: Scalar> {
@@ -51,7 +51,7 @@ impl<T: Scalar> Preconditioner<T> for IncompleteLUT<T> {
         let n = matrix.rows();
         self.l = SparseMatrix::new(n, n, crate::core::sparse::StorageOrder::ColMajor);
         self.u = SparseMatrix::new(n, n, crate::core::sparse::StorageOrder::ColMajor);
-        
+
         // ILU(0) - Sparsity pattern of (L+U) = Sparsity pattern of A
         let mut pattern_l = vec![Vec::new(); n];
         let mut pattern_u = vec![Vec::new(); n];
@@ -102,8 +102,8 @@ impl<T: Scalar> Preconditioner<T> for IncompleteLUT<T> {
                             // Check if i is in pattern_l[j] or pattern_u[j]
                             // For simplicity, let's just use a fast way to check pattern
                             // or just skip if not in pattern.
-                            let in_pattern = if i == j { 
-                                true 
+                            let in_pattern = if i == j {
+                                true
                             } else if i > j {
                                 pattern_l[j].contains(&i)
                             } else {
@@ -132,12 +132,12 @@ impl<T: Scalar> Preconditioner<T> for IncompleteLUT<T> {
                 workspace[j] = T::from_f64(1.0);
             }
             let u_jj_safe = workspace[j];
-            
+
             for &i in &pattern_u[j] {
                 u_values[j].push(workspace[i]);
                 workspace[i] = T::default();
             }
-            
+
             for &i in &pattern_l[j] {
                 l_values[j].push(workspace[i] / u_jj_safe);
                 workspace[i] = T::default();
@@ -163,21 +163,24 @@ impl<T: Scalar> Preconditioner<T> for IncompleteLUT<T> {
         Ok(())
     }
 
-    fn solve<S: Storage<T>>(&self, b: &Matrix<T, S>) -> Result<Matrix<T, DynamicStorage<T>>, String> {
+    fn solve<S: Storage<T>>(
+        &self,
+        b: &Matrix<T, S>,
+    ) -> Result<Matrix<T, DynamicStorage<T>>, String> {
         if !self.is_initialized {
             return Err("Preconditioner not initialized".to_string());
         }
-        
+
         let n = b.rows();
         let mut x = Matrix::<T, DynamicStorage<T>>::new_dynamic(n, b.cols())?;
-        
+
         for k in 0..b.cols() {
             // Forward substitution for L (unit diagonal)
             let mut y = vec![T::default(); n];
             for i in 0..n {
                 y[i] = *b.get(i, k).unwrap();
             }
-            
+
             for j in 0..n {
                 let val_j = y[j];
                 let mut it = InnerIterator::new(&self.l, j);
@@ -189,7 +192,7 @@ impl<T: Scalar> Preconditioner<T> for IncompleteLUT<T> {
                     it.next();
                 }
             }
-            
+
             // Backward substitution for U (CSC)
             // Column-based backward solve:
             // For j from n-1 down to 0:
@@ -205,11 +208,11 @@ impl<T: Scalar> Preconditioner<T> for IncompleteLUT<T> {
                     }
                     it.next();
                 }
-                
+
                 if diag_val.abs().to_f64() > 1e-18 {
                     y[j] /= diag_val;
                 }
-                
+
                 let val_j = y[j];
                 let mut it = InnerIterator::new(&self.u, j);
                 while it.is_valid() {
@@ -220,12 +223,12 @@ impl<T: Scalar> Preconditioner<T> for IncompleteLUT<T> {
                     it.next();
                 }
             }
-            
+
             for i in 0..n {
                 *x.get_mut(i, k).unwrap() = y[i];
             }
         }
-        
+
         Ok(x)
     }
 }

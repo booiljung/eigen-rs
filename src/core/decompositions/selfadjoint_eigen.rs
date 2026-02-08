@@ -1,9 +1,9 @@
 //! Eigenvalue decomposition of a selfadjoint matrix.
 
-use crate::core::matrix::Matrix;
-use crate::core::storage::{Storage, DynamicStorage};
-use crate::core::scalar::Scalar;
 use crate::core::decompositions::Tridiagonalization;
+use crate::core::matrix::Matrix;
+use crate::core::scalar::Scalar;
+use crate::core::storage::{DynamicStorage, Storage};
 
 /// Eigendecomposition of a selfadjoint matrix.
 pub struct SelfAdjointEigenSolver<T: Scalar, S: Storage<T>> {
@@ -40,13 +40,17 @@ impl<T: Scalar, S: Storage<T>> SelfAdjointEigenSolver<T, S> {
         Ok(solver)
     }
 
-    pub fn compute(&mut self, matrix: &Matrix<T, S>, compute_eigenvectors: bool) -> Result<(), String> {
+    pub fn compute(
+        &mut self,
+        matrix: &Matrix<T, S>,
+        compute_eigenvectors: bool,
+    ) -> Result<(), String> {
         let n = matrix.rows();
         if n == 0 {
             self.info = ComputationInfo::Success;
             return Ok(());
         }
-        
+
         if n == 1 {
             *self.eigenvalues.get_mut(0, 0).unwrap() = *matrix.get(0, 0).unwrap();
             if compute_eigenvectors {
@@ -64,15 +68,15 @@ impl<T: Scalar, S: Storage<T>> SelfAdjointEigenSolver<T, S> {
         }
 
         if n == 3 {
-             self.compute_3x3(matrix, compute_eigenvectors)?;
-             return Ok(());
+            self.compute_3x3(matrix, compute_eigenvectors)?;
+            return Ok(());
         }
 
         // General case: Reduce to tridiagonal form and use QR
         let tri = Tridiagonalization::new(matrix)?;
         let mut diag = vec![T::default(); n];
         let mut subdiag = vec![T::default(); n - 1];
-        
+
         let t = tri.matrix_t();
         for i in 0..n {
             diag[i] = *t.get(i, i).unwrap();
@@ -91,7 +95,11 @@ impl<T: Scalar, S: Storage<T>> SelfAdjointEigenSolver<T, S> {
         Ok(())
     }
 
-    fn compute_2x2(&mut self, matrix: &Matrix<T, S>, compute_eigenvectors: bool) -> Result<(), String> {
+    fn compute_2x2(
+        &mut self,
+        matrix: &Matrix<T, S>,
+        compute_eigenvectors: bool,
+    ) -> Result<(), String> {
         let a = *matrix.get(0, 0).unwrap();
         let b = *matrix.get(1, 0).unwrap();
         let d = *matrix.get(1, 1).unwrap();
@@ -149,7 +157,11 @@ impl<T: Scalar, S: Storage<T>> SelfAdjointEigenSolver<T, S> {
         Ok(())
     }
 
-    fn compute_3x3(&mut self, matrix: &Matrix<T, S>, compute_eigenvectors: bool) -> Result<(), String> {
+    fn compute_3x3(
+        &mut self,
+        matrix: &Matrix<T, S>,
+        compute_eigenvectors: bool,
+    ) -> Result<(), String> {
         let m00 = *matrix.get(0, 0).unwrap();
         let m10 = *matrix.get(1, 0).unwrap();
         let m20 = *matrix.get(2, 0).unwrap();
@@ -158,12 +170,16 @@ impl<T: Scalar, S: Storage<T>> SelfAdjointEigenSolver<T, S> {
         let m22 = *matrix.get(2, 2).unwrap();
 
         let shift = (m00 + m11 + m22) / T::from_f64(3.0);
-        
+
         let s00 = m00 - shift;
         let s11 = m11 - shift;
         let s22 = m22 - shift;
 
-        let norm = (s00*s00 + s11*s11 + s22*s22 + T::from_f64(2.0)*(m10*m10 + m20*m20 + m21*m21)).sqrt();
+        let norm = (s00 * s00
+            + s11 * s11
+            + s22 * s22
+            + T::from_f64(2.0) * (m10 * m10 + m20 * m20 + m21 * m21))
+            .sqrt();
         if norm < T::epsilon() {
             *self.eigenvalues.get_mut(0, 0).unwrap() = shift;
             *self.eigenvalues.get_mut(1, 0).unwrap() = shift;
@@ -172,7 +188,11 @@ impl<T: Scalar, S: Storage<T>> SelfAdjointEigenSolver<T, S> {
                 let mut _vecs = Matrix::<T, DynamicStorage<T>>::new_dynamic(3, 3)?;
                 for i in 0..3 {
                     for j in 0..3 {
-                        *_vecs.get_mut(i, j).unwrap() = if i == j { T::from_f64(1.0) } else { T::default() };
+                        *_vecs.get_mut(i, j).unwrap() = if i == j {
+                            T::from_f64(1.0)
+                        } else {
+                            T::default()
+                        };
                     }
                 }
                 self.eigenvectors = Some(_vecs);
@@ -189,14 +209,17 @@ impl<T: Scalar, S: Storage<T>> SelfAdjointEigenSolver<T, S> {
         let a21 = m21 / scale;
         let a22 = s22 / scale;
 
-        let c0 = a00*a11*a22 + T::from_f64(2.0)*a10*a20*a21 - a00*a21*a21 - a11*a20*a20 - a22*a10*a10;
-        let c1 = a00*a11 - a10*a10 + a00*a22 - a20*a20 + a11*a22 - a21*a21;
+        let c0 = a00 * a11 * a22 + T::from_f64(2.0) * a10 * a20 * a21
+            - a00 * a21 * a21
+            - a11 * a20 * a20
+            - a22 * a10 * a10;
+        let c1 = a00 * a11 - a10 * a10 + a00 * a22 - a20 * a20 + a11 * a22 - a21 * a21;
         let _c2 = T::default(); // trace is zero by construction
 
         let a_over_3 = -c1 / T::from_f64(3.0);
         let half_b = c0 * T::from_f64(0.5);
-        
-        let q = a_over_3*a_over_3*a_over_3 - half_b*half_b;
+
+        let q = a_over_3 * a_over_3 * a_over_3 - half_b * half_b;
         let q_clamped = if q > T::default() { q } else { T::default() };
 
         let rho = a_over_3.sqrt();
@@ -218,7 +241,7 @@ impl<T: Scalar, S: Storage<T>> SelfAdjointEigenSolver<T, S> {
 
         if compute_eigenvectors {
             // To keep it simple and robust, if compute_eigenvectors is true for 3x3,
-            // we'll run the general path. 
+            // we'll run the general path.
             // In Eigen, they have a fully direct 3x3, but it's quite complex.
             // Let's just use the general path for now if eigenvectors are needed for N=3.
             return self.compute_general(matrix, compute_eigenvectors);
@@ -228,7 +251,11 @@ impl<T: Scalar, S: Storage<T>> SelfAdjointEigenSolver<T, S> {
         Ok(())
     }
 
-    fn compute_general(&mut self, matrix: &Matrix<T, S>, compute_eigenvectors: bool) -> Result<(), String> {
+    fn compute_general(
+        &mut self,
+        matrix: &Matrix<T, S>,
+        compute_eigenvectors: bool,
+    ) -> Result<(), String> {
         let n = matrix.rows();
         let tri = Tridiagonalization::new(matrix)?;
         let mut diag = vec![T::default(); n];
@@ -248,7 +275,12 @@ impl<T: Scalar, S: Storage<T>> SelfAdjointEigenSolver<T, S> {
         Ok(())
     }
 
-    fn compute_from_tridiagonal(&mut self, diag: &mut [T], subdiag: &mut [T], compute_eigenvectors: bool) -> Result<(), String> {
+    fn compute_from_tridiagonal(
+        &mut self,
+        diag: &mut [T],
+        subdiag: &mut [T],
+        compute_eigenvectors: bool,
+    ) -> Result<(), String> {
         let n = diag.len();
         let mut end = n - 1;
         let mut iter = 0;
@@ -261,15 +293,21 @@ impl<T: Scalar, S: Storage<T>> SelfAdjointEigenSolver<T, S> {
                     subdiag[i] = T::default();
                 }
             }
-            while end > 0 && subdiag[end - 1] == T::default() { end -= 1; }
-            if end == 0 { break; }
+            while end > 0 && subdiag[end - 1] == T::default() {
+                end -= 1;
+            }
+            if end == 0 {
+                break;
+            }
             iter += 1;
             if iter > max_iter {
                 self.info = ComputationInfo::NoConvergence;
                 return Ok(());
             }
             let mut start = end - 1;
-            while start > 0 && subdiag[start - 1] != T::default() { start -= 1; }
+            while start > 0 && subdiag[start - 1] != T::default() {
+                start -= 1;
+            }
             self.tridiagonal_qr_step(diag, subdiag, start, end, compute_eigenvectors);
         }
         for i in 0..n {
@@ -279,23 +317,40 @@ impl<T: Scalar, S: Storage<T>> SelfAdjointEigenSolver<T, S> {
         Ok(())
     }
 
-    fn tridiagonal_qr_step(&mut self, diag: &mut [T], subdiag: &mut [T], start: usize, end: usize, compute_eigenvectors: bool) {
+    fn tridiagonal_qr_step(
+        &mut self,
+        diag: &mut [T],
+        subdiag: &mut [T],
+        start: usize,
+        end: usize,
+        compute_eigenvectors: bool,
+    ) {
         let n_total = self.eigenvalues.rows();
         let d_prev = diag[end - 1];
         let d_last = diag[end];
         let e_last = subdiag[end - 1];
         let e2 = e_last * e_last;
         let td = (d_prev - d_last) * T::from_f64(0.5);
-        let sign_td = if td >= T::default() { T::from_f64(1.0) } else { T::from_f64(-1.0) };
+        let sign_td = if td >= T::default() {
+            T::from_f64(1.0)
+        } else {
+            T::from_f64(-1.0)
+        };
         let mu = d_last - e2 / (td + sign_td * (td * td + e2).sqrt());
-        
+
         let mut f = diag[start] - mu;
         let mut g = subdiag[start];
 
         for k in start..end {
             let r = (f * f + g * g).sqrt();
-            let (c, s) = if r == T::default() { (T::from_f64(1.0), T::default()) } else { (f / r, g / r) };
-            if k > start { subdiag[k - 1] = r; }
+            let (c, s) = if r == T::default() {
+                (T::from_f64(1.0), T::default())
+            } else {
+                (f / r, g / r)
+            };
+            if k > start {
+                subdiag[k - 1] = r;
+            }
             let d1 = diag[k];
             let d2 = diag[k + 1];
             let e1 = subdiag[k];
@@ -332,11 +387,14 @@ impl<T: Scalar, S: Storage<T>> SelfAdjointEigenSolver<T, S> {
             for j in i + 1..n {
                 let val_j = *self.eigenvalues.get(j, 0).unwrap();
                 let val_min = *self.eigenvalues.get(min_idx, 0).unwrap();
-                if val_j < val_min { min_idx = j; }
+                if val_j < val_min {
+                    min_idx = j;
+                }
             }
             if min_idx != i {
                 let temp = *self.eigenvalues.get(i, 0).unwrap();
-                *self.eigenvalues.get_mut(i, 0).unwrap() = *self.eigenvalues.get(min_idx, 0).unwrap();
+                *self.eigenvalues.get_mut(i, 0).unwrap() =
+                    *self.eigenvalues.get(min_idx, 0).unwrap();
                 *self.eigenvalues.get_mut(min_idx, 0).unwrap() = temp;
                 if let Some(ref mut vecs) = self.eigenvectors {
                     for row in 0..n {
@@ -350,7 +408,13 @@ impl<T: Scalar, S: Storage<T>> SelfAdjointEigenSolver<T, S> {
         }
     }
 
-    pub fn eigenvalues(&self) -> &Matrix<T, DynamicStorage<T>> { &self.eigenvalues }
-    pub fn eigenvectors(&self) -> Option<&Matrix<T, DynamicStorage<T>>> { self.eigenvectors.as_ref() }
-    pub fn info(&self) -> ComputationInfo { self.info }
+    pub fn eigenvalues(&self) -> &Matrix<T, DynamicStorage<T>> {
+        &self.eigenvalues
+    }
+    pub fn eigenvectors(&self) -> Option<&Matrix<T, DynamicStorage<T>>> {
+        self.eigenvectors.as_ref()
+    }
+    pub fn info(&self) -> ComputationInfo {
+        self.info
+    }
 }

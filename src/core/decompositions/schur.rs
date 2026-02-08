@@ -1,10 +1,10 @@
 //! Real Schur decomposition of a square matrix.
 //! A = Q * T * Q^T
 
-use crate::core::matrix::Matrix;
-use crate::core::storage::{Storage, DynamicStorage};
-use crate::core::scalar::Scalar;
 use crate::core::decompositions::HessenbergDecomposition;
+use crate::core::matrix::Matrix;
+use crate::core::scalar::Scalar;
+use crate::core::storage::{DynamicStorage, Storage};
 
 /// Real Schur decomposition of a square matrix.
 pub struct RealSchur<T: Scalar, S: Storage<T>> {
@@ -40,7 +40,10 @@ impl<T: Scalar, S: Storage<T>> RealSchur<T, S> {
     }
 
     /// Iterative QR algorithm with shifts on Hessenberg matrix.
-    fn compute_inplace(h: &mut Matrix<T, DynamicStorage<T>>, q: &mut Matrix<T, DynamicStorage<T>>) -> Result<(), String> {
+    fn compute_inplace(
+        h: &mut Matrix<T, DynamicStorage<T>>,
+        q: &mut Matrix<T, DynamicStorage<T>>,
+    ) -> Result<(), String> {
         let n = h.rows();
         let max_iter = 40 * n;
         let mut iter = 0;
@@ -48,7 +51,13 @@ impl<T: Scalar, S: Storage<T>> RealSchur<T, S> {
         let mut high = n - 1;
 
         // Numerical precision epsilon
-        let eps = T::from_f64(if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() { 1e-7 } else { 1e-15 });
+        let eps = T::from_f64(
+            if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() {
+                1e-7
+            } else {
+                1e-15
+            },
+        );
 
         while high > 0 {
             if iter > max_iter {
@@ -89,21 +98,25 @@ impl<T: Scalar, S: Storage<T>> RealSchur<T, S> {
                     // Exceptional shift using sub-diagonals (Datta / LAPACK strategy) to break cycles
                     // s = 1.5 * (|h_n,n-1| + |h_n-1,n-2|) approximated
                     let h_high_m1 = h.get(high, high - 1).unwrap().abs();
-                    let h_m1_m2 = if high > low + 1 { h.get(high - 1, high - 2).unwrap().abs() } else { T::default() };
+                    let h_m1_m2 = if high > low + 1 {
+                        h.get(high - 1, high - 2).unwrap().abs()
+                    } else {
+                        T::default()
+                    };
                     let s_val = h_high_m1 + h_m1_m2;
-                    
+
                     // Specific ad-hoc values to break symmetry
                     s = T::from_f64(1.5) * s_val;
-                    t = s_val * s_val; 
+                    t = s_val * s_val;
                 } else {
-                     // Standard Francis double-shift from bottom 2x2 block
+                    // Standard Francis double-shift from bottom 2x2 block
                     let h_mm = *h.get(end, end).unwrap();
                     let h_mm1 = *h.get(end - 1, end - 1).unwrap();
                     let h_m_m1 = *h.get(end, end - 1).unwrap();
                     let h_m1_m = *h.get(end - 1, end).unwrap();
 
                     // Characteristic polynomial: x^2 - s*x + t = 0
-                    s = h_mm + h_mm1;      // Trace
+                    s = h_mm + h_mm1; // Trace
                     t = h_mm * h_mm1 - h_m_m1 * h_m1_m; // Determinant
                 }
 
@@ -126,9 +139,16 @@ impl<T: Scalar, S: Storage<T>> RealSchur<T, S> {
 
     /// Performs one Francis double-shift QR step on the Hessenberg matrix H in the range [start, end].
     /// `s` (trace) and `t` (determinant) define the implicit shift polynomial x^2 - sx + t.
-    fn francis_qr_step(h: &mut Matrix<T, DynamicStorage<T>>, q: &mut Matrix<T, DynamicStorage<T>>, start: usize, end: usize, s: T, t: T) {
+    fn francis_qr_step(
+        h: &mut Matrix<T, DynamicStorage<T>>,
+        q: &mut Matrix<T, DynamicStorage<T>>,
+        start: usize,
+        end: usize,
+        s: T,
+        t: T,
+    ) {
         let n = h.rows();
-        
+
         // 1. Shifts s and t are passed in.
 
         // 2. Compute first Householder reflection
@@ -140,19 +160,26 @@ impl<T: Scalar, S: Storage<T>> RealSchur<T, S> {
         let h10 = *h.get(start + 1, start).unwrap();
         let h01 = *h.get(start, start + 1).unwrap();
         let h11 = *h.get(start + 1, start + 1).unwrap();
-        let h21 = if start + 2 <= end { *h.get(start + 2, start + 1).unwrap() } else { T::default() };
+        let h21 = if start + 2 <= end {
+            *h.get(start + 2, start + 1).unwrap()
+        } else {
+            T::default()
+        };
 
         let v1 = h00 * h00 + h01 * h10 - s * h00 + t;
         let v2 = h10 * (h00 + h11 - s);
         let v3 = h10 * h21;
 
         let mut v = [v1, v2, v3];
-        
+
         // 3. Bulge chasing
-        for k in start..end { // Loop up to 'end'
+        for k in start..end {
+            // Loop up to 'end'
             let nr = std::cmp::min(3, end - k + 1);
-            if nr < 2 { break; } // Stop if not enough elements for a 2x2 or 3x3 reflection
-            
+            if nr < 2 {
+                break;
+            } // Stop if not enough elements for a 2x2 or 3x3 reflection
+
             if k > start {
                 // If not the first step, the vector 'v' for the Householder reflection
                 // is taken from the sub-diagonal elements of H
@@ -164,7 +191,7 @@ impl<T: Scalar, S: Storage<T>> RealSchur<T, S> {
             }
 
             let (tau, house) = Self::make_householder(&v[..nr]);
-            
+
             // Left: H = P H
             let left_start = if k == start { start } else { k - 1 };
             for j in left_start..n {
@@ -225,7 +252,7 @@ impl<T: Scalar, S: Storage<T>> RealSchur<T, S> {
         for i in 1..n {
             norm_sq += v[i] * v[i];
         }
-        
+
         let mut house = vec![T::default(); n];
         house[0] = T::from_f64(1.0);
         for i in 1..n {
@@ -237,9 +264,13 @@ impl<T: Scalar, S: Storage<T>> RealSchur<T, S> {
         }
 
         let mu = (v[0] * v[0] + norm_sq).sqrt();
-        let v0 = if v[0] <= T::default() { v[0] - mu } else { (T::default() - norm_sq) / (v[0] + mu) };
+        let v0 = if v[0] <= T::default() {
+            v[0] - mu
+        } else {
+            (T::default() - norm_sq) / (v[0] + mu)
+        };
         let tau = T::from_f64(2.0) * v0 * v0 / (v0 * v0 + norm_sq);
-        
+
         let inv_v0 = v0.recip();
         for i in 1..n {
             house[i] *= inv_v0;
@@ -248,8 +279,12 @@ impl<T: Scalar, S: Storage<T>> RealSchur<T, S> {
         (tau, house)
     }
 
-    pub fn matrix_t(&self) -> &Matrix<T, DynamicStorage<T>> { &self.t }
-    pub fn matrix_q(&self) -> &Matrix<T, DynamicStorage<T>> { &self.q }
+    pub fn matrix_t(&self) -> &Matrix<T, DynamicStorage<T>> {
+        &self.t
+    }
+    pub fn matrix_q(&self) -> &Matrix<T, DynamicStorage<T>> {
+        &self.q
+    }
 }
 
 #[cfg(test)]
@@ -262,10 +297,8 @@ mod tests {
         let n = 4;
         let mut a = Matrix::<f64, DynamicStorage<f64>>::new_dynamic(n, n)?;
         let data = [
-             0.35,  0.45, -0.14, -0.17,
-             0.09,  0.07, -0.54,  0.35,
-            -0.44, -0.33, -0.03,  0.17,
-             0.25, -0.32, -0.13,  0.11,
+            0.35, 0.45, -0.14, -0.17, 0.09, 0.07, -0.54, 0.35, -0.44, -0.33, -0.03, 0.17, 0.25,
+            -0.32, -0.13, 0.11,
         ];
         for i in 0..n {
             for j in 0..n {
@@ -322,7 +355,13 @@ mod tests {
         for i in 0..n {
             for j in 0..n {
                 if i > j + 1 {
-                    assert!(t.get(i, j).unwrap().abs() < 1e-10, "T is not quasi-upper triangular at ({}, {}): {}", i, j, t.get(i, j).unwrap());
+                    assert!(
+                        t.get(i, j).unwrap().abs() < 1e-10,
+                        "T is not quasi-upper triangular at ({}, {}): {}",
+                        i,
+                        j,
+                        t.get(i, j).unwrap()
+                    );
                 }
             }
         }
@@ -334,7 +373,9 @@ mod tests {
     fn test_real_schur_identity() -> Result<(), String> {
         let n = 5;
         let mut a = Matrix::<f64, DynamicStorage<f64>>::new_dynamic(n, n)?;
-        for i in 0..n { *a.get_mut(i, i).unwrap() = 1.0; }
+        for i in 0..n {
+            *a.get_mut(i, i).unwrap() = 1.0;
+        }
 
         let schur = RealSchur::new(&a)?;
         let t = schur.matrix_t();

@@ -3,11 +3,11 @@
 //! Performs the factorization A = L * D * L^T where L is lower triangular with unit diagonal
 //! and D is diagonal.
 
-use crate::core::scalar::Scalar;
-use crate::core::sparse::sparse_matrix::{SparseMatrix, StorageOrder};
-use crate::core::sparse::iterators::InnerIterator;
 use crate::core::matrix::Matrix;
-use crate::core::storage::{Storage, DynamicStorage};
+use crate::core::scalar::Scalar;
+use crate::core::sparse::iterators::InnerIterator;
+use crate::core::sparse::sparse_matrix::{SparseMatrix, StorageOrder};
+use crate::core::storage::{DynamicStorage, Storage};
 
 /// Simplicial LDLT factorization of a sparse symmetric matrix.
 pub struct SimplicialLDLT<T: Scalar> {
@@ -60,7 +60,7 @@ impl<T: Scalar> SimplicialLDLT<T> {
         // Actually, if we use standard SparseMatrix, we should store them.
         let mut l_cols: Vec<Vec<(usize, T)>> = vec![Vec::new(); n];
         let mut l_dense = vec![T::default(); n];
-        
+
         for j in 0..n {
             // 1. Initialize dense column with A's j-th column (lower part)
             let mut it = InnerIterator::new(matrix, j);
@@ -76,7 +76,7 @@ impl<T: Scalar> SimplicialLDLT<T> {
             // A_{rj} - sum_{k<j} L_{rk} D_{kk} L_{jk}
             for k in 0..j {
                 let mut l_jk = T::default();
-                // Find L_jk in l_cols[k]. 
+                // Find L_jk in l_cols[k].
                 // Since l_cols is sorted by row index? No, purely pushed.
                 // We assume sorted or we search.
                 // For efficiency, usually standard impls use a linked list or similar for updating.
@@ -91,7 +91,7 @@ impl<T: Scalar> SimplicialLDLT<T> {
                 if l_jk != T::default() {
                     let d_kk = self.d[k];
                     let factor = l_jk * d_kk;
-                    
+
                     for &(r, val) in &l_cols[k] {
                         if r >= j {
                             l_dense[r] -= val * factor;
@@ -102,19 +102,19 @@ impl<T: Scalar> SimplicialLDLT<T> {
 
             // 3. Finalize column j
             let d_jj = l_dense[j];
-        
+
             if d_jj == T::default() {
-                 // Zero pivot? For LDLT strictly, this is an issue unless we do pivoting.
-                 // We return error for now.
-                 return Err(format!("Zero pivot at index {}", j));
+                // Zero pivot? For LDLT strictly, this is an issue unless we do pivoting.
+                // We return error for now.
+                return Err(format!("Zero pivot at index {}", j));
             }
-            
+
             self.d[j] = d_jj;
             self.inv_d[j] = T::from_f64(1.0) / d_jj;
-            
+
             // L_jj = 1.0
             l_cols[j].push((j, T::from_f64(1.0)));
-            
+
             for i in (j + 1)..n {
                 let val = l_dense[i] / d_jj;
                 if val != T::default() {
@@ -139,7 +139,10 @@ impl<T: Scalar> SimplicialLDLT<T> {
     }
 
     /// Solves the linear system Ax = b.
-    pub fn solve<S: Storage<T>>(&self, b: &Matrix<T, S>) -> Result<Matrix<T, DynamicStorage<T>>, String> {
+    pub fn solve<S: Storage<T>>(
+        &self,
+        b: &Matrix<T, S>,
+    ) -> Result<Matrix<T, DynamicStorage<T>>, String> {
         if !self.is_factorized {
             return Err("Solver is not factorized".to_string());
         }
@@ -168,24 +171,25 @@ impl<T: Scalar> SimplicialLDLT<T> {
                 //   z[j] is determined (already accumulated updates).
                 //   Update future z[i] using column j of L.
                 //   z[i] -= L_{ij} * z[j]
-                
+
                 let z_j = sol[j];
                 let mut it = InnerIterator::new(&self.l, j);
                 while it.is_valid() {
-                     let row = it.row();
-                     if row > j { // Strict lower part
-                         let val = it.value();
-                         sol[row] -= val * z_j;
-                     }
-                     it.next();
+                    let row = it.row();
+                    if row > j {
+                        // Strict lower part
+                        let val = it.value();
+                        sol[row] -= val * z_j;
+                    }
+                    it.next();
                 }
             }
-            
+
             // 2. Diagonal solve D * y = z
             for i in 0..n {
                 sol[i] *= self.inv_d[i];
             }
-            
+
             // 3. Backward substitution L^T * x = y
             // L^T is upper triangular with unit diagonal.
             // Solve x backwards.
@@ -199,7 +203,7 @@ impl<T: Scalar> SimplicialLDLT<T> {
                 // We need sum over k > j of L_{kj} * x[k].
                 // So iterate column j of L, look at row indices i > j.
                 // sum += L_{ij} * sol[i]
-                
+
                 let mut sum = T::default();
                 let mut it = InnerIterator::new(&self.l, j);
                 while it.is_valid() {
@@ -211,7 +215,7 @@ impl<T: Scalar> SimplicialLDLT<T> {
                 }
                 sol[j] -= sum; // Div by 1.0
             }
-            
+
             for i in 0..n {
                 *x.get_mut(i, k).unwrap() = sol[i];
             }

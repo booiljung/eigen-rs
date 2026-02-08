@@ -1,13 +1,13 @@
 //! Bridge to Intel MKL PARDISO solver.
 
+use crate::core::matrix::Matrix;
 use crate::core::scalar::Scalar;
 use crate::core::sparse::sparse_matrix::{SparseMatrix, StorageOrder};
-use crate::core::matrix::Matrix;
-use crate::core::storage::{Storage, DynamicStorage};
+use crate::core::storage::{DynamicStorage, Storage};
 
 #[cfg(feature = "mkl")]
 pub mod sys {
-    use std::os::raw::{c_int, c_long, c_double, c_void};
+    use std::os::raw::{c_double, c_int, c_long, c_void};
 
     extern "C" {
         pub fn pardiso(
@@ -44,7 +44,11 @@ pub struct MklPardiso<T: Scalar> {
 impl<T: Scalar> MklPardiso<T> {
     pub fn new(symmetric: bool, pd: bool) -> Self {
         let mtype = if symmetric {
-            if pd { 2 } else { -2 }
+            if pd {
+                2
+            } else {
+                -2
+            }
         } else {
             11 // Real unsymmetric
         };

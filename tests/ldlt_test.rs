@@ -5,9 +5,15 @@ mod common;
 fn test_ldlt_reconstruction() {
     let mut m = MatrixX::<f32>::new_dynamic(3, 3).unwrap();
     // Symmetric positive definite matrix
-    *m.get_mut(0, 0).unwrap() = 4.0; *m.get_mut(0, 1).unwrap() = 12.0; *m.get_mut(0, 2).unwrap() = -16.0;
-    *m.get_mut(1, 0).unwrap() = 12.0; *m.get_mut(1, 1).unwrap() = 37.0; *m.get_mut(1, 2).unwrap() = -43.0;
-    *m.get_mut(2, 0).unwrap() = -16.0; *m.get_mut(2, 1).unwrap() = -43.0; *m.get_mut(2, 2).unwrap() = 98.0;
+    *m.get_mut(0, 0).unwrap() = 4.0;
+    *m.get_mut(0, 1).unwrap() = 12.0;
+    *m.get_mut(0, 2).unwrap() = -16.0;
+    *m.get_mut(1, 0).unwrap() = 12.0;
+    *m.get_mut(1, 1).unwrap() = 37.0;
+    *m.get_mut(1, 2).unwrap() = -43.0;
+    *m.get_mut(2, 0).unwrap() = -16.0;
+    *m.get_mut(2, 1).unwrap() = -43.0;
+    *m.get_mut(2, 2).unwrap() = 98.0;
 
     let ldlt = m.ldlt().unwrap();
     let l = ldlt.matrix_l();
@@ -19,11 +25,11 @@ fn test_ldlt_reconstruction() {
     for i in 0..rows {
         *d_mat.get_mut(i, i).unwrap() = d[i];
     }
-    
+
     let lt = l.transpose();
     let mut ld = MatrixX::<f32>::new_dynamic(rows, rows).unwrap();
     ld.assign_product(&(l * &d_mat)).unwrap();
-    
+
     let mut m_reconstructed = MatrixX::<f32>::new_dynamic(rows, rows).unwrap();
     m_reconstructed.assign_product(&(&ld * &lt)).unwrap();
 
@@ -45,7 +51,8 @@ fn test_ldlt_reconstruction() {
     }
 
     // Differential Testing
-    let cpp_output = common::run_cpp_harness_stdout("tests/cpp_harness/matrix_cholesky_verify.cpp").unwrap();
+    let cpp_output =
+        common::run_cpp_harness_stdout("tests/cpp_harness/matrix_cholesky_verify.cpp").unwrap();
     for line in cpp_output.lines() {
         let parts: Vec<&str> = line.split(',').collect();
         match parts[0] {
@@ -54,19 +61,29 @@ fn test_ldlt_reconstruction() {
                 let col: usize = parts[2].parse().unwrap();
                 let val_cpp: f32 = parts[3].parse().unwrap();
                 let val_rust = *l.get(row, col).unwrap();
-                assert!((val_rust - val_cpp).abs() < 1e-5, "LDLT L mismatch at {},{}", row, col);
-            },
+                assert!(
+                    (val_rust - val_cpp).abs() < 1e-5,
+                    "LDLT L mismatch at {},{}",
+                    row,
+                    col
+                );
+            }
             "LDLT_D" => {
                 let idx: usize = parts[1].parse().unwrap();
                 let val_cpp: f32 = parts[2].parse().unwrap();
                 let val_rust = d[idx];
-                assert!((val_rust - val_cpp).abs() < 1e-5, "LDLT D mismatch at {}", idx);
-            },
+                assert!(
+                    (val_rust - val_cpp).abs() < 1e-5,
+                    "LDLT D mismatch at {}",
+                    idx
+                );
+            }
             _ => {}
         }
     }
     // Differential Testing
-    let cpp_output = common::run_cpp_harness_stdout("tests/cpp_harness/matrix_cholesky_verify.cpp").unwrap();
+    let cpp_output =
+        common::run_cpp_harness_stdout("tests/cpp_harness/matrix_cholesky_verify.cpp").unwrap();
     // Eigen's P contains transpositions. We need to be careful.
     // Actually, for simplicity, let's just check if L*D*L^T = A and if D values match in some order.
     // BUT we want to match EXACTLY if possible.
@@ -80,15 +97,28 @@ fn test_ldlt_reconstruction() {
                 let idx: usize = parts[1].parse().unwrap();
                 let val_cpp: f32 = parts[2].parse().unwrap();
                 let val_rust = d[idx];
-                assert!((val_rust - val_cpp).abs() < 1e-4, "LDLT D mismatch at {}: Rust={} C++={}", idx, val_rust, val_cpp);
-            },
+                assert!(
+                    (val_rust - val_cpp).abs() < 1e-4,
+                    "LDLT D mismatch at {}: Rust={} C++={}",
+                    idx,
+                    val_rust,
+                    val_cpp
+                );
+            }
             "LDLT_L" => {
                 let r: usize = parts[1].parse().unwrap();
                 let c: usize = parts[2].parse().unwrap();
                 let val_cpp: f32 = parts[3].parse().unwrap();
                 let val_rust = *l.get(r, c).unwrap();
-                assert!((val_rust - val_cpp).abs() < 1e-4, "LDLT L mismatch at {},{}: Rust={} C++={}", r, c, val_rust, val_cpp);
-            },
+                assert!(
+                    (val_rust - val_cpp).abs() < 1e-4,
+                    "LDLT L mismatch at {},{}: Rust={} C++={}",
+                    r,
+                    c,
+                    val_rust,
+                    val_cpp
+                );
+            }
             _ => {}
         }
     }

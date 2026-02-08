@@ -7,7 +7,7 @@ use crate::core::tensor::Tensor;
 pub trait TensorXpr<T: Scalar, const RANK: usize> {
     /// Returns the dimensions of the tensor expression.
     fn dims(&self) -> [usize; RANK];
-    
+
     /// Evaluates the expression at the given indices.
     fn eval(&self, indices: [usize; RANK]) -> T;
 
@@ -41,7 +41,7 @@ impl<T: Scalar, const RANK: usize> TensorXpr<T, RANK> for &Tensor<T, RANK> {
 
 /// Lazy coefficient-wise addition.
 /// Holds L and R by value to allow moving temporary expressions.
-pub struct CwiseTensorAddOp<T: Scalar, const RANK: usize, L, R> 
+pub struct CwiseTensorAddOp<T: Scalar, const RANK: usize, L, R>
 where
     L: TensorXpr<T, RANK>,
     R: TensorXpr<T, RANK>,
@@ -85,7 +85,7 @@ where
 }
 
 /// Lazy coefficient-wise subtraction.
-pub struct CwiseTensorSubOp<T: Scalar, const RANK: usize, L, R> 
+pub struct CwiseTensorSubOp<T: Scalar, const RANK: usize, L, R>
 where
     L: TensorXpr<T, RANK>,
     R: TensorXpr<T, RANK>,
@@ -129,7 +129,7 @@ where
 }
 
 /// Lazy scalar multiplication (broadcasting).
-pub struct CwiseTensorScalarMulOp<T: Scalar, const RANK: usize, X> 
+pub struct CwiseTensorScalarMulOp<T: Scalar, const RANK: usize, X>
 where
     X: TensorXpr<T, RANK>,
 {
@@ -160,7 +160,7 @@ where
 }
 
 /// Lazy scalar addition (broadcasting).
-pub struct CwiseTensorScalarAddOp<T: Scalar, const RANK: usize, X> 
+pub struct CwiseTensorScalarAddOp<T: Scalar, const RANK: usize, X>
 where
     X: TensorXpr<T, RANK>,
 {
@@ -191,7 +191,7 @@ where
 }
 
 /// Lazy scalar subtraction (broadcasting).
-pub struct CwiseTensorScalarSubOp<T: Scalar, const RANK: usize, X> 
+pub struct CwiseTensorScalarSubOp<T: Scalar, const RANK: usize, X>
 where
     X: TensorXpr<T, RANK>,
 {

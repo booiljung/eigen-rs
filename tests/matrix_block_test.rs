@@ -32,19 +32,19 @@ fn test_matrix_block_differential() {
                 let v_cpp: f32 = parts[3].parse().unwrap();
                 let v_rust = b.eval(row, col);
                 assert_eq!(v_rust, v_cpp, "Block mismatch at {},{}", row, col);
-            },
+            }
             "ROW" => {
                 let col: usize = parts[1].parse().unwrap();
                 let v_cpp: f32 = parts[2].parse().unwrap();
                 let v_rust = r.eval(0, col);
                 assert_eq!(v_rust, v_cpp, "Row mismatch at col {}", col);
-            },
+            }
             "COL" => {
                 let row: usize = parts[1].parse().unwrap();
                 let v_cpp: f32 = parts[2].parse().unwrap();
                 let v_rust = c.eval(row, 0);
                 assert_eq!(v_rust, v_cpp, "Col mismatch at row {}", row);
-            },
+            }
             _ => {}
         }
     }

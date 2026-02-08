@@ -5,7 +5,9 @@ use crate::core::storage::CudaStorage;
 pub mod sys {
     #[repr(C)]
     #[derive(Debug, Copy, Clone)]
-    pub struct cublasContext { _unused: [u8; 0] }
+    pub struct cublasContext {
+        _unused: [u8; 0],
+    }
     pub type cublasHandle_t = *mut cublasContext;
 
     #[repr(u32)]
@@ -97,7 +99,9 @@ impl CublasHandle {
 #[cfg(feature = "cuda")]
 impl Drop for CublasHandle {
     fn drop(&mut self) {
-        unsafe { sys::cublasDestroy_v2(self.handle); }
+        unsafe {
+            sys::cublasDestroy_v2(self.handle);
+        }
     }
 }
 
@@ -120,8 +124,16 @@ pub fn gemm_cublas<T: Scalar>(
 ) -> Result<(), String> {
     #[cfg(feature = "cuda")]
     unsafe {
-        let op_a = if trans_a { sys::cublasOperation_t::T } else { sys::cublasOperation_t::N };
-        let op_b = if trans_b { sys::cublasOperation_t::T } else { sys::cublasOperation_t::N };
+        let op_a = if trans_a {
+            sys::cublasOperation_t::T
+        } else {
+            sys::cublasOperation_t::N
+        };
+        let op_b = if trans_b {
+            sys::cublasOperation_t::T
+        } else {
+            sys::cublasOperation_t::N
+        };
 
         // LDA/LDB/LDC = Leading Dimension.
         // If Column Major:
@@ -129,52 +141,64 @@ pub fn gemm_cublas<T: Scalar>(
         // Wait, cuBLAS expects Column Major by default.
         // eigen-rs uses Column Major.
         // If NoTrans, A is m x k, stored as m x k. lda = m.
-        
+
         let lda = if trans_a { k } else { m } as i32; // Assuming packed
-        // Actually for standard storage: lda = rows() always? No, stride.
-        // CudaStorage packs contiguously.
+                                                      // Actually for standard storage: lda = rows() always? No, stride.
+                                                      // CudaStorage packs contiguously.
         let lda = a.rows() as i32;
         let ldb = b.rows() as i32;
         let ldc = c.rows() as i32;
 
         if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() {
-             let alpha_f32 = *(&alpha as *const T as *const f32);
-             let beta_f32 = *(&beta as *const T as *const f32);
-             
-             let res = sys::cublasSgemm_v2(
-                 handle.handle,
-                 op_a, op_b,
-                 m as i32, n as i32, k as i32,
-                 &alpha_f32,
-                 a.get_ptr(0, 0) as *const f32, lda,
-                 b.get_ptr(0, 0) as *const f32, ldb,
-                 &beta_f32,
-                 c.get_ptr(0, 0) as *mut f32, ldc
-             );
-             
-             if res != sys::cublasStatus_t::Success {
-                 return Err(format!("cublasSgemm failed: {:?}", res));
-             }
-             Ok(())
+            let alpha_f32 = *(&alpha as *const T as *const f32);
+            let beta_f32 = *(&beta as *const T as *const f32);
+
+            let res = sys::cublasSgemm_v2(
+                handle.handle,
+                op_a,
+                op_b,
+                m as i32,
+                n as i32,
+                k as i32,
+                &alpha_f32,
+                a.get_ptr(0, 0) as *const f32,
+                lda,
+                b.get_ptr(0, 0) as *const f32,
+                ldb,
+                &beta_f32,
+                c.get_ptr(0, 0) as *mut f32,
+                ldc,
+            );
+
+            if res != sys::cublasStatus_t::Success {
+                return Err(format!("cublasSgemm failed: {:?}", res));
+            }
+            Ok(())
         } else if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>() {
-             let alpha_f64 = *(&alpha as *const T as *const f64);
-             let beta_f64 = *(&beta as *const T as *const f64);
-             
-             let res = sys::cublasDgemm_v2(
-                 handle.handle,
-                 op_a, op_b,
-                 m as i32, n as i32, k as i32,
-                 &alpha_f64,
-                 a.get_ptr(0, 0) as *const f64, lda,
-                 b.get_ptr(0, 0) as *const f64, ldb,
-                 &beta_f64,
-                 c.get_ptr(0, 0) as *mut f64, ldc
-             );
-             
-             if res != sys::cublasStatus_t::Success {
-                 return Err(format!("cublasDgemm failed: {:?}", res));
-             }
-             Ok(())
+            let alpha_f64 = *(&alpha as *const T as *const f64);
+            let beta_f64 = *(&beta as *const T as *const f64);
+
+            let res = sys::cublasDgemm_v2(
+                handle.handle,
+                op_a,
+                op_b,
+                m as i32,
+                n as i32,
+                k as i32,
+                &alpha_f64,
+                a.get_ptr(0, 0) as *const f64,
+                lda,
+                b.get_ptr(0, 0) as *const f64,
+                ldb,
+                &beta_f64,
+                c.get_ptr(0, 0) as *mut f64,
+                ldc,
+            );
+
+            if res != sys::cublasStatus_t::Success {
+                return Err(format!("cublasDgemm failed: {:?}", res));
+            }
+            Ok(())
         } else {
             Err("Unsupported type for cuBLAS GEMM".to_string())
         }

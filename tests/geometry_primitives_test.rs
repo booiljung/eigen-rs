@@ -20,7 +20,7 @@ mod tests {
         assert!(box3.contains(&min));
         assert!(box3.contains(&max));
         assert!(box3.contains(&vec3(0.5, 0.5, 0.5)));
-        
+
         let outside = vec3(1.5, 0.5, 0.5);
         assert!(!box3.contains(&outside));
 
@@ -35,11 +35,11 @@ mod tests {
         // Plane z = 0, normal = [0, 0, 1], offset = 0
         let normal = vec3(0.0, 0.0, 1.0);
         let plane = Hyperplane::<f64, 3>::new(normal, 0.0);
-        
+
         let p1 = vec3(1.0, 2.0, 3.0);
         let dist = plane.signed_distance(&p1);
         assert!((dist - 3.0).abs() < 1e-10);
-        
+
         // Helper to check vector approx equality
         let proj = plane.projection(&p1);
         assert!((proj.get(0, 0).unwrap() - 1.0).abs() < 1e-10);
@@ -53,14 +53,14 @@ mod tests {
         let origin = Vector3::<f64>::zeros();
         let direction = vec3(1.0, 0.0, 0.0);
         let line = ParametrizedLine::<f64, 3>::new(origin, direction);
-        
+
         let p = line.point_at(2.0);
         assert!((p.get(0, 0).unwrap() - 2.0).abs() < 1e-10);
-        
+
         let p_off = vec3(2.0, 3.0, 0.0);
         let dist = line.distance(&p_off);
         assert!((dist - 3.0).abs() < 1e-10);
-        
+
         let proj = line.projection(&p_off);
         assert!((proj.get(0, 0).unwrap() - 2.0).abs() < 1e-10);
         assert!(proj.get(1, 0).unwrap().abs() < 1e-10);
@@ -72,17 +72,17 @@ mod tests {
         let origin = Vector3::<f64>::zeros();
         let direction = vec3(1.0, 0.0, 0.0);
         let ray = Ray::<f64, 3>::new(origin, direction);
-        
+
         // Point "behind" the ray
         let p_behind = vec3(-2.0, 3.0, 0.0);
         // Projection onto line would be (-2, 0, 0), dist 3.
         // Projection onto RAY should be clamped to origin (0, 0, 0)? No, t_clamped = 0.
         // So dist is dist(origin, p_behind) = sqrt(4 + 9) = sqrt(13) ~ 3.605
-        
+
         let dist = ray.distance(&p_behind);
         let expected = (4.0f64 + 9.0).sqrt();
         assert!((dist - expected).abs() < 1e-10);
-        
+
         let p_forward = vec3(2.0, 3.0, 0.0);
         let dist_f = ray.distance(&p_forward);
         assert!((dist_f - 3.0).abs() < 1e-10);

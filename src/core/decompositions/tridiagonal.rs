@@ -2,8 +2,8 @@
 //! A = Q * T * Q^T
 
 use crate::core::matrix::Matrix;
-use crate::core::storage::{Storage, DynamicStorage};
 use crate::core::scalar::Scalar;
+use crate::core::storage::{DynamicStorage, Storage};
 
 /// Tridiagonal decomposition of a selfadjoint matrix.
 pub struct Tridiagonalization<T: Scalar, S: Storage<T>> {
@@ -39,28 +39,28 @@ impl<T: Scalar, S: Storage<T>> Tridiagonalization<T, S> {
 
     fn tridiagonalization_inplace(mat_a: &mut Matrix<T, DynamicStorage<T>>, h_coeffs: &mut [T]) {
         let n = mat_a.rows();
-        
-        for i in 0..n-1 {
+
+        for i in 0..n - 1 {
             // 1. Compute Householder reflection for column i starting from i+1
             let mut norm_sq = T::default();
-            for k in i+1..n {
+            for k in i + 1..n {
                 let val = *mat_a.get(k, i).unwrap();
                 norm_sq += val * val;
             }
             let norm = norm_sq.sqrt();
-            
+
             if norm != T::default() {
                 let v0 = *mat_a.get(i + 1, i).unwrap();
                 let beta = if v0 >= T::default() { -norm } else { norm };
-                
+
                 let v0_minus_beta = v0 - beta;
                 let inv_v0_minus_beta = v0_minus_beta.recip();
-                
+
                 // Scale Householder vector: v[0] becomes 1, rest stored in mat_a
                 for k in i + 2..n {
                     *mat_a.get_mut(k, i).unwrap() *= inv_v0_minus_beta;
                 }
-                
+
                 // Householder coefficient h (tau) for the scaled vector
                 let h = (v0.abs() + norm) / norm;
                 h_coeffs[i] = h;
@@ -79,9 +79,13 @@ impl<T: Scalar, S: Storage<T>> Tridiagonalization<T, S> {
                         } else {
                             *mat_a.get(c, r).unwrap()
                         };
-                        
+
                         // v[0] is 1
-                        let v_col = if col == 0 { T::from_f64(1.0) } else { *mat_a.get(c, i).unwrap() };
+                        let v_col = if col == 0 {
+                            T::from_f64(1.0)
+                        } else {
+                            *mat_a.get(c, i).unwrap()
+                        };
                         dot += val * v_col;
                     }
                     w[row] = h * dot;
@@ -89,24 +93,41 @@ impl<T: Scalar, S: Storage<T>> Tridiagonalization<T, S> {
 
                 let mut vt_w = T::default();
                 for k in 0..remaining_size {
-                    let v_k = if k == 0 { T::from_f64(1.0) } else { *mat_a.get(k + i + 1, i).unwrap() };
+                    let v_k = if k == 0 {
+                        T::from_f64(1.0)
+                    } else {
+                        *mat_a.get(k + i + 1, i).unwrap()
+                    };
                     vt_w += v_k * w[k];
                 }
                 let scale = h * vt_w * T::from_f64(0.5);
 
                 for k in 0..remaining_size {
-                    let v_k = if k == 0 { T::from_f64(1.0) } else { *mat_a.get(k + i + 1, i).unwrap() };
+                    let v_k = if k == 0 {
+                        T::from_f64(1.0)
+                    } else {
+                        *mat_a.get(k + i + 1, i).unwrap()
+                    };
                     w[k] -= scale * v_k;
                 }
 
                 for col in 0..remaining_size {
                     for row in col..remaining_size {
-                        let v_row = if row == 0 { T::from_f64(1.0) } else { *mat_a.get(row + i + 1, i).unwrap() };
+                        let v_row = if row == 0 {
+                            T::from_f64(1.0)
+                        } else {
+                            *mat_a.get(row + i + 1, i).unwrap()
+                        };
                         let p_row = w[row];
-                        let v_col = if col == 0 { T::from_f64(1.0) } else { *mat_a.get(col + i + 1, i).unwrap() };
+                        let v_col = if col == 0 {
+                            T::from_f64(1.0)
+                        } else {
+                            *mat_a.get(col + i + 1, i).unwrap()
+                        };
                         let p_col = w[col];
-                        
-                        *mat_a.get_mut(row + i + 1, col + i + 1).unwrap() -= v_row * p_col + p_row * v_col;
+
+                        *mat_a.get_mut(row + i + 1, col + i + 1).unwrap() -=
+                            v_row * p_col + p_row * v_col;
                     }
                 }
 
@@ -122,7 +143,7 @@ impl<T: Scalar, S: Storage<T>> Tridiagonalization<T, S> {
     pub fn matrix_t(&self) -> Matrix<T, DynamicStorage<T>> {
         let n = self.packed_matrix.rows();
         let mut t = Matrix::<T, DynamicStorage<T>>::new_dynamic(n, n).unwrap();
-        
+
         for j in 0..n {
             for i in 0..n {
                 if i == j {
@@ -143,22 +164,26 @@ impl<T: Scalar, S: Storage<T>> Tridiagonalization<T, S> {
     pub fn matrix_q(&self) -> Matrix<T, DynamicStorage<T>> {
         let n = self.packed_matrix.rows();
         let mut q = Matrix::<T, DynamicStorage<T>>::new_dynamic(n, n).unwrap();
-        
+
         for i in 0..n {
             for j in 0..n {
-                *q.get_mut(i, j).unwrap() = if i == j { T::from_usize(1) } else { T::default() };
+                *q.get_mut(i, j).unwrap() = if i == j {
+                    T::from_usize(1)
+                } else {
+                    T::default()
+                };
             }
         }
-        
-        for i in (0..n-1).rev() {
+
+        for i in (0..n - 1).rev() {
             let h = self.h_coeffs[i];
             if h != T::default() {
-                for j in i+1..n {
+                for j in i + 1..n {
                     let mut dot = *q.get(i + 1, j).unwrap();
                     for k in i + 2..n {
                         dot += (*self.packed_matrix.get(k, i).unwrap()) * (*q.get(k, j).unwrap());
                     }
-                    
+
                     let factor = h * dot;
                     *q.get_mut(i + 1, j).unwrap() -= factor;
                     for k in i + 2..n {

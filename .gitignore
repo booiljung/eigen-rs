@@ -25,3 +25,4 @@ cachegrind.out.*
 # Temporary Files
 tmp/
 *.log
+*.bin

@@ -15,7 +15,10 @@ impl<'a, T: Scalar, const RANK: usize> BroadcastedTensor<'a, T, RANK> {
         let src_dims = tensor.dims();
         for i in 0..RANK {
             if src_dims[i] != target_dims[i] && src_dims[i] != 1 {
-                return Err(format!("Cannot broadcast dimension {} of size {} to {}", i, src_dims[i], target_dims[i]));
+                return Err(format!(
+                    "Cannot broadcast dimension {} of size {} to {}",
+                    i, src_dims[i], target_dims[i]
+                ));
             }
         }
         Ok(Self {
@@ -28,12 +31,12 @@ impl<'a, T: Scalar, const RANK: usize> BroadcastedTensor<'a, T, RANK> {
         let mut src_indices = [0; RANK];
         let src_dims = self.tensor.dims();
         for i in 0..RANK {
+            if indices[i] >= self.target_dims[i] {
+                return None;
+            }
             if src_dims[i] == 1 {
                 src_indices[i] = 0;
             } else {
-                if indices[i] >= src_dims[i] {
-                    return None;
-                }
                 src_indices[i] = indices[i];
             }
         }

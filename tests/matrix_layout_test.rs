@@ -20,7 +20,13 @@ fn test_matrix2f_differential() {
     // 3. Compare results
     for (r, c, v_cpp) in cpp_results {
         let v_rust = *m_rust.get(r, c).expect("Rust matrix missing element");
-        assert!((v_rust - v_cpp).abs() < 1e-6, 
-            "Value mismatch at ({},{}): Rust={} != C++={}", r, c, v_rust, v_cpp);
+        assert!(
+            (v_rust - v_cpp).abs() < 1e-6,
+            "Value mismatch at ({},{}): Rust={} != C++={}",
+            r,
+            c,
+            v_rust,
+            v_cpp
+        );
     }
 }

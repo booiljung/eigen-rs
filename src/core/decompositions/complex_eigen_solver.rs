@@ -1,11 +1,11 @@
 //! Eigenvalue and eigenvector decomposition of a general complex matrix.
 //! A = V * D * V^-1
 
-use crate::core::matrix::Matrix;
-use crate::core::storage::{Storage, DynamicStorage};
-use crate::core::scalar::Scalar;
 use crate::core::complex::Complex;
 use crate::core::decompositions::ComplexSchur;
+use crate::core::matrix::Matrix;
+use crate::core::scalar::Scalar;
+use crate::core::storage::{DynamicStorage, Storage};
 
 /// Eigensolver for general complex matrices.
 pub struct ComplexEigenSolver<T: Scalar, S: Storage<Complex<T>>> {
@@ -40,17 +40,17 @@ impl<T: Scalar, S: Storage<Complex<T>>> ComplexEigenSolver<T, S> {
 
             for j in 0..n {
                 let lambda = *eigenvalues.get(j, 0).unwrap();
-                
+
                 // Solve (T[0:j+1, 0:j+1] - lambda I) y_j = 0
                 // We set y_j[j] = 1.0 and solve for y_j[0..j]
                 *vecs_y.get_mut(j, j).unwrap() = Complex::from_f64(1.0);
-                
+
                 for i in (0..j).rev() {
                     let mut sum = Complex::default();
                     for k in i + 1..=j {
                         sum += (*t.get(i, k).unwrap()) * (*vecs_y.get(k, j).unwrap());
                     }
-                    
+
                     let denom = lambda - (*t.get(i, i).unwrap());
                     if denom.norm_sq() < T::epsilon() {
                         // Singular or nearly singular. In a real solver, we'd use a small perturbation.
@@ -114,9 +114,15 @@ mod tests {
         let n = 3;
         let mut a = Matrix::<Complex<f64>, DynamicStorage<Complex<f64>>>::new_dynamic(n, n)?;
         let data = [
-            Complex::new(1.0, 2.0), Complex::new(2.0, -1.0), Complex::new(0.0, 1.0),
-            Complex::new(1.0, 1.0), Complex::new(4.0, 0.0),  Complex::new(2.0, 3.0),
-            Complex::new(0.0, 0.0), Complex::new(1.0, 2.0),  Complex::new(5.0, -2.0),
+            Complex::new(1.0, 2.0),
+            Complex::new(2.0, -1.0),
+            Complex::new(0.0, 1.0),
+            Complex::new(1.0, 1.0),
+            Complex::new(4.0, 0.0),
+            Complex::new(2.0, 3.0),
+            Complex::new(0.0, 0.0),
+            Complex::new(1.0, 2.0),
+            Complex::new(5.0, -2.0),
         ];
         for i in 0..n {
             for j in 0..n {
@@ -137,8 +143,22 @@ mod tests {
                     av += (*a.get(i, k).unwrap()) * (*evecs.get(k, j).unwrap());
                 }
                 let lv = lambda * (*evecs.get(i, j).unwrap());
-                assert!((av.re - lv.re).abs() < 1e-8, "Failed at col {} row {}: av={}, lv={}", j, i, av, lv);
-                assert!((av.im - lv.im).abs() < 1e-8, "Failed at col {} row {}: av={}, lv={}", j, i, av, lv);
+                assert!(
+                    (av.re - lv.re).abs() < 1e-8,
+                    "Failed at col {} row {}: av={}, lv={}",
+                    j,
+                    i,
+                    av,
+                    lv
+                );
+                assert!(
+                    (av.im - lv.im).abs() < 1e-8,
+                    "Failed at col {} row {}: av={}, lv={}",
+                    j,
+                    i,
+                    av,
+                    lv
+                );
             }
         }
 
@@ -155,7 +175,7 @@ mod tests {
 
         let solver = ComplexEigenSolver::new(&a, true)?;
         let evals = solver.eigenvalues();
-        
+
         for j in 0..n {
             let val = evals.get(j, 0).unwrap();
             assert!((val.re - 1.0).abs() < 1e-10);
@@ -178,7 +198,7 @@ mod tests {
 
         let solver = ComplexEigenSolver::new(&a, true)?;
         let evals = solver.eigenvalues();
-        
+
         for j in 0..n {
             let val = evals.get(j, 0).unwrap();
             assert!((val.re - 2.0).abs() < 1e-10);

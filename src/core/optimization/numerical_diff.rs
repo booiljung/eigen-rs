@@ -1,12 +1,12 @@
 //! Numerical differentiation using finite differences.
 
-use crate::core::scalar::Scalar;
 use crate::core::matrix::MatrixX;
 use crate::core::optimization::Functor;
+use crate::core::scalar::Scalar;
 use crate::core::xpr::MatrixXpr;
 
 /// A trait for functions that only provide residuals.
-/// 
+///
 /// `NumericalDiff` and `AutoDiff` (if implemented for this) can wrap this
 /// to provide the full `Functor` interface.
 pub trait Residuals<T: Scalar> {
@@ -37,8 +37,12 @@ impl<F: Residuals<T>, T: Scalar> NumericalDiff<F, T> {
 }
 
 impl<F: Residuals<T>, T: Scalar + 'static> Functor<T> for NumericalDiff<F, T> {
-    fn inputs(&self) -> usize { self.func.inputs() }
-    fn values(&self) -> usize { self.func.values() }
+    fn inputs(&self) -> usize {
+        self.func.inputs()
+    }
+    fn values(&self) -> usize {
+        self.func.values()
+    }
 
     fn operator(&self, x: &MatrixX<T>, fvec: &mut MatrixX<T>) -> Result<(), String> {
         self.func.operator(x, fvec)
@@ -49,10 +53,10 @@ impl<F: Residuals<T>, T: Scalar + 'static> Functor<T> for NumericalDiff<F, T> {
         let m = self.values();
         let mut fvec = MatrixX::<T>::new_dynamic(m, 1)?;
         let mut fvec_eps = MatrixX::<T>::new_dynamic(m, 1)?;
-        
+
         // Base evaluation
         self.func.operator(x, &mut fvec)?;
-        
+
         let h = T::from_f64(self.eps);
         let inv_h = T::from_f64(1.0 / self.eps);
 
@@ -61,15 +65,15 @@ impl<F: Residuals<T>, T: Scalar + 'static> Functor<T> for NumericalDiff<F, T> {
             if let Some(val) = x_eps.get_mut(j, 0) {
                 *val += h;
             }
-            
+
             self.func.operator(&x_eps, &mut fvec_eps)?;
-            
+
             for i in 0..m {
                 let diff = (fvec_eps.eval(i, 0) - fvec.eval(i, 0)) * inv_h;
                 *fjac.get_mut(i, j).unwrap() = diff;
             }
         }
-        
+
         Ok(())
     }
 }

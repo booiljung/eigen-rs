@@ -1,8 +1,8 @@
 //! Levenberg-Marquardt non-linear least squares solver.
 
-use crate::core::scalar::Scalar;
 use crate::core::matrix::MatrixX;
 use crate::core::optimization::{Functor, Status};
+use crate::core::scalar::Scalar;
 use crate::core::xpr::MatrixXpr;
 
 /// Levenberg-Marquardt solver.
@@ -33,37 +33,45 @@ impl<T: Scalar + 'static> LevenbergMarquardt<T> {
         self.max_iter = max_iter;
     }
 
-    pub fn minimize<F: Functor<T>>(&self, functor: &F, x: &mut MatrixX<T>) -> Result<Status, String> {
+    pub fn minimize<F: Functor<T>>(
+        &self,
+        functor: &F,
+        x: &mut MatrixX<T>,
+    ) -> Result<Status, String> {
         let n = functor.inputs();
         let m = functor.values();
-        
+
         let mut fvec = MatrixX::<T>::new_dynamic(m, 1)?;
         let mut fjac = MatrixX::<T>::new_dynamic(m, n)?;
-        
+
         functor.operator(x, &mut fvec)?;
         let mut current_err = self.total_error(&fvec);
-        
+
         let mut lambda = T::default();
         let mut lambda_initialized = false;
-        
+
         for _iter in 0..self.max_iter {
             functor.jacobian(x, &mut fjac)?;
-            
+
             // J^T * J
             let mut jtj = MatrixX::<T>::new_dynamic(n, n)?;
             let fjac_t = fjac.transpose();
             let prod = &fjac_t * &fjac;
             jtj.assign(&prod)?;
-            
+
             if !lambda_initialized {
                 // Initialize lambda = 1e-3 * max(diag(J^T J))
                 let mut max_diag = T::default();
                 for i in 0..n {
                     let d = *jtj.get(i, i).unwrap();
-                    if d > max_diag { max_diag = d; }
+                    if d > max_diag {
+                        max_diag = d;
+                    }
                 }
                 lambda = max_diag * T::from_f64(1e-3);
-                if lambda.to_f64() < 1e-6 { lambda = T::from_f64(1e-3); }
+                if lambda.to_f64() < 1e-6 {
+                    lambda = T::from_f64(1e-3);
+                }
                 lambda_initialized = true;
             }
 
@@ -76,7 +84,7 @@ impl<T: Scalar + 'static> LevenbergMarquardt<T> {
                     *val = -*val;
                 }
             }
-            
+
             // (J^T * J + lambda * I) * delta = rhs
             let mut a = jtj.clone();
             for i in 0..n {
@@ -84,11 +92,11 @@ impl<T: Scalar + 'static> LevenbergMarquardt<T> {
                     *val += lambda;
                 }
             }
-            
+
             // Solve using QR
             let qr = a.householder_qr()?;
             let delta = qr.solve(&rhs)?;
-            
+
             // Try new x
             let mut x_new = x.clone();
             for i in 0..n {
@@ -96,14 +104,16 @@ impl<T: Scalar + 'static> LevenbergMarquardt<T> {
                     *val += *delta.get(i, 0).unwrap();
                 }
             }
-            
+
             let mut fvec_new = MatrixX::<T>::new_dynamic(m, 1)?;
             functor.operator(&x_new, &mut fvec_new)?;
             let new_err = self.total_error(&fvec_new);
-            
+
             if new_err < current_err {
                 // Convergence check before accepting
-                if (current_err - new_err).to_f64().abs() < self.ftol * current_err.to_f64().abs() + 1e-14 {
+                if (current_err - new_err).to_f64().abs()
+                    < self.ftol * current_err.to_f64().abs() + 1e-14
+                {
                     *x = x_new;
                     return Ok(Status::Converged);
                 }
@@ -117,13 +127,13 @@ impl<T: Scalar + 'static> LevenbergMarquardt<T> {
                 // Reject step, increase damping
                 lambda *= T::from_f64(10.0);
             }
-            
+
             if lambda.to_f64() > 1e16 {
                 return Ok(Status::MaxIterationsReached);
             }
         }
         let _ = self.xtol; // Silence warning
-        
+
         if current_err.to_f64() < 1e-12 {
             Ok(Status::Converged)
         } else {
