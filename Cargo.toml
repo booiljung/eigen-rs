@@ -1,6 +1,56 @@
 [package]
 name = "eigen-rs"
-version = "0.1.0"
-edition = "2024"
+version = "3.4.0"
+edition = "2021"
+authors = ["bijung <user@example.com>"]
+description = "A pure Rust port of the Eigen C++ template library for linear algebra."
+repository = "https://github.com/user/eigen-rs"
+documentation = "https://docs.rs/eigen-rs"
+license = "MPL-2.0"
+keywords = ["linear-algebra", "matrix", "vector", "math", "eigen"]
+categories = ["science", "mathematics", "no-std"]
+readme = "README.md"
 
 [dependencies]
+cuda-sys = { version = "0.2.0", optional = true }
+libc = "0.2"
+rayon = { version = "1.10", optional = true }
+lapack-sys = { version = "0.14", optional = true }
+libm = "0.2.16"
+rustfft = "6.4.1"
+num-traits = "0.2"
+
+[dev-dependencies]
+criterion = "0.5"
+
+[[bench]]
+name = "matrix_bench"
+harness = false
+
+[[bench]]
+name = "sparse_bench"
+harness = false
+
+[[bench]]
+name = "geometry_bench"
+harness = false
+
+[[bench]]
+name = "fft_benchmark"
+harness = false
+
+[[bench]]
+name = "spline_benchmark"
+harness = false
+
+[[bench]]
+name = "gemm_bench"
+harness = false
+
+[features]
+cuda = ["dep:cuda-sys"]
+suitesparse = []
+mkl = []
+parallel = ["dep:rayon"]
+lapack = ["dep:lapack-sys"]
+default = ["parallel"]

@@ -1,0 +1,909 @@
+warning: unused import: `crate::core::scalar::Scalar`
+ --> src/core/storage/map.rs:4:5
+  |
+4 | use crate::core::scalar::Scalar;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused imports: `Add` and `Neg`
+ --> src/core/geometry/translation.rs:5:21
+  |
+5 | use std::ops::{Mul, Add, Neg};
+  |                     ^^^  ^^^
+
+warning: unused import: `std::marker::PhantomData`
+ --> src/core/sparse/sparse_matrix.rs:7:5
+  |
+7 | use std::marker::PhantomData;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unnecessary parentheses around assigned value
+   --> src/core/sparse/solvers/incomplete_cholesky.rs:178:24
+    |
+178 |                 y[j] = (y[j] - sum);
+    |                        ^          ^
+    |
+    = note: `#[warn(unused_parens)]` (part of `#[warn(unused)]`) on by default
+help: remove these parentheses
+    |
+178 -                 y[j] = (y[j] - sum);
+178 +                 y[j] = y[j] - sum;
+    |
+
+warning: unused import: `Storage`
+ --> src/core/sparse/cuda_ops.rs:5:28
+  |
+5 | use crate::core::storage::{Storage, CudaStorage};
+  |                            ^^^^^^^
+
+warning: unused import: `crate::core::matrix::Matrix`
+ --> src/core/sparse/cuda_ops.rs:6:5
+  |
+6 | use crate::core::matrix::Matrix;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `Matrix`
+ --> src/core/nn/layers/linear.rs:6:27
+  |
+6 | use crate::core::matrix::{Matrix, MatrixX};
+  |                           ^^^^^^
+
+warning: unnecessary parentheses around assigned value
+  --> src/core/nn/layers/linear.rs:53:20
+   |
+53 |         let prod = (&x_mat * &w_t);
+   |                    ^             ^
+   |
+help: remove these parentheses
+   |
+53 -         let prod = (&x_mat * &w_t);
+53 +         let prod = &x_mat * &w_t;
+   |
+
+warning: unused import: `Matrix`
+ --> src/core/optimization/levenberg_marquardt.rs:4:27
+  |
+4 | use crate::core::matrix::{Matrix, MatrixX};
+  |                           ^^^^^^
+
+warning: unused import: `crate::core::storage::DynamicStorage`
+ --> src/core/optimization/levenberg_marquardt.rs:5:5
+  |
+5 | use crate::core::storage::DynamicStorage;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unnecessary parentheses around assigned value
+  --> src/core/optimization/levenberg_marquardt.rs:50:24
+   |
+50 |             let prod = (&fjac_t * &fjac);
+   |                        ^               ^
+   |
+help: remove these parentheses
+   |
+50 -             let prod = (&fjac_t * &fjac);
+50 +             let prod = &fjac_t * &fjac;
+   |
+
+warning: unused import: `Matrix`
+ --> src/core/optimization/hybrid.rs:4:27
+  |
+4 | use crate::core::matrix::{Matrix, MatrixX};
+  |                           ^^^^^^
+
+warning: unreachable expression
+  --> src/core/storage/cuda.rs:35:9
+   |
+32 |               return Err("CUDA feature not enabled".to_string());
+   |               -------------------------------------------------- any code following this expression is unreachable
+...
+35 | /         Ok(Self {
+36 | |             data: NonNull::new(ptr).ok_or("Failed to create NonNu...
+37 | |             rows,
+38 | |             cols,
+39 | |         })
+   | |__________^ unreachable expression
+   |
+   = note: `#[warn(unreachable_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: unreachable statement
+  --> src/core/decompositions/lapack.rs:76:9
+   |
+38 | ...       return Err("LAPACK feature not enabled".to_string());
+   |           ---------------------------------------------------- any code following this expression is unreachable
+...
+76 | ...   self.is_initialized = true;
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^ unreachable statement
+
+warning: unreachable statement
+   --> src/core/decompositions/lapack.rs:197:9
+    |
+163 | ...       return Err("LAPACK feature not enabled".to_string());
+    |           ---------------------------------------------------- any code following this expression is unreachable
+...
+197 | ...   self.is_initialized = true;
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^ unreachable statement
+
+warning: unused import: `crate::core::storage::Storage`
+ --> src/core/nn/layers/linear.rs:7:5
+  |
+7 | use crate::core::storage::Storage;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::core::storage::Storage`
+ --> src/core/ops/unary.rs:6:5
+  |
+6 | use crate::core::storage::Storage;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::core::xpr::MatrixXpr`
+ --> src/core/nn/layers/linear.rs:8:5
+  |
+8 | use crate::core::xpr::MatrixXpr;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::core::storage::Storage`
+ --> src/core/ops/mod.rs:5:5
+  |
+5 | use crate::core::storage::Storage as _; // Try aliasing...
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused variable: `ptr`
+  --> src/core/storage/cuda.rs:18:17
+   |
+18 |         let mut ptr: *mut T = std::ptr::null_mut();
+   |                 ^^^ help: if this is intentional, prefix it with an underscore: `_ptr`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+  --> src/core/storage/cuda.rs:18:13
+   |
+18 |         let mut ptr: *mut T = std::ptr::null_mut();
+   |             ----^^^
+   |             |
+   |             help: remove this `mut`
+   |
+   = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `row`
+  --> src/core/ops/unary.rs:64:41
+   |
+64 |     fn packet_eval<P: Packet<T>>(&self, row: usize, co...
+   |                                         ^^^
+   |
+help: if this is intentional, prefix it with an underscore
+   |
+64 |     fn packet_eval<P: Packet<T>>(&self, _row: usize, col: usize) -> P 
+   |                                         +
+help: you might have meant to pattern match on the similarly named constant `BLOCK_SIZE`
+   |
+64 -     fn packet_eval<P: Packet<T>>(&self, row: usize, col: usize) -> P 
+64 +     fn packet_eval<P: Packet<T>>(&self, core::ops::gemm::gemm_cm_blocked::BLOCK_SIZE: usize, col: usize) -> P 
+   |
+
+warning: unused variable: `col`
+  --> src/core/ops/unary.rs:64:53
+   |
+64 | ...<T>>(&self, row: usize, col: usize) -> P 
+   |                            ^^^
+   |
+help: if this is intentional, prefix it with an underscore
+   |
+64 |     fn packet_eval<P: Packet<T>>(&self, row: usize, _col: usize) -> P 
+   |                                                     +
+help: you might have meant to pattern match on the similarly named constant `BLOCK_SIZE`
+   |
+64 -     fn packet_eval<P: Packet<T>>(&self, row: usize, col: usize) -> P 
+64 +     fn packet_eval<P: Packet<T>>(&self, row: usize, core::ops::gemm::gemm_cm_blocked::BLOCK_SIZE: usize) -> P 
+   |
+
+warning: value assigned to `eps` is never read
+  --> src/core/decompositions/svd.rs:43:17
+   |
+43 | ...   let mut eps = T::from_usize(0); // This should b...
+   |               ^^^
+   |
+   = help: maybe it is overwritten before being read?
+   = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `b`
+   --> src/core/decompositions/lapack.rs:201:40
+    |
+201 | ...Storage<T>>(&self, b: &Matrix<T, S>) -> Result<Mat...
+    |                       ^ help: if this is intentional, prefix it with an underscore: `_b`
+
+warning: unused variable: `c0`
+  --> src/unsupported/matrix_functions.rs:79:13
+   |
+79 |         let c0 = T::from_f64(1.0);
+   |             ^^ help: if this is intentional, prefix it with an underscore: `_c0`
+
+warning: trait `StaticFloatConsts` is more private than the item `MatrixExponential<'a, T, S>`
+   --> src/unsupported/matrix_functions.rs:23:1
+    |
+ 23 | / impl<'a, T, S> MatrixExponential<'a, T, S> 
+ 24 | | where 
+ 25 | |     T: Scalar + Copy + PartialOrd + StaticFloatCons...
+ 26 | |     S: Storage<T> + 'static
+    | |___________________________^ implementation `MatrixExponential<'a, T, S>` is reachable at visibility `pub`
+    |
+note: but trait `StaticFloatConsts` is only usable at visibility `pub(self)`
+   --> src/unsupported/matrix_functions.rs:310:1
+    |
+310 | trait StaticFloatConsts {
+    | ^^^^^^^^^^^^^^^^^^^^^^^
+    = note: `#[warn(private_bounds)]` on by default
+
+warning: trait `StaticFloatConsts` is more private than the item `MatrixLogarithm<'a, T, S>`
+   --> src/unsupported/matrix_functions.rs:174:1
+    |
+174 | / impl<'a, T, S> MatrixLogarithm<'a, T, S> 
+175 | | where 
+176 | |     T: Scalar + Copy + PartialOrd + StaticFloatCons...
+177 | |     S: Storage<T> + 'static
+    | |___________________________^ implementation `MatrixLogarithm<'a, T, S>` is reachable at visibility `pub`
+    |
+note: but trait `StaticFloatConsts` is only usable at visibility `pub(self)`
+   --> src/unsupported/matrix_functions.rs:310:1
+    |
+310 | trait StaticFloatConsts {
+    | ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: field `ipiv` is never read
+  --> src/core/decompositions/lapack.rs:16:5
+   |
+12 | pub struct LapackLU<T: Scalar> {
+   |            -------- field in this struct
+...
+16 |     ipiv: Vec<i32>,
+   |     ^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: field `tau` is never read
+   --> src/core/decompositions/lapack.rs:141:5
+    |
+137 | pub struct LapackQR<T: Scalar> {
+    |            -------- field in this struct
+...
+141 |     tau: Vec<T>,
+    |     ^^^
+
+warning: `eigen-rs` (lib) generated 30 warnings (run `cargo fix --lib -p eigen-rs` to apply 15 suggestions)
+warning: unused import: `eigen_rs::core::storage::Storage`
+ --> tests/simplicial_ldlt_test.rs:4:5
+  |
+4 | use eigen_rs::core::storage::Storage;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `run_cpp_harness_stdout` is never used
+  --> tests/common/mod.rs:54:8
+   |
+54 | pub fn run_cpp_harness_stdout(cpp_file: &str) -> Resul...
+   |        ^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `run_cpp_harness` is never used
+ --> tests/common/mod.rs:6:8
+  |
+6 | pub fn run_cpp_harness(cpp_file: &str) -> Result<Vec<(u...
+  |        ^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `eigen_rs::core::storage::Storage`
+ --> tests/matrix_unary_test.rs:5:9
+  |
+5 |     use eigen_rs::core::storage::Storage;
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `eigen_rs::core::matrix::Matrix`
+ --> tests/cuda_test.rs:1:5
+  |
+1 | use eigen_rs::core::matrix::Matrix;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `eigen_rs::core::storage::CudaStorage`
+ --> tests/cuda_test.rs:2:5
+  |
+2 | use eigen_rs::core::storage::CudaStorage;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `run_cpp_harness_stdout` is never used
+  --> tests/common/mod.rs:54:8
+   |
+54 | pub fn run_cpp_harness_stdout(cpp_file: &str) -> Resul...
+   |        ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused variable: `rust_u`
+   --> tests/eigen_differential_test.rs:102:9
+    |
+102 |     let rust_u = schur.matrix_u();
+    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_rust_u`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `eigen_rs::core::sparse::solvers::Preconditioner`
+ --> tests/gmres_test.rs:7:9
+  |
+7 |     use eigen_rs::core::sparse::solvers::Preconditioner;
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `Vector4`
+ --> examples/geometry.rs:2:39
+  |
+2 | use eigen_rs::core::matrix::{Vector3, Vector4};
+  |                                       ^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused imports: `Affine3` and `Transform`
+ --> examples/geometry.rs:3:69
+  |
+3 | ...nslation3, Transform, Isometry3, Affine3};
+  |               ^^^^^^^^^             ^^^^^^^
+
+warning: unused import: `eigen_rs::core::scalar::Scalar`
+ --> examples/geometry.rs:4:5
+  |
+4 | use eigen_rs::core::scalar::Scalar;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused variable: `aa`
+  --> examples/geometry.rs:15:9
+   |
+15 |     let aa = AngleAxis::new(angle, axis);
+   |         ^^ help: if this is intentional, prefix it with an underscore: `_aa`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `Matrix`
+ --> tests/parallel_test.rs:1:30
+  |
+1 | use eigen_rs::core::matrix::{Matrix, MatrixX};
+  |                              ^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused imports: `MatrixX` and `Matrix`
+ --> tests/lapack_test.rs:1:30
+  |
+1 | use eigen_rs::core::matrix::{Matrix, MatrixX};
+  |                              ^^^^^^  ^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `eigen_rs::core::decompositions::lu::PartialPivLU`
+ --> tests/lapack_test.rs:2:5
+  |
+2 | use eigen_rs::core::decompositions::lu::PartialPivLU;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `eigen_rs::core::decompositions::qr::HouseholderQR`
+ --> tests/lapack_test.rs:3:5
+  |
+3 | use eigen_rs::core::decompositions::qr::HouseholderQR;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `eigen-rs` (test "simplicial_ldlt_test") generated 1 warning (run `cargo fix --test "simplicial_ldlt_test"` to apply 1 suggestion)
+warning: `eigen-rs` (test "matrix_transpose_test") generated 1 warning
+warning: `eigen-rs` (test "matrix_mul_test") generated 1 warning (1 duplicate)
+warning: `eigen-rs` (test "ldlt_test") generated 1 warning
+warning: `eigen-rs` (test "matrix_inv_test") generated 1 warning (1 duplicate)
+warning: `eigen-rs` (test "matrix_unary_test") generated 1 warning (run `cargo fix --test "matrix_unary_test"` to apply 1 suggestion)
+warning: `eigen-rs` (test "matrix_det_test") generated 1 warning (1 duplicate)
+warning: `eigen-rs` (test "svd_test") generated 1 warning (1 duplicate)
+warning: `eigen-rs` (test "cuda_test") generated 2 warnings (run `cargo fix --test "cuda_test"` to apply 2 suggestions)
+warning: `eigen-rs` (test "cuda_compute_test") generated 2 warnings (1 duplicate)
+warning: `eigen-rs` (test "eigen_differential_test") generated 2 warnings (1 duplicate)
+warning: `eigen-rs` (test "gmres_test") generated 1 warning
+warning: `eigen-rs` (example "geometry") generated 4 warnings (run `cargo fix --example "geometry"` to apply 3 suggestions)
+warning: `eigen-rs` (test "llt_test") generated 1 warning (1 duplicate)
+warning: `eigen-rs` (test "parallel_test") generated 1 warning (run `cargo fix --test "parallel_test"` to apply 1 suggestion)
+warning: `eigen-rs` (test "lapack_test") generated 3 warnings (run `cargo fix --test "lapack_test"` to apply 3 suggestions)
+warning: unused import: `eigen_rs::core::scalar::Scalar`
+ --> tests/optimization_test.rs:5:5
+  |
+5 | use eigen_rs::core::scalar::Scalar;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `Matrix`
+ --> tests/geometry_primitives_test.rs:4:43
+  |
+4 |     use eigen_rs::core::matrix::{Vector3, Matrix};
+  |                                           ^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `axis`
+  --> tests/geometry_transformations_test.rs:67:13
+   |
+67 |         let axis = vec3(0.0, 0.0, 1.0);
+   |             ^^^^ help: if this is intentional, prefix it with an underscore: `_axis`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `eigen_rs::core::decompositions::generalized_hessenberg::GeneralizedHessenbergTriangular`
+ --> tests/generalized_eigen_solver_test.rs:6:9
+  |
+6 | ...se eigen_rs::core::decompositions::generalized_hessenberg::GeneralizedHessenbergTriangular;
+  |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `evecs`
+  --> examples/general_eigen.rs:53:17
+   |
+53 |     if let Some(evecs) = esolver.eigenvectors() {
+   |                 ^^^^^ help: if this is intentional, prefix it with an underscore: `_evecs`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `v0`
+  --> examples/general_eigen.rs:54:14
+   |
+54 |          let v0 = Matrix::<Complex<f64>, DynamicStorag...
+   |              ^^ help: if this is intentional, prefix it with an underscore: `_v0`
+
+warning: unused import: `crate::core::decompositions::PartialPivLU`
+   --> src/core/decompositions/generalized_eigen_solver.rs:262:9
+    |
+262 |     use crate::core::decompositions::PartialPivLU;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::core::matrix::MatrixX`
+   --> src/core/decompositions/bidiagonal.rs:524:13
+    |
+524 | ...   use crate::core::matrix::MatrixX; // Re-use sta...
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused variable: `v`
+   --> src/core/decompositions/bidiagonal.rs:518:13
+    |
+518 |         let v = bidiag.matrix_v();
+    |             ^ help: if this is intentional, prefix it with an underscore: `_v`
+
+warning: unused variable: `x`
+   --> src/core/sparse/solvers/sparse_lu.rs:248:13
+    |
+248 |         let x = lu.solve(&b).unwrap();
+    |             ^ help: if this is intentional, prefix it with an underscore: `_x`
+
+warning: unused imports: `Matrix4` and `Vector4`
+ --> tests/unsupported_matrix_functions_test.rs:4:58
+  |
+4 | ..., DynamicStorage, Matrix4, Vector4};
+  |                      ^^^^^^^  ^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `eigen_rs::core::storage::Storage`
+ --> tests/unsupported_matrix_functions_test.rs:5:9
+  |
+5 |     use eigen_rs::core::storage::Storage;
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `Matrix3`
+ --> tests/api_parity_test.rs:2:29
+  |
+2 | use eigen_rs::{Matrix, Map, Matrix3};
+  |                             ^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: `eigen-rs` (test "optimization_test") generated 1 warning
+warning: `eigen-rs` (test "matrix_lu_test") generated 1 warning (1 duplicate)
+warning: `eigen-rs` (test "geometry_primitives_test") generated 1 warning (run `cargo fix --test "geometry_primitives_test"` to apply 1 suggestion)
+warning: `eigen-rs` (test "geometry_transformations_test") generated 1 warning
+warning: `eigen-rs` (test "generalized_eigen_solver_test") generated 1 warning (run `cargo fix --test "generalized_eigen_solver_test"` to apply 1 suggestion)
+warning: `eigen-rs` (example "general_eigen") generated 2 warnings
+warning: `eigen-rs` (test "geometry_test") generated 1 warning (1 duplicate)
+warning: `eigen-rs` (test "matrix_layout_test") generated 1 warning (1 duplicate)
+warning: `eigen-rs` (lib test) generated 34 warnings (30 duplicates) (run `cargo fix --lib -p eigen-rs --tests` to apply 2 suggestions)
+warning: `eigen-rs` (test "matrix_qr_test") generated 1 warning (1 duplicate)
+warning: `eigen-rs` (test "unsupported_matrix_functions_test") generated 2 warnings (run `cargo fix --test "unsupported_matrix_functions_test"` to apply 2 suggestions)
+warning: `eigen-rs` (test "api_parity_test") generated 1 warning (run `cargo fix --test "api_parity_test"` to apply 1 suggestion)
+warning: `eigen-rs` (test "matrix_arithmetic_test") generated 1 warning (1 duplicate)
+warning: `eigen-rs` (test "matrix_ops_test") generated 1 warning (1 duplicate)
+warning: `eigen-rs` (test "matrix_block_test") generated 1 warning (1 duplicate)
+warning: `eigen-rs` (test "matrix_reduction_test") generated 1 warning (1 duplicate)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.04s
+     Running unittests src/lib.rs (target/debug/deps/eigen_rs-a0f986388aa2f5c3)
+
+running 32 tests
+test core::decompositions::bidiagonal::tests::test_bidiagonal_upper ... ok
+test core::decompositions::bidiagonal::tests::test_bidiagonal_orthogonality ... ok
+test core::decompositions::complex_eigen_solver::tests::test_complex_eigen_solver_basic ... ok
+test core::decompositions::complex_eigen_solver::tests::test_complex_eigen_solver_repeated ... ok
+test core::decompositions::complex_eigen_solver::tests::test_complex_eigen_solver_identity ... ok
+test core::decompositions::complex_schur::tests::test_complex_schur_2x2 ... ok
+test core::decompositions::eigen_solver::tests::test_eigen_solver_complex ... ok
+test core::decompositions::complex_schur::tests::test_complex_schur_basic ... ok
+test core::decompositions::eigen_solver::tests::test_eigen_solver_eigenvectors ... ok
+test core::decompositions::eigen_solver::tests::test_eigen_solver_real ... ok
+test core::decompositions::generalized_eigen_solver::tests::test_generalized_eigen_solver_basic ... ok
+test core::decompositions::generalized_eigen_solver::tests::test_generalized_eigen_solver_eigenvectors ... ok
+test core::decompositions::hessenberg::tests::test_hessenberg_basic ... ok
+test core::decompositions::generalized_hessenberg::tests::test_ght_basic ... ok
+test core::decompositions::generalized_eigen_solver::tests::test_generalized_eigen_solver_random ... ok
+test core::decompositions::hessenberg::tests::test_hessenberg_identity ... ok
+test core::decompositions::hessenberg::tests::test_hessenberg_random_non_symmetric ... ok
+test core::decompositions::schur::tests::test_real_schur_identity ... ok
+test core::decompositions::schur::tests::test_real_schur_basic ... ok
+test core::matrix::tests::test_matrix_dynamic_creation ... ok
+test core::matrix::tests::test_matrix_fixed_creation ... ok
+test core::sparse::iterators::tests::test_sparse_inner_iterator ... ok
+test core::sparse::solvers::simplicial_llt::tests::test_sparse_llt_basic ... ok
+test core::sparse::solvers::sparse_lu::tests::test_sparse_lu_basic ... ok
+test core::sparse::sparse_matrix::tests::test_sparse_addition ... ok
+test core::sparse::sparse_matrix::tests::test_sparse_dense_mul ... ok
+test core::sparse::sparse_matrix::tests::test_sparse_dense_mul_csc ... ok
+test core::sparse::sparse_matrix::tests::test_sparse_matrix_triplets_csc ... ok
+test core::sparse::sparse_matrix::tests::test_sparse_matrix_triplets_csr ... ok
+test core::sparse::sparse_matrix::tests::test_sparse_sparse_mul ... ok
+test core::sparse::sparse_matrix::tests::test_sparse_transpose ... ok
+test core::decompositions::schur::tests::test_real_schur_random ... ok
+
+test result: ok. 32 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/api_parity_test.rs (target/debug/deps/api_parity_test-d17342c06ca0c9da)
+
+running 2 tests
+test test_map_read_write ... ok
+test test_set_methods ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/cuda_compute_test.rs (target/debug/deps/cuda_compute_test-ada68db753a24ce3)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/cuda_test.rs (target/debug/deps/cuda_test-1ab2303fe3cba8da)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/diff_test.rs (target/debug/deps/diff_test-6cb467c117848c2b)
+
+running 3 tests
+test test_autodiff_hybrid_root ... ok
+test test_numerical_diff_circle_fitting ... ok
+test test_autodiff_circle_fitting ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/eigen_differential_test.rs (target/debug/deps/eigen_differential_test-b4f0b5495959b0e3)
+
+running 7 tests
+test test_sparse_ops_differential ... ok
+test test_sparse_iterative_differential ... ok
+test test_sparse_llt_differential ... ok
+test test_matrix_eigen_differential ... ok
+test test_complex_schur_differential ... ok
+test test_sparse_lu_differential ... ok
+test test_generalized_eigen_differential ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.19s
+
+     Running tests/eigen_test.rs (target/debug/deps/eigen_test-5fe43fe03d8de43d)
+
+running 3 tests
+test test_eigenvalues_2x2 ... ok
+test test_eigen_decomposition_3x3 ... ok
+test test_tridiagonalization ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/generalized_eigen_solver_test.rs (target/debug/deps/generalized_eigen_solver_test-e099365b28c24f59)
+
+running 1 test
+test tests::test_ght_hang_repro ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/geometry_advanced_test.rs (target/debug/deps/geometry_advanced_test-2c860bba4c4a53f4)
+
+running 4 tests
+test tests::test_dot_cross ... ok
+test tests::test_euler_angles_conversions ... ok
+test tests::test_projective ... ok
+test tests::test_spatial_queries ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/geometry_primitives_test.rs (target/debug/deps/geometry_primitives_test-dd5795fd9a9e2d35)
+
+running 4 tests
+test tests::test_aligned_box ... ok
+test tests::test_hyperplane ... ok
+test tests::test_parametrized_line ... ok
+test tests::test_ray ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/geometry_test.rs (target/debug/deps/geometry_test-b05c3728ee3129cf)
+
+running 5 tests
+test test_quaternion_identity ... ok
+test test_quaternion_rotation ... ok
+test test_quaternion_to_matrix ... ok
+test test_transform_translation ... ok
+test test_geometry_differential ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.32s
+
+     Running tests/geometry_transformations_test.rs (target/debug/deps/geometry_transformations_test-92d9b61973460e01)
+
+running 6 tests
+test tests::test_angle_axis ... ok
+test tests::test_quaternion ... ok
+test tests::test_scaling ... ok
+test tests::test_translation_composition ... ok
+test tests::test_transform ... ok
+test tests::test_translation ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/gmres_test.rs (target/debug/deps/gmres_test-0eebb8b20a5d1afe)
+
+running 3 tests
+test tests::test_gmres_non_symmetric ... ok
+test tests::test_gmres_simple ... ok
+test tests::test_gmres_preconditioned ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/lapack_test.rs (target/debug/deps/lapack_test-b57c56582974033f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/ldlt_test.rs (target/debug/deps/ldlt_test-1c239a1ff1013f3a)
+
+running 1 test
+test test_ldlt_reconstruction ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.11s
+
+     Running tests/llt_test.rs (target/debug/deps/llt_test-2deadd480659922b)
+
+running 2 tests
+test test_llt_reconstruction ... ok
+test test_llt_solve ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.67s
+
+     Running tests/matrix_arithmetic_test.rs (target/debug/deps/matrix_arithmetic_test-c1d81d1b302527a8)
+
+running 1 test
+test test_matrix_addition_differential ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.01s
+
+     Running tests/matrix_block_test.rs (target/debug/deps/matrix_block_test-30d834f6590e36c5)
+
+running 2 tests
+test test_matrix_block_chaining ... ok
+test test_matrix_block_differential ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.73s
+
+     Running tests/matrix_det_test.rs (target/debug/deps/matrix_det_test-62832db13a39f177)
+
+running 1 test
+test test_matrix_determinant_differential ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.06s
+
+     Running tests/matrix_inv_test.rs (target/debug/deps/matrix_inv_test-a4fc69d1bc731e6e)
+
+running 2 tests
+test test_matrix_inverse_identity ... ok
+test test_matrix_inverse_differential ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.11s
+
+     Running tests/matrix_layout_test.rs (target/debug/deps/matrix_layout_test-74580797a1dfea04)
+
+running 1 test
+test test_matrix2f_differential ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.71s
+
+     Running tests/matrix_lu_test.rs (target/debug/deps/matrix_lu_test-8c698a7374c91f0c)
+
+running 1 test
+test test_matrix_lu_differential ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.65s
+
+     Running tests/matrix_mul_test.rs (target/debug/deps/matrix_mul_test-75a94405767f5ebb)
+
+running 1 test
+test test_matrix_mul_differential ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.99s
+
+     Running tests/matrix_ops_test.rs (target/debug/deps/matrix_ops_test-1017ba034d91d691)
+
+running 1 test
+test test_matrix_ops_differential ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.95s
+
+     Running tests/matrix_qr_test.rs (target/debug/deps/matrix_qr_test-803907bc1fbeada9)
+
+running 2 tests
+test test_matrix_qr_orthogonality ... ok
+test test_matrix_qr_differential ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.86s
+
+     Running tests/matrix_reduction_test.rs (target/debug/deps/matrix_reduction_test-781eca8091d347d2)
+
+running 1 test
+test test_matrix_reductions_differential ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.93s
+
+     Running tests/matrix_transpose_test.rs (target/debug/deps/matrix_transpose_test-102ea4a7cc5709ba)
+
+running 2 tests
+test test_matrix_transpose_chaining ... ok
+test test_matrix_transpose_differential ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.72s
+
+     Running tests/matrix_unary_test.rs (target/debug/deps/matrix_unary_test-8206f3813a089b98)
+
+running 3 tests
+test tests::test_unary_composition ... ok
+test tests::test_unary_exp_log ... ok
+test tests::test_unary_sin_cos ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/optimization_test.rs (target/debug/deps/optimization_test-6569745eb73d9aeb)
+
+running 2 tests
+test test_hybrid_root ... ok
+test test_levenberg_marquardt_circle ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/parallel_test.rs (target/debug/deps/parallel_test-a61b5cfe156aedec)
+
+running 3 tests
+test test_parallel_assign ... ok
+test test_parallel_spmv ... ok
+test test_parallel_reductions ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/simd_test.rs (target/debug/deps/simd_test-68d03ee32a4b4abd)
+
+running 4 tests
+test test_simd_gemm_correctness ... ok
+test test_simd_scalar_packet_eval ... ok
+test test_simd_sse_packet_eval ... ok
+test test_simd_gemm_blocked_correctness ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/simplicial_ldlt_test.rs (target/debug/deps/simplicial_ldlt_test-65545dffc86810da)
+
+running 1 test
+test test_ldlt_basic ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/sparse_bridge_test.rs (target/debug/deps/sparse_bridge_test-c710a4d5548e2013)
+
+running 2 tests
+test test_cholmod_bridge_init ... ok
+test test_mkl_bridge_init ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/sparse_qr_test.rs (target/debug/deps/sparse_qr_test-17d8f3ba63277408)
+
+running 3 tests
+test tests::test_sparse_qr_diagonal ... ok
+test tests::test_sparse_qr_identity ... ok
+test tests::test_sparse_qr_rectangular_least_squares ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/svd_test.rs (target/debug/deps/svd_test-50ad39da2375482b)
+
+running 4 tests
+test test_svd_orthogonality ... ok
+test test_bdcsvd_reconstruction ... ok
+test test_bdcsvd_orthogonality ... ok
+test test_svd_reconstruction ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.26s
+
+     Running tests/tensor_xpr_test.rs (target/debug/deps/tensor_xpr_test-7e5ea654af3dddea)
+
+running 6 tests
+test test_tensor_broadcasting_add ... ok
+test test_tensor_chained_xpr ... ok
+test test_tensor_broadcasting_sub ... ok
+test test_tensor_complex_chain ... ok
+test test_tensor_lazy_add ... ok
+test test_tensor_scalar_mul ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/unsupported_matrix_functions_test.rs (target/debug/deps/unsupported_matrix_functions_test-39227d212fc82bf7)
+
+running 4 tests
+test tests::test_matrix_exp_diagonal ... ok
+test tests::test_matrix_exp_identity ... ok
+test tests::test_matrix_log_identity ... ok
+test tests::test_matrix_exp_log_roundtrip ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests eigen_rs
+warning: unnecessary parentheses around assigned value
+   --> src/core/sparse/solvers/incomplete_cholesky.rs:178:24
+    |
+178 |                 y[j] = (y[j] - sum);
+    |                        ^          ^
+    |
+    = note: `#[warn(unused_parens)]` (part of `#[warn(unused)]`) on by default
+help: remove these parentheses
+    |
+178 -                 y[j] = (y[j] - sum);
+178 +                 y[j] = y[j] - sum;
+    |
+
+warning: unnecessary parentheses around assigned value
+  --> src/core/nn/layers/linear.rs:53:20
+   |
+53 |         let prod = (&x_mat * &w_t);
+   |                    ^             ^
+   |
+help: remove these parentheses
+   |
+53 -         let prod = (&x_mat * &w_t);
+53 +         let prod = &x_mat * &w_t;
+   |
+
+warning: unnecessary parentheses around assigned value
+  --> src/core/optimization/levenberg_marquardt.rs:50:24
+   |
+50 |             let prod = (&fjac_t * &fjac);
+   |                        ^               ^
+   |
+help: remove these parentheses
+   |
+50 -             let prod = (&fjac_t * &fjac);
+50 +             let prod = &fjac_t * &fjac;
+   |
+
+warning: 3 warnings emitted
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

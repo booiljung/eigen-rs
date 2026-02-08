@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+  # Ensure we test the SIMD paths (Github runners are x86_64 usually)
+  RUSTFLAGS: "-C target-cpu=native"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        components: clippy, rustfmt
+
+    - name: Check Formatting
+      run: cargo fmt -- --check
+
+    - name: Clippy
+      run: cargo clippy -- -D warnings
+
+    - name: Build
+      run: cargo build --verbose
+
+    - name: Run Tests (Correctness)
+      run: cargo test --verbose
+
+    - name: Run SIMD Verification (Cross-Check)
+      # This requires C++ compiler which ubuntu-latest has (g++)
+      run: cargo test --test simd_verify_test -- --nocapture
+
+    - name: Run Benchmarks (Sanity Check)
+      # Just run to ensure they compile and run, not strictly for perf numbers in CI
+      run: cargo bench --no-run

@@ -1,1 +1,27 @@
-/target
+# Rust Build Artifacts
+/target/
+/debug/
+**/*.rs.bk
+
+# Cargo
+# For libraries, it is recommended to ignore Cargo.lock. 
+# Apps should commit it. Since eigen-rs is a library:
+Cargo.lock
+
+# IDE & Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Benchmark & Profiling
+perf.data
+perf.data.old
+callgrind.out.*
+cachegrind.out.*
+
+# Temporary Files
+tmp/
+*.log

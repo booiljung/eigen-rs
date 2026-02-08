@@ -1,0 +1,201 @@
+    Checking eigen-rs v0.1.0 (/home/bijung/ws/eigen-rs)
+warning: unused imports: `Add` and `Neg`
+ --> src/core/geometry/translation.rs:5:21
+  |
+5 | use std::ops::{Mul, Add, Neg};
+  |                     ^^^  ^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `std::marker::PhantomData`
+ --> src/core/sparse/sparse_matrix.rs:7:5
+  |
+7 | use std::marker::PhantomData;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unnecessary parentheses around assigned value
+   --> src/core/sparse/solvers/incomplete_cholesky.rs:178:24
+    |
+178 |                 y[j] = (y[j] - sum);
+    |                        ^          ^
+    |
+    = note: `#[warn(unused_parens)]` (part of `#[warn(unused)]`) on by default
+help: remove these parentheses
+    |
+178 -                 y[j] = (y[j] - sum);
+178 +                 y[j] = y[j] - sum;
+    |
+
+warning: unused import: `Storage`
+ --> src/core/sparse/cuda_ops.rs:5:28
+  |
+5 | use crate::core::storage::{Storage, CudaStorage};
+  |                            ^^^^^^^
+
+warning: unused import: `crate::core::matrix::Matrix`
+ --> src/core/sparse/cuda_ops.rs:6:5
+  |
+6 | use crate::core::matrix::Matrix;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `Matrix`
+ --> src/core/nn/layers/linear.rs:6:27
+  |
+6 | use crate::core::matrix::{Matrix, MatrixX};
+  |                           ^^^^^^
+
+warning: unnecessary parentheses around assigned value
+  --> src/core/nn/layers/linear.rs:53:20
+   |
+53 |         let prod = (&x_mat * &w_t);
+   |                    ^             ^
+   |
+help: remove these parentheses
+   |
+53 -         let prod = (&x_mat * &w_t);
+53 +         let prod = &x_mat * &w_t;
+   |
+
+warning: unused import: `Matrix`
+ --> src/core/optimization/levenberg_marquardt.rs:4:27
+  |
+4 | use crate::core::matrix::{Matrix, MatrixX};
+  |                           ^^^^^^
+
+warning: unused import: `crate::core::storage::DynamicStorage`
+ --> src/core/optimization/levenberg_marquardt.rs:5:5
+  |
+5 | use crate::core::storage::DynamicStorage;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unnecessary parentheses around assigned value
+  --> src/core/optimization/levenberg_marquardt.rs:50:24
+   |
+50 |             let prod = (&fjac_t * &fjac);
+   |                        ^               ^
+   |
+help: remove these parentheses
+   |
+50 -             let prod = (&fjac_t * &fjac);
+50 +             let prod = &fjac_t * &fjac;
+   |
+
+warning: unused import: `Matrix`
+ --> src/core/optimization/hybrid.rs:4:27
+  |
+4 | use crate::core::matrix::{Matrix, MatrixX};
+  |                           ^^^^^^
+
+error[E0277]: the trait bound `IdentityPreconditioner: Default` is not satisfied
+  --> src/core/sparse/solvers/gmres.rs:16:52
+   |
+16 | pub struct GMRES<T: Scalar, P: Preconditioner<T> + Default = IdentityPreconditioner> {
+   |                                                    ^^^^^^^ the trait `Default` is not implemented for `IdentityPreconditioner`
+   |
+note: required by a bound in `GMRES`
+  --> src/core/sparse/solvers/gmres.rs:16:52
+   |
+16 | pub struct GMRES<T: Scalar, P: Preconditioner<T> + Default = IdentityPreconditioner> {
+   |                                                    ^^^^^^^ required by this bound in `GMRES`
+help: consider annotating `IdentityPreconditioner` with `#[derive(Default)]`
+  --> src/core/sparse/solvers/iterative_solver_base.rs:23:1
+   |
+23 + #[derive(Default)]
+24 | pub struct IdentityPreconditioner;
+   |
+
+warning: unreachable expression
+  --> src/core/storage/cuda.rs:35:9
+   |
+32 |               return Err("CUDA feature not enabled".to_string());
+   |               -------------------------------------------------- any code following this expression is unreachable
+...
+35 | /         Ok(Self {
+36 | |             data: NonNull::new(ptr).ok_or("Failed to create NonNull from CUDA pointer")?,
+37 | |             rows,
+38 | |             cols,
+39 | |         })
+   | |__________^ unreachable expression
+   |
+   = note: `#[warn(unreachable_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: unreachable statement
+  --> src/core/decompositions/lapack.rs:76:9
+   |
+38 |             return Err("LAPACK feature not enabled".to_string());
+   |             ---------------------------------------------------- any code following this expression is unreachable
+...
+76 |         self.is_initialized = true;
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^ unreachable statement
+
+warning: unreachable statement
+   --> src/core/decompositions/lapack.rs:197:9
+    |
+163 |             return Err("LAPACK feature not enabled".to_string());
+    |             ---------------------------------------------------- any code following this expression is unreachable
+...
+197 |         self.is_initialized = true;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^ unreachable statement
+
+warning: unused import: `crate::core::storage::Storage`
+ --> src/core/nn/layers/linear.rs:7:5
+  |
+7 | use crate::core::storage::Storage;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::core::xpr::MatrixXpr`
+ --> src/core/nn/layers/linear.rs:8:5
+  |
+8 | use crate::core::xpr::MatrixXpr;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::core::storage::Storage`
+ --> src/core/ops/mod.rs:5:5
+  |
+5 | use crate::core::storage::Storage as _; // Try aliasing to avoid any potential conflict
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused variable: `ptr`
+  --> src/core/storage/cuda.rs:18:17
+   |
+18 |         let mut ptr: *mut T = std::ptr::null_mut();
+   |                 ^^^ help: if this is intentional, prefix it with an underscore: `_ptr`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+  --> src/core/storage/cuda.rs:18:13
+   |
+18 |         let mut ptr: *mut T = std::ptr::null_mut();
+   |             ----^^^
+   |             |
+   |             help: remove this `mut`
+   |
+   = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: value assigned to `eps` is never read
+  --> src/core/decompositions/svd.rs:43:17
+   |
+43 |         let mut eps = T::from_usize(0); // This should be a small value based on type
+   |                 ^^^
+   |
+   = help: maybe it is overwritten before being read?
+   = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `b`
+   --> src/core/decompositions/lapack.rs:201:40
+    |
+201 |     pub fn solve<S: Storage<T>>(&self, b: &Matrix<T, S>) -> Result<Matrix<T, DynamicStorage<T>>, String> {
+    |                                        ^ help: if this is intentional, prefix it with an underscore: `_b`
+
+warning: variable does not need to be mutable
+   --> src/core/sparse/solvers/gmres.rs:106:17
+    |
+106 |             let mut r = self.preconditioner.solve(&r_raw)?;
+    |                 ----^
+    |                 |
+    |                 help: remove this `mut`
+
+For more information about this error, try `rustc --explain E0277`.
+warning: `eigen-rs` (lib) generated 22 warnings
+error: could not compile `eigen-rs` (lib) due to 1 previous error; 22 warnings emitted

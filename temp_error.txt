@@ -1,0 +1,243 @@
+    Checking eigen-rs v0.1.0 (/home/bijung/ws/eigen-rs)
+warning: unused imports: `Add` and `Neg`
+ --> src/core/geometry/translation.rs:5:21
+  |
+5 | use std::ops::{Mul, Add, Neg};
+  |                     ^^^  ^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `std::marker::PhantomData`
+ --> src/core/sparse/sparse_matrix.rs:7:5
+  |
+7 | use std::marker::PhantomData;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unnecessary parentheses around assigned value
+   --> src/core/sparse/solvers/incomplete_cholesky.rs:178:24
+    |
+178 |                 y[j] = (y[j] - sum);
+    |                        ^          ^
+    |
+    = note: `#[warn(unused_parens)]` (part of `#[warn(unused)]`) on by default
+help: remove these parentheses
+    |
+178 -                 y[j] = (y[j] - sum);
+178 +                 y[j] = y[j] - sum;
+    |
+
+warning: unused import: `Storage`
+ --> src/core/sparse/cuda_ops.rs:5:28
+  |
+5 | use crate::core::storage::{Storage, CudaStorage};
+  |                            ^^^^^^^
+
+warning: unused import: `crate::core::matrix::Matrix`
+ --> src/core/sparse/cuda_ops.rs:6:5
+  |
+6 | use crate::core::matrix::Matrix;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `Matrix`
+ --> src/core/nn/layers/linear.rs:6:27
+  |
+6 | use crate::core::matrix::{Matrix, MatrixX};
+  |                           ^^^^^^
+
+warning: unnecessary parentheses around assigned value
+  --> src/core/nn/layers/linear.rs:53:20
+   |
+53 |         let prod = (&x_mat * &w_t);
+   |                    ^             ^
+   |
+help: remove these parentheses
+   |
+53 -         let prod = (&x_mat * &w_t);
+53 +         let prod = &x_mat * &w_t;
+   |
+
+warning: unused import: `Matrix`
+ --> src/core/optimization/levenberg_marquardt.rs:4:27
+  |
+4 | use crate::core::matrix::{Matrix, MatrixX};
+  |                           ^^^^^^
+
+warning: unused import: `crate::core::storage::DynamicStorage`
+ --> src/core/optimization/levenberg_marquardt.rs:5:5
+  |
+5 | use crate::core::storage::DynamicStorage;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unnecessary parentheses around assigned value
+  --> src/core/optimization/levenberg_marquardt.rs:50:24
+   |
+50 |             let prod = (&fjac_t * &fjac);
+   |                        ^               ^
+   |
+help: remove these parentheses
+   |
+50 -             let prod = (&fjac_t * &fjac);
+50 +             let prod = &fjac_t * &fjac;
+   |
+
+warning: unused import: `Matrix`
+ --> src/core/optimization/hybrid.rs:4:27
+  |
+4 | use crate::core::matrix::{Matrix, MatrixX};
+  |                           ^^^^^^
+
+warning: unreachable expression
+  --> src/core/storage/cuda.rs:35:9
+   |
+32 |               return Err("CUDA feature not enabled".to_string());
+   |               -------------------------------------------------- any code following this expression is unreachable
+...
+35 | /         Ok(Self {
+36 | |             data: NonNull::new(ptr).ok_or("Failed to create NonNull from CUDA pointer")?,
+37 | |             rows,
+38 | |             cols,
+39 | |         })
+   | |__________^ unreachable expression
+   |
+   = note: `#[warn(unreachable_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: unreachable statement
+  --> src/core/decompositions/lapack.rs:76:9
+   |
+38 |             return Err("LAPACK feature not enabled".to_string());
+   |             ---------------------------------------------------- any code following this expression is unreachable
+...
+76 |         self.is_initialized = true;
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^ unreachable statement
+
+warning: unreachable statement
+   --> src/core/decompositions/lapack.rs:197:9
+    |
+163 |             return Err("LAPACK feature not enabled".to_string());
+    |             ---------------------------------------------------- any code following this expression is unreachable
+...
+197 |         self.is_initialized = true;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^ unreachable statement
+
+error[E0599]: no function or associated item named `new` found for type parameter `P` in the current scope
+  --> src/core/sparse/solvers/gmres.rs:32:32
+   |
+25 | impl<T: Scalar, P: Preconditioner<T>> GMRES<T, P> {
+   |                 - function or associated item `new` not found for this type parameter
+...
+32 |             preconditioner: P::new(),
+   |                                ^^^ function or associated item not found in `P`
+
+error[E0599]: no function or associated item named `zero` found for type parameter `T` in the current scope
+  --> src/core/sparse/solvers/gmres.rs:34:23
+   |
+25 | impl<T: Scalar, P: Preconditioner<T>> GMRES<T, P> {
+   |      - function or associated item `zero` not found for this type parameter
+...
+34 |             error: T::zero(),
+   |                       ^^^^ function or associated item not found in `T`
+
+error[E0369]: cannot subtract `&Matrix<T, DynamicStorage<T>>` from `&&Matrix<T, S>`
+   --> src/core/sparse/solvers/gmres.rs:103:31
+    |
+103 |             r_raw.assign(&(&b - &ax))?;
+    |                            -- ^ --- &Matrix<T, DynamicStorage<T>>
+    |                            |
+    |                            &&Matrix<T, S>
+    |
+help: `-` can be used on `&Matrix<T, S>` if you dereference the left-hand side
+    |
+103 |             r_raw.assign(&(*&b - &ax))?;
+    |                            +
+help: consider extending the `where` clause, but there might be an alternative better way to express this requirement
+    |
+ 65 |     where T: Scalar + 'static, &&Matrix<T, S>: std::ops::Sub<&Matrix<T, DynamicStorage<T>>> // 'static for Matrix operations just in case
+    |                              ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+help: consider introducing a `where` clause, but there might be an alternative better way to express this requirement
+    |
+ 25 | impl<T: Scalar, P: Preconditioner<T>> GMRES<T, P> where &&Matrix<T, S>: std::ops::Sub<&Matrix<T, DynamicStorage<T>>> {
+    |                                                   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+error[E0308]: mismatched types
+   --> src/core/sparse/solvers/gmres.rs:169:37
+    |
+169 |                     let diff = &w - &scaled_v;
+    |                                     ^^^^^^^^^ expected `&Matrix<T, _>`, found `&CwiseScalarMulOp<'_, T, Matrix<T, ...>>`
+    |
+    = note: expected reference `&Matrix<_, _>`
+               found reference `&CwiseScalarMulOp<'_, T, Matrix<_, DynamicStorage<T>>>`
+
+error[E0599]: no method named `epsilon` found for type parameter `T` in the current scope
+   --> src/core/sparse/solvers/gmres.rs:196:64
+    |
+ 25 | impl<T: Scalar, P: Preconditioner<T>> GMRES<T, P> {
+    |      - method `epsilon` not found for this type parameter
+...
+196 |                 let is_breakdown = w_norm.abs() < T::default().epsilon(); // eps
+    |                                                   -------------^^^^^^^--
+    |                                                   |            |
+    |                                                   |            this is an associated function, not a method
+    |                                                   help: use associated function syntax instead: `T::epsilon()`
+    |
+    = note: found the following associated functions; to be used as methods, functions must have a `self` parameter
+note: the candidate is defined in the trait `Scalar`
+   --> src/core/scalar.rs:28:5
+    |
+ 28 |     fn epsilon() -> Self;
+    |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::core::storage::Storage`
+ --> src/core/nn/layers/linear.rs:7:5
+  |
+7 | use crate::core::storage::Storage;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::core::xpr::MatrixXpr`
+ --> src/core/nn/layers/linear.rs:8:5
+  |
+8 | use crate::core::xpr::MatrixXpr;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::core::storage::Storage`
+ --> src/core/ops/mod.rs:5:5
+  |
+5 | use crate::core::storage::Storage as _; // Try aliasing to avoid any potential conflict
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused variable: `ptr`
+  --> src/core/storage/cuda.rs:18:17
+   |
+18 |         let mut ptr: *mut T = std::ptr::null_mut();
+   |                 ^^^ help: if this is intentional, prefix it with an underscore: `_ptr`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+  --> src/core/storage/cuda.rs:18:13
+   |
+18 |         let mut ptr: *mut T = std::ptr::null_mut();
+   |             ----^^^
+   |             |
+   |             help: remove this `mut`
+   |
+   = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: value assigned to `eps` is never read
+  --> src/core/decompositions/svd.rs:43:17
+   |
+43 |         let mut eps = T::from_usize(0); // This should be a small value based on type
+   |                 ^^^
+   |
+   = help: maybe it is overwritten before being read?
+   = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `b`
+   --> src/core/decompositions/lapack.rs:201:40
+    |
+201 |     pub fn solve<S: Storage<T>>(&self, b: &Matrix<T, S>) -> Result<Matrix<T, DynamicStorage<T>>, String> {
+    |                                        ^ help: if this is intentional, prefix it with an underscore: `_b`
+
+Some errors have detailed explanations: E0308, E0369, E0599.
+For more information about an error, try `rustc --explain E0308`.
+warning: `eigen-rs` (lib) generated 21 warnings
+error: could not compile `eigen-rs` (lib) due to 5 previous errors; 21 warnings emitted

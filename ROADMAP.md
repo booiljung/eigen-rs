@@ -1,0 +1,34 @@
+# eigen-rs Roadmap
+
+This document serves as the high-level index for the `eigen-rs` project roadmap. Details for each module are tracked in their respective documents.
+
+## Module Roadmaps
+
+| Module | Description | Status | Link |
+|:---|:---|:---|:---|
+| **Core** | Dense Matrix features, Evaluators, Storage | **100%** | [See Details](docs/roadmap/Core.md) |
+| **Architecture** | SIMD (AVX/SSE/NEON), GPU (CUDA), Parallelism | **91%** | [See Details](docs/roadmap/Arch.md) |
+| **Geometry** | Rotations, Transforms, Spatial primitives | **100%** | [See Details](docs/roadmap/Geometry.md) |
+| **Decompositions** | LU, QR, Cholesky, SVD, Eigensolvers | **100%** | [See Details](docs/roadmap/Decompositions.md) |
+| **Sparse** | Sparse Storage (CSR/CSC), Solvers | **100%** | [See Details](docs/roadmap/Sparse.md) |
+| **Unsupported** | FFT, Splines, Polynomials, Tensors, Optimization | **100%** | [See Details](docs/roadmap/Unsupported.md) |
+
+## Strategic Philosophy: Pure Rust Core + Optional FFI
+
+The project follows a **"Pure Rust First, FFI Optional"** hybrid approach:
+1.  **Core Logic (Pure Rust)**:
+    - Matrix arithmetic, decompositions (LU/QR/Cholesky), and geometry are implemented in 100% safe/unsafe Rust.
+    - **Goal**: Generic extensibility (supporting `Complex`, `DualNumber`, etc.) and zero-dependency portability (WASM/Embedded).
+2.  **Special Functions (Hybrid/FFI)**:
+    - Complex functions (`erf`, `bessel`, `gamma`) leverage `libc` (system `libm`) for accuracy and performance.
+    - Future goal: Gradual transition to `libm` crate for pure Rust portability.
+3.  **High-Performance Backends (Opt-in FFI)**:
+    - Users can enable features like `mkl`, `lapack`, `cuda` to offload heavy computations (GEMM, SVD) to optimized vendor libraries.
+    - Default behavior remains pure Rust for maximum compatibility.
+
+## Numerical Stability & Quality Assurance
+
+- [x] **Fuzzy Comparison**: `isApprox`, `isMuchSmallerThan` with configurable precision.
+- [x] **Condition Estimation**: `ConditionEstimator` for solver reliability.
+- [x] **Scalar Traits**: `NumTraits` for floating point, integer, and complex types.
+- [x] **Validation**: Differential testing framework against C++ Eigen binaries.
