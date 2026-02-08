@@ -1,9 +1,9 @@
 # eigen-rs
 
-[![CI](https://github.com/user/eigen-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/user/eigen-rs/actions/workflows/ci.yml)
+[![CI](https://github.com/booiljung/eigen-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/booiljung/eigen-rs/actions/workflows/ci.yml)
 [![Crates.io](https://img.shields.io/crates/v/eigen-rs.svg)](https://crates.io/crates/eigen-rs)
 [![Docs.rs](https://docs.rs/eigen-rs/badge.svg)](https://docs.rs/eigen-rs)
-[![License](https://img.shields.io/crates/l/eigen-rs.svg)](https://github.com/user/eigen-rs/blob/main/LICENSE)
+[![License](https://img.shields.io/crates/l/eigen-rs.svg)](https://github.com/booiljung/eigen-rs/blob/main/LICENSE)
 [![Korean](https://img.shields.io/badge/Language-Korean-blue.svg)](README.KO.md)
 
 A> **eigen-rs** is a pure Rust port of the **Eigen 3.4** C++ library.

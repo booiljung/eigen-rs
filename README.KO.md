@@ -1,9 +1,9 @@
 # eigen-rs
 
-[![CI](https://github.com/user/eigen-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/user/eigen-rs/actions/workflows/ci.yml)
+[![CI](https://github.com/booiljung/eigen-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/booiljung/eigen-rs/actions/workflows/ci.yml)
 [![Crates.io](https://img.shields.io/crates/v/eigen-rs.svg)](https://crates.io/crates/eigen-rs)
 [![Docs.rs](https://docs.rs/eigen-rs/badge.svg)](https://docs.rs/eigen-rs)
-[![License](https://img.shields.io/crates/l/eigen-rs.svg)](https://github.com/user/eigen-rs/blob/main/LICENSE)
+[![License](https://img.shields.io/crates/l/eigen-rs.svg)](https://github.com/booiljung/eigen-rs/blob/main/LICENSE)
 [![English](https://img.shields.io/badge/Language-English-blue.svg)](README.md)
 
 **Eigen 3.4** C++ 라이브러리의 고성능 Rust 포트입니다.
