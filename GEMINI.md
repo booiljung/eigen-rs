@@ -12,6 +12,7 @@
   - **SIMD** (x86_64, ARM64 support)
   - **CUDA 11.0+** (GPU acceleration, maintaining system-independent compatibility)
 - **Infrastructure**: **GitHub Actions** (CI/CD)
+- **Temporary Files**: All temporary files, logs, and benchmark binaries must be placed in the `tmp/` directory (which is git-ignored) to keep the project root clean.
 
 ## Development Rules
 
