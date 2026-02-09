@@ -176,7 +176,6 @@ impl<T: Scalar> SkylineMatrix<T> {
 
         // 1. Determine profile
         let mut profile_ptrs = vec![0usize; n + 1];
-        let current_ptr = 0;
 
         // Loop removed (redundant initialization)
 

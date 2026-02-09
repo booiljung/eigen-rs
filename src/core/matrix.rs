@@ -739,6 +739,17 @@ impl<T: Scalar, const R: usize, const C: usize, const S: usize>
     pub fn zeros() -> Self {
         Self::new_fixed()
     }
+
+    pub fn identity() -> Self {
+        let mut m = Self::zeros();
+        let rows = R;
+        let cols = C;
+        let n = if rows < cols { rows } else { cols };
+        for i in 0..n {
+            *m.get_mut(i, i).unwrap() = T::from_f64(1.0);
+        }
+        m
+    }
 }
 
 /// Specialization for Dynamic-size matrices.

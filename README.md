@@ -45,17 +45,34 @@ fn main() {
     let mut b = MatrixX::<f32>::new_dynamic(3, 3).unwrap();
     
     // Fill matrices...
+    *a.get_mut(0, 0).unwrap() = 1.0;
+    *b.get_mut(0, 0).unwrap() = 2.0;
     
-    let c = &a + &b * 2.0;
-    println!("Matrix C:\n{}", c);
+    // Perform operations
+    // Note: Expression templates like (&a + &b * 2.0) are supported but concise assignment 
+    // to a new Matrix needs explicit evaluation or assignment methods.
+    // Here we show a step-by-step approach for clarity:
+    let mut b_scaled = b.clone(); 
+    b_scaled.scale(2.0);
+
+    let mut c = MatrixX::<f32>::new_dynamic(3, 3).unwrap();
+    c.assign(&(&a + &b_scaled)).unwrap();
+    
+    println!("Matrix C:\n{:?}", c);
 }
 ```
 
 ### Example: Solving Linear Systems
 
 ```rust
-let llt = matrix.llt().expect("Matrix must be positive-definite");
-let x = llt.solve(&b).expect("Solve failed");
+use eigen_rs::core::matrix::Matrix3;
+
+fn main() {
+    let matrix = Matrix3::<f32>::identity();
+    let b = Matrix3::<f32>::identity(); // Placeholder
+    let llt = matrix.llt().expect("Matrix must be positive-definite");
+    let x = llt.solve(&b).expect("Solve failed");
+}
 ```
 
 ## Documentation
