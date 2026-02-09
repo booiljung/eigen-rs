@@ -164,11 +164,25 @@ pub mod sys {
             bufferSize: *mut usize,
         ) -> cusparseStatus_t;
     }
+    }
+
+
+#[cfg(not(feature = "cuda"))]
+pub mod sys {
+    #[allow(non_camel_case_types)]
+    pub type cusparseHandle_t = ();
+    #[allow(non_camel_case_types)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+    pub enum cusparseStatus_t {
+        Success = 0,
+    }
 }
 
 pub struct CusparseHandle {
     #[cfg(feature = "cuda")]
     handle: sys::cusparseHandle_t,
+    #[cfg(not(feature = "cuda"))]
+    _handle: sys::cusparseHandle_t,
 }
 
 impl CusparseHandle {

@@ -71,11 +71,25 @@ pub mod sys {
             ldc: i32,
         ) -> cublasStatus_t;
     }
+
+}
+
+#[cfg(not(feature = "cuda"))]
+pub mod sys {
+    #[allow(non_camel_case_types)]
+    pub type cublasHandle_t = ();
+    #[allow(non_camel_case_types)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+    pub enum cublasStatus_t {
+        Success = 0,
+    }
 }
 
 pub struct CublasHandle {
     #[cfg(feature = "cuda")]
     handle: sys::cublasHandle_t,
+    #[cfg(not(feature = "cuda"))]
+    _handle: sys::cublasHandle_t,
 }
 
 impl CublasHandle {
