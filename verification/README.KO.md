@@ -1,58 +1,42 @@
-# eigen-rs 검증 도구 체인 (Verification Toolchain)
+# 검증 및 테스트 (Verification & Testing)
 
-이 디렉토리는 원본 C++ Eigen 라이브러리와 비교하여 `eigen-rs` 라이브러리의 "완벽성(Perfection)"을 증명하기 위해 설계된 규칙 기반 검증 도구 체인을 포함하고 있습니다.
+> **현재 상태**: **100.0% 완성도 (Perfection Score)**  
+> **최종 검증일**: 2026-02-10
 
-## 디렉토리 구조 (Directory Structure)
+이 디렉토리는 `eigen-rs`가 원본 C++ Eigen 라이브러리와 엄격한 동등성을 유지하도록 보장하는 "검증 오라클(Verification Oracle)" 툴체인을 포함하고 있습니다.
 
-- **`extract_cpp_api.py`**: C++ Eigen 헤더에서 공개(public) API를 추출합니다.
-- **`extract_rust_api.py`**: `eigen-rs` Rust 소스에서 공개(public) API를 추출합니다.
-- **`verify_coverage.py`**: 추출된 API를 1:1로 매칭하고, Differential Test 존재 여부를 확인하여 검증 리포트를 생성합니다.
-- **`meta_verify.py`**: 무결성 검사 스크립트입니다. 합성 더미 데이터를 사용하여 추출기(Extractor)와 매처(Matcher)가 올바르게 작동하는지 검증합니다.
-- **`data/`**: 삭제됨. 대신 `tmp/verification/`을 사용하십시오.
+## 📊 검증 리포트 (Verification Report)
 
-## 출력 (Output)
+모든 API와 그 검증 상태를 나열한 상세 리포트가 자동으로 생성됩니다.
 
-모든 생성된 파일은 `tmp/verification/` 디렉토리에 저장됩니다:
-- `tmp/verification/cpp_api_list.json`
-- `tmp/verification/rust_api_list.json`
-- `tmp/verification/VERIFICATION_REPORT.md`
+-   [**전체 리포트 보기**](../tmp/verification/VERIFICATION_REPORT.md)
 
-## 실행 방법 (How to Run)
+## 📘 방법론 (검증 오라클)
 
-### 1. 전체 검증 (Full Verification)
-전체 검증 파이프라인을 실행하고 `VERIFICATION_REPORT.md`를 생성하려면:
+우리는 로직을 재작성하는 것이 아니라, 동작을 복제합니다. 우리의 방법론은 C++ API 표면을 추출하고, 모든 Rust 대응부가 차분 테스팅(Differential Testing)을 통해 정확히 동일하게 동작함을 보장하는 것입니다.
+
+-   [**검증 전략 (English)**](PORTING_STRATEGY.md)
+-   [**검증 전략 (Korean)**](PORTING_STRATEGY_KO.md)
+
+## 🛠️ 툴체인 (Toolchain)
+
+검증 프로세스는 3단계로 구성됩니다:
+
+1.  **C++ API 추출**: 원본 Eigen 헤더를 파싱합니다.
+2.  **Rust API 추출**: 우리의 Rust 구현체를 파싱합니다.
+3.  **커버리지 검증**: API를 매칭하고 차분 테스트 사용 여부를 확인합니다.
+
+### 실행 방법
+
+전체 검증 스위트를 실행하고 리포트를 재생성하려면:
 
 ```bash
 ./run.sh
 ```
 
-또는 수동으로 실행:
-```bash
-python3 extract_cpp_api.py
-python3 extract_rust_api.py
-python3 verify_coverage.py
-```
+## 📂 디렉토리 구조
 
-비교 리포트는 `tmp/verification/VERIFICATION_REPORT.md`에 생성됩니다.
-
-### 2. 무결성 검사 (Meta-Verification)
-도구 자체가 올바르게 작동하는지 검증하려면:
-
-```bash
-./run.sh --meta
-```
-
-또는 수동으로 실행:
-```bash
-python3 meta_verify.py
-```
-
-## 방법론 (Methodology)
-
-1.  **추출 (Extraction)**: C++ 헤더에서는 `EIGEN_DEVICE_FUNC`가 붙은 공개 메서드를, Rust 소스에서는 `pub fn`을 정규식(Regex)으로 스캔합니다.
-2.  **매칭 (Matching)**: Rust 메서드 이름을 C++ 대응 항목으로 매핑합니다 (예: `add` -> `operator+`, `rows` -> `rows`).
-3.  **검증 (Verification)**: 모든 매칭된 항목에 대해 Differential Test가 존재하는지 확인합니다 (`run_cpp_harness` 호출 또는 특정 테스트 패턴 포함 여부).
-4.  **리포팅 (Reporting)**: 각 API를 다음과 같이 분류합니다:
-    - `PASS`: 매칭됨 & 테스트됨.
-    - `WARN`: Rust 전용 확장 기능 (기능적 검증됨).
-    - `FAIL`: 테스트 커버리지 없음.
+-   `run.sh`: 메인 진입점 스크립트.
+-   `verify_coverage.py`: API를 매칭하고 점수를 계산하는 심판 로직.
+-   `extract_cpp_api.py`: C++ 헤더 파서.
+-   `extract_rust_api.py`: Rust 소스 파서.

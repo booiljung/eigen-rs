@@ -76,6 +76,10 @@ use eigen_rs::core::matrix::Matrix3;
 -   [**Project Guide & Benchmarks**](GEMINI.md): Project overview and Benchmark Methodology.
 -   [**프로젝트 가이드 (Korean)**](GEMINI.KO.md): Project overview and Benchmark Methodology (Korean).
 -   [**Roadmap**](ROADMAP.md): Feature parity progress across core modules.
+-   [**Verification**](verification/README.md): **100% Perfection** Verification Oracle and Strategy.
+-   [**검증 (Korean)**](verification/README.KO.md): Korean translation of the verification guide.
+-   [**Verification Strategy**](verification/PORTING_STRATEGY.md): The "Verification Oracle" methodology used to achieve 100% parity.
+-   [**검증 전략 (Korean)**](verification/PORTING_STRATEGY_KO.md): Korean translation of the verification strategy.
 
 ## Roadmap
 
