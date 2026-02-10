@@ -35,6 +35,7 @@ impl<T: Scalar, const RANK: usize> Translation<T, RANK> {
 }
 
 // Translation * Vector (Apply translation)
+#[allow(clippy::suspicious_arithmetic_impl)]
 impl<'a, T: Scalar, const RANK: usize> Mul<&'a Matrix<T, FixedStorage<T, RANK, 1, RANK>>>
     for &'a Translation<T, RANK>
 {
@@ -51,6 +52,7 @@ impl<'a, T: Scalar, const RANK: usize> Mul<&'a Matrix<T, FixedStorage<T, RANK, 1
 }
 
 // Translation * Translation (Composition)
+#[allow(clippy::suspicious_arithmetic_impl)]
 impl<'a, T: Scalar, const RANK: usize> Mul<&'a Translation<T, RANK>> for &'a Translation<T, RANK> {
     type Output = Translation<T, RANK>;
 

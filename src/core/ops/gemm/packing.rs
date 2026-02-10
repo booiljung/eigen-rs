@@ -6,6 +6,8 @@ use crate::core::scalar::Scalar;
 // For each micropanel of width MR:
 //   For each k:
 //     Store MR elements
+/// # Safety
+/// Pointers must be valid.
 pub unsafe fn pack_lhs<T: Scalar + Copy>(
     mr: usize,
     kc: usize,
@@ -52,6 +54,8 @@ pub unsafe fn pack_lhs<T: Scalar + Copy>(
 // For each micropanel of NR cols:
 //   For each k:
 //     Store NR elements
+/// # Safety
+/// Pointers must be valid.
 pub unsafe fn pack_rhs<T: Scalar + Copy>(
     nr: usize,
     kc: usize,

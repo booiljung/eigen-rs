@@ -40,12 +40,12 @@ impl<T: Scalar> Preconditioner<T> for IncompleteCholesky<T> {
         // IC(0) - Sparsity(L) = Sparsity(lower(A))
         // We need to keep track of the sparsity pattern.
         let mut pattern = vec![Vec::new(); n];
-        for j in 0..n {
+        for (j, pat) in pattern.iter_mut().enumerate().take(n) {
             let mut it = InnerIterator::new(matrix, j);
             while it.is_valid() {
                 let i = it.row();
                 if i >= j {
-                    pattern[j].push(i);
+                    pat.push(i);
                 }
                 it.next();
             }
@@ -140,8 +140,8 @@ impl<T: Scalar> Preconditioner<T> for IncompleteCholesky<T> {
         for k in 0..b.cols() {
             // Forward solve L*y = b
             let mut y = vec![T::default(); n];
-            for i in 0..n {
-                y[i] = *b.get(i, k).unwrap();
+            for (i, val) in y.iter_mut().enumerate().take(n) {
+                *val = *b.get(i, k).unwrap();
             }
 
             for j in 0..n {
@@ -194,8 +194,8 @@ impl<T: Scalar> Preconditioner<T> for IncompleteCholesky<T> {
                 }
             }
 
-            for i in 0..n {
-                *x.get_mut(i, k).unwrap() = y[i];
+            for (i, val) in y.iter().enumerate().take(n) {
+                *x.get_mut(i, k).unwrap() = *val;
             }
         }
 

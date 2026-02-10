@@ -40,7 +40,7 @@ impl<T: Scalar, S: Storage<T>> Tridiagonalization<T, S> {
     fn tridiagonalization_inplace(mat_a: &mut Matrix<T, DynamicStorage<T>>, h_coeffs: &mut [T]) {
         let n = mat_a.rows();
 
-        for i in 0..n - 1 {
+        for (i, h_coeff) in h_coeffs.iter_mut().enumerate().take(n - 1) {
             // 1. Compute Householder reflection for column i starting from i+1
             let mut norm_sq = T::default();
             for k in i + 1..n {
@@ -63,13 +63,13 @@ impl<T: Scalar, S: Storage<T>> Tridiagonalization<T, S> {
 
                 // Householder coefficient h (tau) for the scaled vector
                 let h = (v0.abs() + norm) / norm;
-                h_coeffs[i] = h;
+                *h_coeff = h;
 
                 // 2. Similarity transformation: A = H A H^T
                 // Compute p = (h A v) - (h/2 * v^T (h A v)) v
                 let remaining_size = n - i - 1;
                 let mut w = vec![T::default(); remaining_size];
-                for row in 0..remaining_size {
+                for (row, val) in w.iter_mut().enumerate().take(remaining_size) {
                     let mut dot = T::default();
                     for col in 0..remaining_size {
                         let r = row + i + 1;
@@ -88,27 +88,27 @@ impl<T: Scalar, S: Storage<T>> Tridiagonalization<T, S> {
                         };
                         dot += val * v_col;
                     }
-                    w[row] = h * dot;
+                    *val = h * dot;
                 }
 
                 let mut vt_w = T::default();
-                for k in 0..remaining_size {
+                for (k, val) in w.iter().enumerate().take(remaining_size) {
                     let v_k = if k == 0 {
                         T::from_f64(1.0)
                     } else {
                         *mat_a.get(k + i + 1, i).unwrap()
                     };
-                    vt_w += v_k * w[k];
+                    vt_w += v_k * *val;
                 }
                 let scale = h * vt_w * T::from_f64(0.5);
 
-                for k in 0..remaining_size {
+                for (k, val) in w.iter_mut().enumerate().take(remaining_size) {
                     let v_k = if k == 0 {
                         T::from_f64(1.0)
                     } else {
                         *mat_a.get(k + i + 1, i).unwrap()
                     };
-                    w[k] -= scale * v_k;
+                    *val -= scale * v_k;
                 }
 
                 for col in 0..remaining_size {
@@ -134,7 +134,7 @@ impl<T: Scalar, S: Storage<T>> Tridiagonalization<T, S> {
                 // Restore beta as the tridiagonal sub-diagonal element
                 *mat_a.get_mut(i + 1, i).unwrap() = beta;
             } else {
-                h_coeffs[i] = T::default();
+                *h_coeff = T::default();
             }
         }
     }
@@ -146,12 +146,11 @@ impl<T: Scalar, S: Storage<T>> Tridiagonalization<T, S> {
 
         for j in 0..n {
             for i in 0..n {
-                if i == j {
-                    *t.get_mut(i, j).unwrap() = *self.packed_matrix.get(i, j).unwrap();
-                } else if i == j + 1 {
-                    *t.get_mut(i, j).unwrap() = *self.packed_matrix.get(i, j).unwrap();
-                } else if j == i + 1 {
-                    *t.get_mut(i, j).unwrap() = *self.packed_matrix.get(j, i).unwrap();
+                if i == j || i == j + 1 || j == i + 1 {
+                    // Always read from the lower triangular part
+                    let r = std::cmp::max(i, j);
+                    let c = std::cmp::min(i, j);
+                    *t.get_mut(i, j).unwrap() = *self.packed_matrix.get(r, c).unwrap();
                 } else {
                     *t.get_mut(i, j).unwrap() = T::default();
                 }

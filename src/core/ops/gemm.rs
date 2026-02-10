@@ -25,6 +25,9 @@ const NC: usize = 4096; // wide panel of B (streaming)
 /// A: m x k
 /// B: k x n
 /// C: m x n
+/// # Safety
+/// Pointers must be valid.
+#[allow(clippy::too_many_arguments)]
 pub unsafe fn gemm_blocked<T, K>(
     m: usize,
     k: usize,
@@ -215,84 +218,80 @@ where
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     {
         let tid = std::any::TypeId::of::<T>();
-        if tid == std::any::TypeId::of::<f32>() {
-            if is_x86_feature_detected!("fma") {
-                use self::arch::x86::asm_kernel::AsmFmaKernelF32;
-                c.set_zero();
+        if tid == std::any::TypeId::of::<f32>() && is_x86_feature_detected!("fma") {
+            use self::arch::x86::asm_kernel::AsmFmaKernelF32;
+            c.set_zero();
 
-                // Get pointers and assume Column-Major Dense for now (Standard Matrix)
-                // TODO: Handle Strides correctly for Map/Slice.
-                // Current Matrix impl is dense col-major.
-                // a(i, k) is at [k * m + i]
-                // rs = 1, cs = rows
+            // Get pointers and assume Column-Major Dense for now (Standard Matrix)
+            // TODO: Handle Strides correctly for Map/Slice.
+            // Current Matrix impl is dense col-major.
+            // a(i, k) is at [k * m + i]
+            // rs = 1, cs = rows
 
-                let a_ptr = a.storage().data().as_ptr(); // This assumes contiguous slice!
-                let rs_a = 1;
-                let cs_a = a.rows() as isize;
+            let a_ptr = a.storage().data().as_ptr(); // This assumes contiguous slice!
+            let rs_a = 1;
+            let cs_a = a.rows() as isize;
 
-                let b_ptr = b.storage().data().as_ptr();
-                let rs_b = 1;
-                let cs_b = b.rows() as isize; // b.rows() is k
+            let b_ptr = b.storage().data().as_ptr();
+            let rs_b = 1;
+            let cs_b = b.rows() as isize; // b.rows() is k
 
-                let c_ptr = c.storage_mut().data_mut().as_mut_ptr();
-                let rs_c = 1;
-                let cs_c = c.rows() as isize;
+            let c_ptr = c.storage_mut().data_mut().as_mut_ptr();
+            let rs_c = 1;
+            let cs_c = c.rows() as isize;
 
-                // Safety: Checked TypeId. Pointers are valid.
-                unsafe {
-                    gemm_blocked::<f32, AsmFmaKernelF32>(
-                        m,
-                        k,
-                        n,
-                        a_ptr as *const f32,
-                        rs_a,
-                        cs_a,
-                        b_ptr as *const f32,
-                        rs_b,
-                        cs_b,
-                        c_ptr as *mut f32,
-                        rs_c,
-                        cs_c,
-                    )?;
-                }
-                return Ok(());
+            // Safety: Checked TypeId. Pointers are valid.
+            unsafe {
+                gemm_blocked::<f32, AsmFmaKernelF32>(
+                    m,
+                    k,
+                    n,
+                    a_ptr as *const f32,
+                    rs_a,
+                    cs_a,
+                    b_ptr as *const f32,
+                    rs_b,
+                    cs_b,
+                    c_ptr as *mut f32,
+                    rs_c,
+                    cs_c,
+                )?;
             }
+            return Ok(());
         }
-        if tid == std::any::TypeId::of::<f64>() {
-            if is_x86_feature_detected!("fma") {
-                use self::arch::x86::asm_kernel::AsmFmaKernelF64;
-                c.set_zero();
+        if tid == std::any::TypeId::of::<f64>() && is_x86_feature_detected!("fma") {
+            use self::arch::x86::asm_kernel::AsmFmaKernelF64;
+            c.set_zero();
 
-                let a_ptr = a.storage().data().as_ptr();
-                let rs_a = 1;
-                let cs_a = a.rows() as isize;
+            let a_ptr = a.storage().data().as_ptr();
+            let rs_a = 1;
+            let cs_a = a.rows() as isize;
 
-                let b_ptr = b.storage().data().as_ptr();
-                let rs_b = 1;
-                let cs_b = b.rows() as isize;
+            let b_ptr = b.storage().data().as_ptr();
+            let rs_b = 1;
+            let cs_b = b.rows() as isize;
 
-                let c_ptr = c.storage_mut().data_mut().as_mut_ptr();
-                let rs_c = 1;
-                let cs_c = c.rows() as isize;
+            let c_ptr = c.storage_mut().data_mut().as_mut_ptr();
+            let rs_c = 1;
+            let cs_c = c.rows() as isize;
 
-                unsafe {
-                    gemm_blocked::<f64, AsmFmaKernelF64>(
-                        m,
-                        k,
-                        n,
-                        a_ptr as *const f64,
-                        rs_a,
-                        cs_a,
-                        b_ptr as *const f64,
-                        rs_b,
-                        cs_b,
-                        c_ptr as *mut f64,
-                        rs_c,
-                        cs_c,
-                    )?;
-                }
-                return Ok(());
+            unsafe {
+                gemm_blocked::<f64, AsmFmaKernelF64>(
+                    m,
+                    k,
+                    n,
+                    a_ptr as *const f64,
+                    rs_a,
+                    cs_a,
+                    b_ptr as *const f64,
+                    rs_b,
+                    cs_b,
+                    c_ptr as *mut f64,
+                    rs_c,
+                    cs_c,
+                )?;
             }
+            return Ok(());
         }
     }
 

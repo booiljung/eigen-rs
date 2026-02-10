@@ -102,8 +102,8 @@ impl<T: Scalar, O: Ordering> SparseQR<T, O> {
                 // w = w - factor * v
                 let factor = tau * dot;
                 workspace[j] -= factor;
-                for &(r_idx, v_val) in &v_cols[j] {
-                    workspace[r_idx] -= factor * v_val;
+                for (r_idx, v_val) in &v_cols[j] {
+                    workspace[*r_idx] -= factor * *v_val;
                 }
             }
 
@@ -111,14 +111,13 @@ impl<T: Scalar, O: Ordering> SparseQR<T, O> {
             if k < size {
                 // The vector to reflect is workspace[k..m]
                 let mut norm_sq = T::zero();
-                for i in k..m {
-                    norm_sq += workspace[i] * workspace[i];
+                for val in workspace.iter().take(m).skip(k) {
+                    norm_sq += *val * *val;
                 }
 
                 // Store R[k,k] (diagonal) and upper part R[0..k, k]
                 // R[i, k] for i < k comes from workspace[i] (which is finished processing)
-                for i in 0..k {
-                    let val = workspace[i];
+                for (i, &val) in workspace.iter().enumerate().take(k) {
                     if val != T::zero() {
                         r_triplets.push(crate::core::sparse::Triplet::new(i, k, val));
                     }
@@ -146,8 +145,7 @@ impl<T: Scalar, O: Ordering> SparseQR<T, O> {
                     let inv_v0 = v0_new.recip();
                     let mut current_v_col = Vec::new();
 
-                    for i in k + 1..m {
-                        let val = workspace[i];
+                    for (i, &val) in workspace.iter().enumerate().take(m).skip(k + 1) {
                         let v_val = val * inv_v0;
                         if v_val != T::zero() {
                             current_v_col.push((i, v_val));
@@ -165,7 +163,7 @@ impl<T: Scalar, O: Ordering> SparseQR<T, O> {
             } else {
                 // Rectangular wide case (k >= size)
                 // Just store the column into R (it is not annihilated)
-                for i in 0..size {
+                for (i, &val) in workspace.iter().enumerate().take(size) {
                     // Only up to size rows in R? Usually R is m x n but zero below diagonal?
                     // In Thin QR (m >= n), R is n x n.
                     // In Wide QR (m < n), R is m x n?
@@ -174,7 +172,6 @@ impl<T: Scalar, O: Ordering> SparseQR<T, O> {
                     // We only Householder-ized 'size' columns.
                     // If m < n (Wide), size = m. We effectively processed all rows.
                     // workspace[0..m] are valid entries of R column k.
-                    let val = workspace[i];
                     if val != T::zero() {
                         r_triplets.push(crate::core::sparse::Triplet::new(i, k, val));
                     }
@@ -321,8 +318,7 @@ impl<T: Scalar, O: Ordering> SparseQR<T, O> {
                                           // So (P z)[k] = z[j] where k = p[j].
                                           // So final_res[p[i]] = y[i]
 
-        for i in 0..n {
-            let target_row = p_indices[i];
+        for (i, &target_row) in p_indices.iter().enumerate().take(n) {
             for col in 0..b.cols() {
                 *final_res.get_mut(target_row, col).unwrap() = *y.get(i, col).unwrap();
             }

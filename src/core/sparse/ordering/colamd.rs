@@ -18,14 +18,14 @@ impl Ordering for COLAMD {
         // which serves as a baseline for reducing fill-in.
 
         let mut col_degrees = vec![0; n];
-        for j in 0..n {
+        for (j, degree) in col_degrees.iter_mut().enumerate().take(n) {
             let mut count = 0;
             let mut it = crate::core::sparse::iterators::InnerIterator::new(matrix, j);
             while it.is_valid() {
                 count += 1;
                 it.next();
             }
-            col_degrees[j] = count;
+            *degree = count;
         }
 
         let mut p: Vec<usize> = (0..n).collect();

@@ -122,17 +122,7 @@ impl<T: Scalar, S: Storage<T>> SelfAdjointEigenSolver<T, S> {
                 *vecs.get_mut(0, 1).unwrap() = T::default();
                 *vecs.get_mut(1, 1).unwrap() = T::from_f64(1.0);
             } else {
-                let (c, s) = if gap >= T::default() {
-                    let tau = gap / (T::from_f64(2.0) * b);
-                    let t_val = if tau >= T::default() {
-                        T::from_f64(1.0) / (tau + (T::from_f64(1.0) + tau * tau).sqrt())
-                    } else {
-                        T::from_f64(-1.0) / (tau.abs() + (T::from_f64(1.0) + tau * tau).sqrt())
-                    };
-                    let c_val = (T::from_f64(1.0) + t_val * t_val).sqrt().recip();
-                    let s_val = t_val * c_val;
-                    (c_val, s_val)
-                } else {
+                let (c, s) = {
                     let tau = gap / (T::from_f64(2.0) * b);
                     let t_val = if tau >= T::default() {
                         T::from_f64(1.0) / (tau + (T::from_f64(1.0) + tau * tau).sqrt())
@@ -235,8 +225,8 @@ impl<T: Scalar, S: Storage<T>> SelfAdjointEigenSolver<T, S> {
         let mut roots = [r0, r1, r2];
         roots.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
-        for i in 0..3 {
-            *self.eigenvalues.get_mut(i, 0).unwrap() = roots[i] * scale + shift;
+        for (i, root) in roots.iter().enumerate() {
+            *self.eigenvalues.get_mut(i, 0).unwrap() = *root * scale + shift;
         }
 
         if compute_eigenvectors {
@@ -310,8 +300,8 @@ impl<T: Scalar, S: Storage<T>> SelfAdjointEigenSolver<T, S> {
             }
             self.tridiagonal_qr_step(diag, subdiag, start, end, compute_eigenvectors);
         }
-        for i in 0..n {
-            *self.eigenvalues.get_mut(i, 0).unwrap() = diag[i];
+        for (i, val) in diag.iter().enumerate().take(n) {
+            *self.eigenvalues.get_mut(i, 0).unwrap() = *val;
         }
         self.info = ComputationInfo::Success;
         Ok(())

@@ -74,14 +74,14 @@ impl<T: Scalar> SimplicialLDLT<T> {
 
             // 2. Update with previous columns of L
             // A_{rj} - sum_{k<j} L_{rk} D_{kk} L_{jk}
-            for k in 0..j {
+            for (k, l_col_k) in l_cols.iter().enumerate().take(j) {
                 let mut l_jk = T::default();
                 // Find L_jk in l_cols[k].
                 // Since l_cols is sorted by row index? No, purely pushed.
                 // We assume sorted or we search.
                 // For efficiency, usually standard impls use a linked list or similar for updating.
                 // O(nnz) search here is naive but correct for now.
-                for &(r, val) in &l_cols[k] {
+                for &(r, val) in l_col_k {
                     if r == j {
                         l_jk = val;
                         break;
@@ -92,7 +92,7 @@ impl<T: Scalar> SimplicialLDLT<T> {
                     let d_kk = self.d[k];
                     let factor = l_jk * d_kk;
 
-                    for &(r, val) in &l_cols[k] {
+                    for &(r, val) in l_col_k {
                         if r >= j {
                             l_dense[r] -= val * factor;
                         }
@@ -115,20 +115,20 @@ impl<T: Scalar> SimplicialLDLT<T> {
             // L_jj = 1.0
             l_cols[j].push((j, T::from_f64(1.0)));
 
-            for i in (j + 1)..n {
-                let val = l_dense[i] / d_jj;
-                if val != T::default() {
-                    l_cols[j].push((i, val));
+            for (i, val) in l_dense.iter_mut().enumerate().take(n).skip(j + 1) {
+                *val /= d_jj;
+                if *val != T::default() {
+                    l_cols[j].push((i, *val));
                 }
-                l_dense[i] = T::default();
+                *val = T::default();
             }
             l_dense[j] = T::default();
         }
 
         // Convert l_cols to SparseMatrix
         let mut l_triplets = Vec::new();
-        for j in 0..n {
-            for &(i, val) in &l_cols[j] {
+        for (j, l_col_j) in l_cols.iter().enumerate().take(n) {
+            for &(i, val) in l_col_j {
                 l_triplets.push(crate::core::sparse::sparse_matrix::Triplet::new(i, j, val));
             }
         }
@@ -154,12 +154,13 @@ impl<T: Scalar> SimplicialLDLT<T> {
         let mut x = Matrix::<T, DynamicStorage<T>>::new_dynamic(n, b.cols())?;
         for k in 0..b.cols() {
             let mut sol = vec![T::default(); n];
-            for i in 0..n {
-                sol[i] = *b.get(i, k).unwrap();
+            for (i, val) in sol.iter_mut().enumerate().take(n) {
+                *val = *b.get(i, k).unwrap();
             }
 
             // 1. Forward substitution L * z = b
             // L has unit diagonal.
+            #[allow(clippy::needless_range_loop)]
             for j in 0..n {
                 // Diagonal is 1, so no division needed.
                 // z_j = b_j - sum_{k<j} L_{jk} z_k
@@ -178,16 +179,16 @@ impl<T: Scalar> SimplicialLDLT<T> {
                     let row = it.row();
                     if row > j {
                         // Strict lower part
-                        let val = it.value();
-                        sol[row] -= val * z_j;
+                        let l_val = it.value();
+                        sol[row] -= l_val * z_j;
                     }
                     it.next();
                 }
             }
 
             // 2. Diagonal solve D * y = z
-            for i in 0..n {
-                sol[i] *= self.inv_d[i];
+            for (i, val) in sol.iter_mut().enumerate().take(n) {
+                *val *= self.inv_d[i];
             }
 
             // 3. Backward substitution L^T * x = y
@@ -216,6 +217,7 @@ impl<T: Scalar> SimplicialLDLT<T> {
                 sol[j] -= sum; // Div by 1.0
             }
 
+            #[allow(clippy::needless_range_loop)]
             for i in 0..n {
                 *x.get_mut(i, k).unwrap() = sol[i];
             }

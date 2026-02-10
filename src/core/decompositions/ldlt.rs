@@ -61,9 +61,9 @@ impl<T: Scalar + 'static, S: Storage<T> + 'static> LDLT<T, S> {
 
             // 2. Standard LDLT step on the pivoted matrix
             let mut s = T::from_usize(0);
-            for k in 0..j {
+            for (k, dk) in d.iter().enumerate().take(j) {
                 let l_jk = *mat.get(j, k).unwrap();
-                s += l_jk * l_jk * d[k];
+                s += l_jk * l_jk * *dk;
             }
 
             let dj = *mat.get(j, j).unwrap() - s;
@@ -72,8 +72,8 @@ impl<T: Scalar + 'static, S: Storage<T> + 'static> LDLT<T, S> {
 
             for i in j + 1..rows {
                 let mut s = T::from_usize(0);
-                for k in 0..j {
-                    s += (*mat.get(i, k).unwrap()) * (*mat.get(j, k).unwrap()) * d[k];
+                for (k, dk) in d.iter().enumerate().take(j) {
+                    s += (*mat.get(i, k).unwrap()) * (*mat.get(j, k).unwrap()) * *dk;
                 }
                 if dj.abs() > T::epsilon() {
                     *mat.get_mut(i, j).unwrap() = (*mat.get(i, j).unwrap() - s) / dj;

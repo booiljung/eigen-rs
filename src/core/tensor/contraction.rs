@@ -87,22 +87,22 @@ impl<'a, T: Scalar, const RANK1: usize, const RANK2: usize> TensorContraction<'a
                 // Construct LHS indices
                 let mut l_indices = [0; RANK1];
                 let mut out_tracker = 0;
-                for d in 0..RANK1 {
+                for (d, idx) in l_indices.iter_mut().enumerate().take(RANK1) {
                     if d == l_dim_idx {
-                        l_indices[d] = k;
+                        *idx = k;
                     } else {
-                        l_indices[d] = out_indices[out_tracker];
+                        *idx = out_indices[out_tracker];
                         out_tracker += 1;
                     }
                 }
 
                 // Construct RHS indices
                 let mut r_indices = [0; RANK2];
-                for d in 0..RANK2 {
+                for (d, idx) in r_indices.iter_mut().enumerate().take(RANK2) {
                     if d == r_dim_idx {
-                        r_indices[d] = k;
+                        *idx = k;
                     } else {
-                        r_indices[d] = out_indices[out_tracker];
+                        *idx = out_indices[out_tracker];
                         out_tracker += 1;
                     }
                 }

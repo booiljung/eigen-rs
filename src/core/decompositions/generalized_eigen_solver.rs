@@ -66,8 +66,8 @@ impl<T: Scalar, S: Storage<Complex<T>>> GeneralizedEigenSolver<T, S> {
 
                 for i in (0..k).rev() {
                     let mut sum = Complex::default();
-                    for j in i + 1..k + 1 {
-                        sum += (*h.get(i, j).unwrap() - lambda * (*r.get(i, j).unwrap())) * y[j];
+                    for (j, y_val) in y.iter().enumerate().take(k + 1).skip(i + 1) {
+                        sum += (*h.get(i, j).unwrap() - lambda * (*r.get(i, j).unwrap())) * *y_val;
                     }
                     let diag = *h.get(i, i).unwrap() - lambda * (*r.get(i, i).unwrap());
                     if diag.norm_sq() > eps * eps {
@@ -80,8 +80,8 @@ impl<T: Scalar, S: Storage<Complex<T>>> GeneralizedEigenSolver<T, S> {
                 // x = Z * y
                 for i in 0..n {
                     let mut val = Complex::default();
-                    for j in 0..k + 1 {
-                        val += (*z.get(i, j).unwrap()) * y[j];
+                    for (j, y_val) in y.iter().enumerate().take(k + 1) {
+                        val += (*z.get(i, j).unwrap()) * *y_val;
                     }
                     *vecs.get_mut(i, k).unwrap() = val;
                 }

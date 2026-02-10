@@ -34,6 +34,9 @@ impl<'a, T> MapStorage<'a, T> {
     }
 
     /// Creates a new MapStorage with custom stride.
+    ///
+    /// # Safety
+    /// `ptr` must be valid for `rows * cols` elements and the memory layout must match `stride`.
     pub unsafe fn new_with_stride(ptr: *mut T, rows: usize, cols: usize, stride: usize) -> Self {
         Self {
             ptr,

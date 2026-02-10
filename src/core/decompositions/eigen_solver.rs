@@ -89,8 +89,8 @@ impl<T: Scalar, S: Storage<T>> EigenSolver<T, S> {
 
                     for i in (0..k).rev() {
                         let mut sum = T::default();
-                        for j in i + 1..k + 1 {
-                            sum += *t.get(i, j).unwrap() * y_re[j];
+                        for (j, y_re_val) in y_re.iter().enumerate().take(k + 1).skip(i + 1) {
+                            sum += *t.get(i, j).unwrap() * *y_re_val;
                         }
                         let diag = *t.get(i, i).unwrap() - lambda.re;
                         if diag.abs() > eps {
@@ -103,8 +103,8 @@ impl<T: Scalar, S: Storage<T>> EigenSolver<T, S> {
                     // x = Q * y_re
                     for i in 0..n {
                         let mut val = T::default();
-                        for j in 0..k + 1 {
-                            val += *q.get(i, j).unwrap() * y_re[j];
+                        for (j, y_re_val) in y_re.iter().enumerate().take(k + 1) {
+                            val += *q.get(i, j).unwrap() * *y_re_val;
                         }
                         *vecs.get_mut(i, k).unwrap() = Complex::new(val, T::default());
                     }

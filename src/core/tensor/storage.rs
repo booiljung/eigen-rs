@@ -66,11 +66,11 @@ impl<T: Scalar, const RANK: usize> TensorStorage<T, RANK> {
 
     fn flat_index(&self, indices: [usize; RANK]) -> Option<usize> {
         let mut flat = 0;
-        for i in 0..RANK {
-            if indices[i] >= self.dims[i] {
+        for (i, idx) in indices.iter().enumerate().take(RANK) {
+            if *idx >= self.dims[i] {
                 return None;
             }
-            flat += indices[i] * self.strides[i];
+            flat += *idx * self.strides[i];
         }
         Some(flat)
     }

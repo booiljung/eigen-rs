@@ -122,6 +122,7 @@ impl Drop for CublasHandle {
 /// A: m x k
 /// B: k x n
 /// C: m x n
+#[allow(clippy::too_many_arguments)]
 pub fn gemm_cublas<T: Scalar>(
     handle: &CublasHandle,
     trans_a: bool,

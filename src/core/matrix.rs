@@ -533,24 +533,24 @@ impl<T: Scalar, S: Storage<T>> Matrix<T, S> {
     pub fn scale(&mut self, factor: T) {
         let size = self.size();
         let data = self.storage_mut().data_mut();
-        for i in 0..size {
-            data[i] *= factor;
+        for val in data.iter_mut().take(size) {
+            *val *= factor;
         }
     }
 
     pub fn set_zero(&mut self) {
         let size = self.size();
         let data = self.storage_mut().data_mut();
-        for i in 0..size {
-            data[i] = T::default();
+        for val in data.iter_mut().take(size) {
+            *val = T::default();
         }
     }
 
     pub fn set_constant(&mut self, val: T) {
         let size = self.size();
         let data = self.storage_mut().data_mut();
-        for i in 0..size {
-            data[i] = val;
+        for elem in data.iter_mut().take(size) {
+            *elem = val;
         }
     }
 
@@ -696,7 +696,7 @@ where
 }
 
 /// Trigonometric and Exponential functions
-impl<'a, T, S> Matrix<T, S>
+impl<T, S> Matrix<T, S>
 where
     T: Scalar + 'static,
     S: Storage<T>,
@@ -806,6 +806,10 @@ pub type VectorX<T> = Matrix<T, DynamicStorage<T>>; // dynamic vector
 pub type Map<'a, T> = Matrix<T, crate::core::storage::MapStorage<'a, T>>;
 
 impl<'a, T: Sync> Map<'a, T> {
+    /// # Safety
+    /// The pointer must be valid and point to enough allocated memory.
+    /// # Safety
+    /// The pointer must be valid and point to enough allocated memory.
     pub unsafe fn new(ptr: *mut T, rows: usize, cols: usize) -> Self {
         Self {
             storage: unsafe { crate::core::storage::MapStorage::new(ptr, rows, cols) },
@@ -813,6 +817,10 @@ impl<'a, T: Sync> Map<'a, T> {
         }
     }
 
+    /// # Safety
+    /// The pointer must be valid and point to enough allocated memory.
+    /// # Safety
+    /// The pointer must be valid and point to enough allocated memory.
     pub unsafe fn new_with_stride(ptr: *mut T, rows: usize, cols: usize, stride: usize) -> Self {
         Self {
             storage: unsafe {

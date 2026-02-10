@@ -70,10 +70,10 @@ impl<T: Scalar> SimplicialLLT<T> {
             }
 
             // 2. Update with previous columns of L
-            for k in 0..j {
+            for (_k, l_col_k) in l_cols.iter().enumerate().take(j) {
                 // Find L(j,k)
                 let mut l_jk = T::default();
-                for &(r, val) in &l_cols[k] {
+                for &(r, val) in l_col_k {
                     if r == j {
                         l_jk = val;
                         break;
@@ -82,7 +82,7 @@ impl<T: Scalar> SimplicialLLT<T> {
 
                 if l_jk != T::default() {
                     // Update current dense column with col k
-                    for &(r, val) in &l_cols[k] {
+                    for &(r, val) in l_col_k {
                         if r >= j {
                             l_dense[r] -= l_jk * val;
                         }
@@ -99,20 +99,20 @@ impl<T: Scalar> SimplicialLLT<T> {
             l_dense[j] = l_jj;
 
             l_cols[j].push((j, l_jj));
-            for i in (j + 1)..n {
-                let val = l_dense[i] / l_jj;
-                if val != T::default() {
-                    l_cols[j].push((i, val));
+            for (i, val) in l_dense.iter_mut().enumerate().take(n).skip(j + 1) {
+                *val /= l_jj;
+                if *val != T::default() {
+                    l_cols[j].push((i, *val));
                 }
-                l_dense[i] = T::default(); // Reset for next use
+                *val = T::default(); // Reset for next use
             }
             l_dense[j] = T::default(); // Reset
         }
 
         // Convert l_cols to SparseMatrix
         let mut l_triplets = Vec::new();
-        for j in 0..n {
-            for &(i, val) in &l_cols[j] {
+        for (j, l_col_j) in l_cols.iter().enumerate().take(n) {
+            for &(i, val) in l_col_j {
                 l_triplets.push(crate::core::sparse::sparse_matrix::Triplet::new(i, j, val));
             }
         }
@@ -138,8 +138,8 @@ impl<T: Scalar> SimplicialLLT<T> {
         let mut x = Matrix::<T, DynamicStorage<T>>::new_dynamic(n, b.cols())?;
         for k in 0..b.cols() {
             let mut sol = vec![T::default(); n];
-            for i in 0..n {
-                sol[i] = *b.get(i, k).unwrap();
+            for (i, val) in sol.iter_mut().enumerate().take(n) {
+                *val = *b.get(i, k).unwrap();
             }
 
             // Forward substitution L * y = b
@@ -186,8 +186,8 @@ impl<T: Scalar> SimplicialLLT<T> {
                 sol[j] = (sol[j] - sum) / l_jj;
             }
 
-            for i in 0..n {
-                *x.get_mut(i, k).unwrap() = sol[i];
+            for (i, val) in sol.iter().enumerate().take(n) {
+                *x.get_mut(i, k).unwrap() = *val;
             }
         }
 

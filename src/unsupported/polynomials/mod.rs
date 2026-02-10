@@ -76,15 +76,15 @@ impl<T: Scalar> PolynomialSolver<T> {
         let mut companion = MatrixX::<T>::new_dynamic(n, n).map_err(|e| e.to_string())?;
         companion.set_zero();
 
-        for i in 0..n {
+        for (i, coeff) in poly.iter().enumerate().take(n) {
             // Subdiagonal ones
             if i > 0 {
                 *companion.get_mut(i, i - 1).unwrap() = T::from_usize(1);
             }
 
             // Last column: -c_i / leading
-            let coeff = poly[i];
-            let val = -(coeff / leading);
+            let c = *coeff;
+            let val = -(c / leading);
             *companion.get_mut(i, n - 1).unwrap() = val;
         }
 

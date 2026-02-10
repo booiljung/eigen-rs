@@ -160,16 +160,16 @@ impl<T: Scalar, P: Preconditioner<T> + Default> GMRES<T, P> {
                 let mut w = self.preconditioner.solve(&av)?;
 
                 // Modified Gram-Schmidt
-                for i in 0..=j {
+                for (i, v_col) in v.iter().enumerate().take(j + 1) {
                     // H(i, j) = v[i] . w
-                    let hij = v[i].dot(&w);
+                    let hij = v_col.dot(&w);
                     *h.get_mut(i, j).unwrap() = hij;
 
                     // w = w - hij * v[i]
                     // Manual update to avoid trait matching issues
                     let rows = w.rows();
                     for r_idx in 0..rows {
-                        let val = *w.get(r_idx, 0).unwrap() - (*v[i].get(r_idx, 0).unwrap() * hij);
+                        let val = *w.get(r_idx, 0).unwrap() - (*v_col.get(r_idx, 0).unwrap() * hij);
                         *w.get_mut(r_idx, 0).unwrap() = val;
                     }
                 }
@@ -225,8 +225,8 @@ impl<T: Scalar, P: Preconditioner<T> + Default> GMRES<T, P> {
             let mut y = vec![T::default(); size];
             for i in (0..size).rev() {
                 let mut sum = g[i];
-                for j in i + 1..size {
-                    sum -= *h.get(i, j).unwrap() * y[j];
+                for (j, &val) in y.iter().enumerate().take(size).skip(i + 1) {
+                    sum -= *h.get(i, j).unwrap() * val;
                 }
                 y[i] = sum / *h.get(i, i).unwrap();
             }

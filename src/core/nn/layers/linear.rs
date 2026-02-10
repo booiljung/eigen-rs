@@ -57,9 +57,9 @@ impl<T: Scalar + 'static> Layer<T> for Linear<T> {
         // Add bias (broadcasting across batch)
         let bias_data = self.bias.data();
         for i in 0..m {
-            for j in 0..n {
-                if let Some(val) = y_mat.get_mut(i, j) {
-                    *val += bias_data[j];
+            for (j, val) in bias_data.iter().enumerate().take(n) {
+                if let Some(res) = y_mat.get_mut(i, j) {
+                    *res += *val;
                 }
             }
         }

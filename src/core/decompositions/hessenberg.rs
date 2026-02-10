@@ -39,7 +39,7 @@ impl<T: Scalar, S: Storage<T>> HessenbergDecomposition<T, S> {
     fn hessenberg_inplace(mat_a: &mut Matrix<T, DynamicStorage<T>>, h_coeffs: &mut [T]) {
         let n = mat_a.rows();
 
-        for i in 0..n - 2 {
+        for (i, h_coeff) in h_coeffs.iter_mut().enumerate().take(n - 2) {
             // 1. Compute Householder reflection for column i starting from i+1
             let mut norm_sq = T::default();
             for k in i + 1..n {
@@ -66,7 +66,7 @@ impl<T: Scalar, S: Storage<T>> HessenbergDecomposition<T, S> {
 
                 // Householder coefficient tau
                 let tau = v0_plus_sigma.conj() / sigma;
-                h_coeffs[i] = tau;
+                *h_coeff = tau;
 
                 // 2. Apply reflection from the left: A = (I - tau v v^T) A
                 // A[i+1:n, i+1:n] = (I - tau v v^T) A[i+1:n, i+1:n]
@@ -106,7 +106,7 @@ impl<T: Scalar, S: Storage<T>> HessenbergDecomposition<T, S> {
                 // Restore sub-diagonal element
                 *mat_a.get_mut(i + 1, i).unwrap() = T::default() - sigma;
             } else {
-                h_coeffs[i] = T::default();
+                *h_coeff = T::default();
             }
         }
     }

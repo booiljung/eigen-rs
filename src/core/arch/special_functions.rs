@@ -74,6 +74,8 @@ pub mod sse_f32 {
         unsafe { _mm_set1_ps(v) }
     }
 
+    /// # Safety
+    /// This function is unsafe because it operates on raw SIMD types.
     pub unsafe fn psin(x_in: __m128) -> __m128 {
         unsafe {
             let x = x_in;
@@ -123,6 +125,8 @@ pub mod sse_f32 {
         }
     }
 
+    /// # Safety
+    /// This function is unsafe because it operates on raw SIMD types.
     pub unsafe fn pcos(x_in: __m128) -> __m128 {
         let half_pi = unsafe { set1(1.570_796_4) };
         unsafe {
@@ -131,6 +135,8 @@ pub mod sse_f32 {
         }
     }
 
+    /// # Safety
+    /// This function is unsafe because it operates on raw SIMD types.
     pub unsafe fn pexp(x_in: __m128) -> __m128 {
         unsafe {
             let x = x_in;
@@ -167,6 +173,8 @@ pub mod sse_f32 {
         }
     }
 
+    /// # Safety
+    /// This function is unsafe because it operates on raw SIMD types.
     pub unsafe fn plog(x_in: __m128) -> __m128 {
         unsafe {
             let mut x = x_in;

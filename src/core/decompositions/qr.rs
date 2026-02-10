@@ -28,7 +28,7 @@ impl<T: Scalar, S: Storage<T>> HouseholderQR<T, S> {
 
         let mut h_coeffs = vec![T::default(); size];
 
-        for k in 0..size {
+        for (k, h_coeff) in h_coeffs.iter_mut().enumerate().take(size) {
             // 1. Compute norm of the tail of column k
             let mut norm_sq = T::default();
             for i in k..rows {
@@ -48,7 +48,7 @@ impl<T: Scalar, S: Storage<T>> HouseholderQR<T, S> {
                 let v0_new = v0 + sigma;
                 // Correct tau for normalized v (where v[0] = 1)
                 let tau = v0_new / sigma;
-                h_coeffs[k] = tau;
+                *h_coeff = tau;
 
                 // Scale remaining elements of column k by (v0 + sigma)^-1
                 let inv_v0_new = v0_new.recip();
@@ -74,7 +74,7 @@ impl<T: Scalar, S: Storage<T>> HouseholderQR<T, S> {
                     }
                 }
             } else {
-                h_coeffs[k] = T::default();
+                *h_coeff = T::default();
             }
         }
 

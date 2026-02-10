@@ -21,6 +21,9 @@ pub trait GemmKernel {
     /// - `c`: Output block (MC x NC) of size `rs_c * cs_c`
     /// - `rs_c`: Row stride of C
     /// - `cs_c`: Col stride of C
+    /// # Safety
+    /// Pointers must be valid.
+    #[allow(clippy::too_many_arguments)]
     unsafe fn microkernel(
         kc: usize,
         alpha: Self::Elem,

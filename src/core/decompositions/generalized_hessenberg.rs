@@ -205,14 +205,13 @@ impl<T: Scalar, S: Storage<Complex<T>>> GeneralizedHessenbergTriangular<T, S> {
     ) {
         for j in c_start..c_end {
             let mut dot = *m.get(r_start, j).unwrap();
-            for k in 1..v.len() {
-                dot += v[k].conj() * (*m.get(r_start + k, j).unwrap());
+            for (k, vk) in v.iter().enumerate().skip(1) {
+                dot += vk.conj() * (*m.get(r_start + k, j).unwrap());
             }
             let factor = tau * dot;
             *m.get_mut(r_start, j).unwrap() -= factor;
-            for k in 1..v.len() {
-                let vk = v[k];
-                *m.get_mut(r_start + k, j).unwrap() -= factor * vk;
+            for (k, vk) in v.iter().enumerate().skip(1) {
+                *m.get_mut(r_start + k, j).unwrap() -= factor * *vk;
             }
         }
     }
@@ -231,14 +230,13 @@ impl<T: Scalar, S: Storage<Complex<T>>> GeneralizedHessenbergTriangular<T, S> {
         // Reflection is H_i. Q_new = H_i * Q_old.
         for j in 0..n {
             let mut dot = *q.get(r_start, j).unwrap();
-            for k in 1..v.len() {
-                dot += v[k].conj() * (*q.get(r_start + k, j).unwrap());
+            for (k, vk) in v.iter().enumerate().skip(1) {
+                dot += vk.conj() * (*q.get(r_start + k, j).unwrap());
             }
             let factor = tau * dot;
             *q.get_mut(r_start, j).unwrap() -= factor;
-            for k in 1..v.len() {
-                let vk = v[k];
-                *q.get_mut(r_start + k, j).unwrap() -= factor * vk;
+            for (k, vk) in v.iter().enumerate().skip(1) {
+                *q.get_mut(r_start + k, j).unwrap() -= factor * *vk;
             }
         }
     }

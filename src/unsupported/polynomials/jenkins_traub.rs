@@ -112,8 +112,8 @@ impl<T: Scalar> JenkinsTraubSolver<T> {
 
     fn derivative(p: &[Complex<T>]) -> Vec<Complex<T>> {
         let mut res = Vec::with_capacity(p.len().saturating_sub(1));
-        for i in 1..p.len() {
-            res.push(p[i] * Complex::from_usize(i));
+        for (i, val) in p.iter().enumerate().skip(1) {
+            res.push(*val * Complex::from_usize(i));
         }
         res
     }

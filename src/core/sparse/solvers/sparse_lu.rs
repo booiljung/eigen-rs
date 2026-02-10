@@ -97,9 +97,8 @@ impl<T: Scalar> SparseLU<T> {
             let mut pivot_idx = j;
             let mut max_abs = -1.0;
 
-            for i in j..n {
-                let row = p[i];
-                let val_abs_f64 = dense_col[row].abs().to_f64();
+            for (i, row) in p.iter().enumerate().take(n).skip(j) {
+                let val_abs_f64 = dense_col[*row].abs().to_f64();
                 if val_abs_f64 > max_abs {
                     max_abs = val_abs_f64;
                     pivot_idx = i;
@@ -120,8 +119,7 @@ impl<T: Scalar> SparseLU<T> {
             u_cols[j].push((j, u_jj));
 
             l_cols[j].push((j, T::from_f64(1.0))); // Unit diagonal for L
-            for i in (j + 1)..n {
-                let curr_row = p[i];
+            for (i, &curr_row) in p.iter().enumerate().take(n).skip(j + 1) {
                 let l_ij = dense_col[curr_row] / u_jj;
                 if l_ij != T::default() {
                     l_cols[j].push((i, l_ij));
@@ -181,8 +179,8 @@ impl<T: Scalar> SparseLU<T> {
         for k in 0..b.cols() {
             let mut sol = vec![T::default(); n];
             // 1. Permute b: b' = P * b
-            for i in 0..n {
-                sol[i] = *b.get(self.p[i], k).unwrap();
+            for (i, val) in sol.iter_mut().enumerate().take(n) {
+                *val = *b.get(self.p[i], k).unwrap();
             }
 
             // 2. Forward substitution L * y = b'
@@ -229,8 +227,8 @@ impl<T: Scalar> SparseLU<T> {
                 }
             }
 
-            for i in 0..n {
-                *x.get_mut(i, k).unwrap() = sol[i];
+            for (i, &val) in sol.iter().enumerate().take(n) {
+                *x.get_mut(i, k).unwrap() = val;
             }
         }
 

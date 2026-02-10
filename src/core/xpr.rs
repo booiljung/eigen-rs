@@ -21,10 +21,10 @@ pub trait MatrixXpr<T: Scalar>: crate::core::cuda::CudaDispatcher<T> + Sync {
     {
         let mut data = [T::default(); 16]; // Max packet size for now (e.g. AVX512/AMX future proofing)
         let size = P::SIZE;
-        for i in 0..size {
+        for (i, val) in data.iter_mut().enumerate().take(size) {
             // This is a naive fallback. For RowMajor, this assumes col-wise access.
             // In a real implementation, we'd need to know the layout or assume a default.
-            data[i] = self.eval(row, col + i);
+            *val = self.eval(row, col + i);
         }
         unsafe { P::load(data.as_ptr()) }
     }

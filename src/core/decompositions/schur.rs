@@ -249,15 +249,13 @@ impl<T: Scalar, S: Storage<T>> RealSchur<T, S> {
     fn make_householder(v: &[T]) -> (T, Vec<T>) {
         let n = v.len();
         let mut norm_sq = T::default();
-        for i in 1..n {
-            norm_sq += v[i] * v[i];
+        for val in v.iter().take(n).skip(1) {
+            norm_sq += *val * *val;
         }
 
         let mut house = vec![T::default(); n];
         house[0] = T::from_f64(1.0);
-        for i in 1..n {
-            house[i] = v[i];
-        }
+        house[1..n].clone_from_slice(&v[1..n]);
 
         if norm_sq == T::default() {
             return (T::default(), house);
@@ -272,8 +270,8 @@ impl<T: Scalar, S: Storage<T>> RealSchur<T, S> {
         let tau = T::from_f64(2.0) * v0 * v0 / (v0 * v0 + norm_sq);
 
         let inv_v0 = v0.recip();
-        for i in 1..n {
-            house[i] *= inv_v0;
+        for val in house.iter_mut().take(n).skip(1) {
+            *val *= inv_v0;
         }
 
         (tau, house)

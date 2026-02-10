@@ -175,8 +175,8 @@ impl<T: Scalar + 'static> Spline<T> {
         let total_len = u[n - 1];
         if total_len > T::from_usize(0) {
             let inv_len = T::from_usize(1) / total_len;
-            for i in 0..n {
-                u[i] *= inv_len;
+            for u_i in u.iter_mut().take(n) {
+                *u_i *= inv_len;
             }
         }
 
@@ -186,12 +186,12 @@ impl<T: Scalar + 'static> Spline<T> {
         let mut knots = vec![T::from_usize(0); n + degree + 1];
 
         // First k+1 knots are 0
-        for i in 0..=degree {
-            knots[i] = T::from_usize(0);
+        for k in knots.iter_mut().take(degree + 1) {
+            *k = T::from_usize(0);
         }
         // Last k+1 knots are 1
-        for i in n..n + degree + 1 {
-            knots[i] = T::from_usize(1);
+        for k in knots.iter_mut().skip(n).take(degree + 1) {
+            *k = T::from_usize(1);
         }
 
         // Internal knots: knots[j+degree] = mean(u_{j+1} ... u_{j+degree})
@@ -200,8 +200,8 @@ impl<T: Scalar + 'static> Spline<T> {
         if n > degree + 1 {
             for j in 1..n - degree {
                 let mut sum = T::from_usize(0);
-                for i in j..j + degree {
-                    sum += u[i];
+                for u_val in u.iter().skip(j).take(degree) {
+                    sum += *u_val;
                 }
                 knots[j + degree] = sum / T::from_usize(degree);
             }
@@ -227,8 +227,8 @@ impl<T: Scalar + 'static> Spline<T> {
             let dummy_spline = Spline::new(knots.clone(), dummy_ctrl.clone(), degree);
 
             // Eval at all u_i
-            for i in 0..n {
-                let val_vec = dummy_spline.eval(u[i]);
+            for (i, &u_val) in u.iter().enumerate().take(n) {
+                let val_vec = dummy_spline.eval(u_val);
                 let val = *val_vec.get(0, 0).unwrap();
                 *a.get_mut(i, j).unwrap() = val;
             }
