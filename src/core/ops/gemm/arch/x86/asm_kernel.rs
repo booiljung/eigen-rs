@@ -135,7 +135,7 @@ impl GemmKernel for AsmFmaKernelF32 {
 
         // Helper to store: *ptr = alpha * val + beta * *ptr
         let store_col = |j: isize, c_alias: __m256, c1_alias: __m256| {
-            let ptr0 = c.offset(0 * rs_c + j * cs_c);
+            let ptr0 = c.offset(j * cs_c);
             let ptr1 = c.offset(8 * rs_c + j * cs_c);
 
             if beta == 0.0 {
@@ -263,7 +263,7 @@ impl GemmKernel for AsmFmaKernelF64 {
         let alphav = _mm256_set1_pd(alpha);
 
         let store_col = |j: isize, c_alias: __m256d, c1_alias: __m256d| {
-            let ptr0 = c.offset(0 * rs_c + j * cs_c);
+            let ptr0 = c.offset(j * cs_c);
             let ptr1 = c.offset(4 * rs_c + j * cs_c);
 
             if beta == 0.0 {

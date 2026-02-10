@@ -48,7 +48,7 @@ pub mod sse_f32 {
 
     const EXP_HI: f32 = 88.376_26;
     const EXP_LO: f32 = -88.376_26;
-    const LOG2EF: f32 = 1.442_695;
+    const LOG2EF: f32 = std::f32::consts::LOG2_E;
     const EXP_C1: f32 = 0.693_359_4;
     const EXP_C2: f32 = -2.121_944_4e-4;
     const EXP_P0: f32 = 1.987_569_1E-4;

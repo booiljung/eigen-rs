@@ -71,7 +71,6 @@ pub mod sys {
             ldc: i32,
         ) -> cublasStatus_t;
     }
-
 }
 
 #[cfg(not(feature = "cuda"))]

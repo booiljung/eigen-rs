@@ -29,8 +29,6 @@ fn main() {
         }
     });
 
-
-
     let out_dir = std::env::var("OUT_DIR").unwrap();
     let ptx_path = Path::new(&out_dir).join("kernels.ptx");
 
@@ -43,7 +41,7 @@ fn main() {
             println!("cargo:rustc-link-lib=cuda");
             println!("cargo:rustc-link-lib=cudart");
             println!("cargo:rustc-link-lib=cusparse");
-    
+
             // Compile .cu kernels if they exist
             let kernel_src = "src/core/cuda/kernels.cu";
             if Path::new(kernel_src).exists() {
@@ -51,7 +49,7 @@ fn main() {
                     .args(["-ptx", "-O3", kernel_src, "-o"])
                     .arg(&ptx_path)
                     .status();
-    
+
                 if let Ok(s) = status {
                     if s.success() {
                         println!("cargo:rustc-cfg=feature=\"cuda_kernels_compiled\"");

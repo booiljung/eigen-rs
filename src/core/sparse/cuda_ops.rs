@@ -164,8 +164,7 @@ pub mod sys {
             bufferSize: *mut usize,
         ) -> cusparseStatus_t;
     }
-    }
-
+}
 
 #[cfg(not(feature = "cuda"))]
 pub mod sys {
