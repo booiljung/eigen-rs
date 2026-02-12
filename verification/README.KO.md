@@ -11,6 +11,7 @@
 -   [**커버리지 리포트 (정적)**](../tmp/verification/VERIFICATION_REPORT.md): API 존재 여부를 확인합니다.
 -   [**동등성 리포트 (동적)**](../tmp/verification/PARITY_REPORT.md): 런타임 수치 동등성을 확인합니다.
 -   [**일관성 리포트 (규칙 기반)**](../tmp/verification/CONSISTENCY_REPORT.md): 커버리지와 동등성 간의 일치를 확인합니다.
+-   [**성능 리포트 (벤치마크)**](../tmp/verification/PERFORMANCE_REPORT.md): C++ 대비 실행 속도를 비교합니다.
 
 ## 📘 방법론 (검증 오라클)
 
@@ -29,10 +30,11 @@
 3.  **커버리지 검증**: API를 매칭하고 차분 테스트 사용 여부를 확인합니다.
 4.  **동등성 검증**: 차분 테스트를 실행하고 수치적 동등성을 확정합니다.
 5.  **일관성 검증**: 추출된 API와 검증된 API, 실행된 테스트 간의 3자 일치를 규칙 기반으로 검사합니다.
+6.  **성능 검증**: C++ 기준점 대비 실행 속도를 벤치마킹합니다.
 
 ### 실행 방법
 
-전체 검증 스위트(커버리지 + 동등성 + 일관성)를 실행하려면:
+전체 검증 스위트(커버리지 + 동등성 + 일관성 + 성능)를 실행하려면:
 
 ```bash
 ./run.sh
@@ -44,5 +46,6 @@
 -   `verify_coverage.py`: API 매칭 심판 로직.
 -   `verify_parity.py`: 차분 테스트 실행기.
 -   `verify_three_way.py`: 3자 일관성 검사기.
+-   `verify_perf.py`: 성능 벤치마크 실행기.
 -   `extract_cpp_api.py`: C++ 헤더 파서.
 -   `extract_rust_api.py`: Rust 소스 파서.

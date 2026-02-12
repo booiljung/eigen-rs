@@ -35,5 +35,8 @@ else
     echo "4. Verifying Parity (Differential Testing)..."
     python3 verification/verify_parity.py
 
+    echo "5. Verifying Performance (Benchmark vs C++)..."
+    python3 verification/verify_perf.py
+
     echo -e "${GREEN}✅ Full Verification Suite Completed.${NC}"
 fi

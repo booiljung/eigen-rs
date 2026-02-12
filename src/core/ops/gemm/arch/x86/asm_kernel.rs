@@ -60,72 +60,128 @@ impl GemmKernel for AsmFmaKernelF32 {
             c13 = out(ymm_reg) c13, c14 = out(ymm_reg) c14, c15 = out(ymm_reg) c15,
         );
 
-        let mut a_ptr = a;
-        let mut b_ptr = b;
-        let mut k_loop = kc;
+        let a_ptr = a;
+        let b_ptr = b;
+        let k_loop = kc;
 
         // Pointers to help asm
         // asm loop
-        while k_loop > 0 {
-            asm!(
-                // Load A columns (16 rows) -> 2 regs (a0, a1)
-                // A is [16 x KC] packed.
-                "vmovups {a0}, [{a_ptr}]",
-                "vmovups {a1}, [{a_ptr} + 32]",
+        // ASM Loop (Fused K-loop, Unrolled 4x)
+        // KC is guaranteed to be multiple of 4 (KC=128).
+        asm!(
+            "2:", // Loop label
 
-                // Load B scalars, broadcast and FMA
-                // B is [KC x 6] packed.
-                // Col 0
-                "vbroadcastss {b_val}, [{b_ptr}]",
-                "vfmadd231ps {c00}, {a0}, {b_val}",
-                "vfmadd231ps {c10}, {a1}, {b_val}",
+            // Iteration 0
+            "vmovups {a0}, [{a_ptr}]",
+            "vmovups {a1}, [{a_ptr} + 32]",
+            "vbroadcastss {b_val}, [{b_ptr}]",
+            "vfmadd231ps {c00}, {a0}, {b_val}",
+            "vfmadd231ps {c10}, {a1}, {b_val}",
+            "vbroadcastss {b_val}, [{b_ptr} + 4]",
+            "vfmadd231ps {c01}, {a0}, {b_val}",
+            "vfmadd231ps {c11}, {a1}, {b_val}",
+            "vbroadcastss {b_val}, [{b_ptr} + 8]",
+            "vfmadd231ps {c02}, {a0}, {b_val}",
+            "vfmadd231ps {c12}, {a1}, {b_val}",
+            "vbroadcastss {b_val}, [{b_ptr} + 12]",
+            "vfmadd231ps {c03}, {a0}, {b_val}",
+            "vfmadd231ps {c13}, {a1}, {b_val}",
+            "vbroadcastss {b_val}, [{b_ptr} + 16]",
+            "vfmadd231ps {c04}, {a0}, {b_val}",
+            "vfmadd231ps {c14}, {a1}, {b_val}",
+            "vbroadcastss {b_val}, [{b_ptr} + 20]",
+            "vfmadd231ps {c05}, {a0}, {b_val}",
+            "vfmadd231ps {c15}, {a1}, {b_val}",
 
-                // Col 1
-                "vbroadcastss {b_val}, [{b_ptr} + 4]",
-                "vfmadd231ps {c01}, {a0}, {b_val}",
-                "vfmadd231ps {c11}, {a1}, {b_val}",
+            // Iteration 1 (+64A, +24B)
+            "vmovups {a0}, [{a_ptr} + 64]",
+            "vmovups {a1}, [{a_ptr} + 96]",
+            "vbroadcastss {b_val}, [{b_ptr} + 24]",
+            "vfmadd231ps {c00}, {a0}, {b_val}",
+            "vfmadd231ps {c10}, {a1}, {b_val}",
+            "vbroadcastss {b_val}, [{b_ptr} + 28]",
+            "vfmadd231ps {c01}, {a0}, {b_val}",
+            "vfmadd231ps {c11}, {a1}, {b_val}",
+            "vbroadcastss {b_val}, [{b_ptr} + 32]",
+            "vfmadd231ps {c02}, {a0}, {b_val}",
+            "vfmadd231ps {c12}, {a1}, {b_val}",
+            "vbroadcastss {b_val}, [{b_ptr} + 36]",
+            "vfmadd231ps {c03}, {a0}, {b_val}",
+            "vfmadd231ps {c13}, {a1}, {b_val}",
+            "vbroadcastss {b_val}, [{b_ptr} + 40]",
+            "vfmadd231ps {c04}, {a0}, {b_val}",
+            "vfmadd231ps {c14}, {a1}, {b_val}",
+            "vbroadcastss {b_val}, [{b_ptr} + 44]",
+            "vfmadd231ps {c05}, {a0}, {b_val}",
+            "vfmadd231ps {c15}, {a1}, {b_val}",
 
-                // Col 2
-                "vbroadcastss {b_val}, [{b_ptr} + 8]",
-                "vfmadd231ps {c02}, {a0}, {b_val}",
-                "vfmadd231ps {c12}, {a1}, {b_val}",
+            // Iteration 2 (+128A, +48B)
+            "vmovups {a0}, [{a_ptr} + 128]",
+            "vmovups {a1}, [{a_ptr} + 160]",
+            "vbroadcastss {b_val}, [{b_ptr} + 48]",
+            "vfmadd231ps {c00}, {a0}, {b_val}",
+            "vfmadd231ps {c10}, {a1}, {b_val}",
+            "vbroadcastss {b_val}, [{b_ptr} + 52]",
+            "vfmadd231ps {c01}, {a0}, {b_val}",
+            "vfmadd231ps {c11}, {a1}, {b_val}",
+            "vbroadcastss {b_val}, [{b_ptr} + 56]",
+            "vfmadd231ps {c02}, {a0}, {b_val}",
+            "vfmadd231ps {c12}, {a1}, {b_val}",
+            "vbroadcastss {b_val}, [{b_ptr} + 60]",
+            "vfmadd231ps {c03}, {a0}, {b_val}",
+            "vfmadd231ps {c13}, {a1}, {b_val}",
+            "vbroadcastss {b_val}, [{b_ptr} + 64]",
+            "vfmadd231ps {c04}, {a0}, {b_val}",
+            "vfmadd231ps {c14}, {a1}, {b_val}",
+            "vbroadcastss {b_val}, [{b_ptr} + 68]",
+            "vfmadd231ps {c05}, {a0}, {b_val}",
+            "vfmadd231ps {c15}, {a1}, {b_val}",
 
-                // Col 3
-                "vbroadcastss {b_val}, [{b_ptr} + 12]",
-                "vfmadd231ps {c03}, {a0}, {b_val}",
-                "vfmadd231ps {c13}, {a1}, {b_val}",
+            // Iteration 3 (+192A, +72B)
+            "vmovups {a0}, [{a_ptr} + 192]",
+            "vmovups {a1}, [{a_ptr} + 224]",
+            "vbroadcastss {b_val}, [{b_ptr} + 72]",
+            "vfmadd231ps {c00}, {a0}, {b_val}",
+            "vfmadd231ps {c10}, {a1}, {b_val}",
+            "vbroadcastss {b_val}, [{b_ptr} + 76]",
+            "vfmadd231ps {c01}, {a0}, {b_val}",
+            "vfmadd231ps {c11}, {a1}, {b_val}",
+            "vbroadcastss {b_val}, [{b_ptr} + 80]",
+            "vfmadd231ps {c02}, {a0}, {b_val}",
+            "vfmadd231ps {c12}, {a1}, {b_val}",
+            "vbroadcastss {b_val}, [{b_ptr} + 84]",
+            "vfmadd231ps {c03}, {a0}, {b_val}",
+            "vfmadd231ps {c13}, {a1}, {b_val}",
+            "vbroadcastss {b_val}, [{b_ptr} + 88]",
+            "vfmadd231ps {c04}, {a0}, {b_val}",
+            "vfmadd231ps {c14}, {a1}, {b_val}",
+            "vbroadcastss {b_val}, [{b_ptr} + 92]",
+            "vfmadd231ps {c05}, {a0}, {b_val}",
+            "vfmadd231ps {c15}, {a1}, {b_val}",
 
-                // Col 4
-                "vbroadcastss {b_val}, [{b_ptr} + 16]",
-                "vfmadd231ps {c04}, {a0}, {b_val}",
-                "vfmadd231ps {c14}, {a1}, {b_val}",
+            // Update pointers
+            // a += 256 bytes (4*64)
+            // b += 96 bytes (4*24)
+            "add {a_ptr}, 256",
+            "add {b_ptr}, 96",
 
-                // Col 5
-                "vbroadcastss {b_val}, [{b_ptr} + 20]",
-                "vfmadd231ps {c05}, {a0}, {b_val}",
-                "vfmadd231ps {c15}, {a1}, {b_val}",
+            // Decrement and Jump
+            "sub {k}, 4",
+            "jnz 2b",
 
-                // Update pointers
-                // a += 16 * 4 bytes = 64
-                // b += 6 * 4 bytes = 24
+            a_ptr = inout(reg) a_ptr => _,
+            b_ptr = inout(reg) b_ptr => _,
+            k = inout(reg) k_loop => _,
 
-                a_ptr = in(reg) a_ptr,
-                b_ptr = in(reg) b_ptr,
+            c00 = inout(ymm_reg) c00, c01 = inout(ymm_reg) c01, c02 = inout(ymm_reg) c02,
+            c03 = inout(ymm_reg) c03, c04 = inout(ymm_reg) c04, c05 = inout(ymm_reg) c05,
+            c10 = inout(ymm_reg) c10, c11 = inout(ymm_reg) c11, c12 = inout(ymm_reg) c12,
+            c13 = inout(ymm_reg) c13, c14 = inout(ymm_reg) c14, c15 = inout(ymm_reg) c15,
 
-                c00 = inout(ymm_reg) c00, c01 = inout(ymm_reg) c01, c02 = inout(ymm_reg) c02,
-                c03 = inout(ymm_reg) c03, c04 = inout(ymm_reg) c04, c05 = inout(ymm_reg) c05,
-                c10 = inout(ymm_reg) c10, c11 = inout(ymm_reg) c11, c12 = inout(ymm_reg) c12,
-                c13 = inout(ymm_reg) c13, c14 = inout(ymm_reg) c14, c15 = inout(ymm_reg) c15,
-
-                a0 = out(ymm_reg) _,
-                a1 = out(ymm_reg) _,
-                b_val = out(ymm_reg) _,
-            );
-
-            a_ptr = a_ptr.add(16);
-            b_ptr = b_ptr.add(6);
-            k_loop -= 1;
-        }
+            a0 = out(ymm_reg) _,
+            a1 = out(ymm_reg) _,
+            b_val = out(ymm_reg) _,
+        );
 
         // Store results
         // Use intrinsic logic for update: C = alpha*Acc + beta*C
@@ -206,59 +262,101 @@ impl GemmKernel for AsmFmaKernelF64 {
             c12 = out(ymm_reg) c12, c13 = out(ymm_reg) c13,
         );
 
-        let mut a_ptr = a;
-        let mut b_ptr = b;
-        let mut k_loop = kc;
+        let a_ptr = a;
+        let b_ptr = b;
+        let k_loop = kc;
 
-        while k_loop > 0 {
-            asm!(
-                // Load A columns (8 rows) -> 2 regs (a0, a1)
-                // A is [8 x KC] packed.
-                "vmovupd {a0}, [{a_ptr}]",
-                "vmovupd {a1}, [{a_ptr} + 32]",
+        // ASM Loop (Fused K-loop, Unrolled 4x)
+        asm!(
+            "2:",
 
-                // Load B scalars, broadcast and FWA
-                // B is [KC x 4] packed
-                // Col 0
-                "vbroadcastsd {b_val}, [{b_ptr}]",
-                "vfmadd231pd {c00}, {a0}, {b_val}",
-                "vfmadd231pd {c10}, {a1}, {b_val}",
+            // Iteration 0
+            "vmovupd {a0}, [{a_ptr}]",
+            "vmovupd {a1}, [{a_ptr} + 32]",
+            "vbroadcastsd {b_val}, [{b_ptr}]",
+            "vfmadd231pd {c00}, {a0}, {b_val}",
+            "vfmadd231pd {c10}, {a1}, {b_val}",
+            "vbroadcastsd {b_val}, [{b_ptr} + 8]",
+            "vfmadd231pd {c01}, {a0}, {b_val}",
+            "vfmadd231pd {c11}, {a1}, {b_val}",
+            "vbroadcastsd {b_val}, [{b_ptr} + 16]",
+            "vfmadd231pd {c02}, {a0}, {b_val}",
+            "vfmadd231pd {c12}, {a1}, {b_val}",
+            "vbroadcastsd {b_val}, [{b_ptr} + 24]",
+            "vfmadd231pd {c03}, {a0}, {b_val}",
+            "vfmadd231pd {c13}, {a1}, {b_val}",
 
-                // Col 1
-                "vbroadcastsd {b_val}, [{b_ptr} + 8]",
-                "vfmadd231pd {c01}, {a0}, {b_val}",
-                "vfmadd231pd {c11}, {a1}, {b_val}",
+            // Iteration 1 (+64A, +32B)
+            "vmovupd {a0}, [{a_ptr} + 64]",
+            "vmovupd {a1}, [{a_ptr} + 96]",
+            "vbroadcastsd {b_val}, [{b_ptr} + 32]",
+            "vfmadd231pd {c00}, {a0}, {b_val}",
+            "vfmadd231pd {c10}, {a1}, {b_val}",
+            "vbroadcastsd {b_val}, [{b_ptr} + 40]",
+            "vfmadd231pd {c01}, {a0}, {b_val}",
+            "vfmadd231pd {c11}, {a1}, {b_val}",
+            "vbroadcastsd {b_val}, [{b_ptr} + 48]",
+            "vfmadd231pd {c02}, {a0}, {b_val}",
+            "vfmadd231pd {c12}, {a1}, {b_val}",
+            "vbroadcastsd {b_val}, [{b_ptr} + 56]",
+            "vfmadd231pd {c03}, {a0}, {b_val}",
+            "vfmadd231pd {c13}, {a1}, {b_val}",
 
-                // Col 2
-                "vbroadcastsd {b_val}, [{b_ptr} + 16]",
-                "vfmadd231pd {c02}, {a0}, {b_val}",
-                "vfmadd231pd {c12}, {a1}, {b_val}",
+            // Iteration 2 (+128A, +64B)
+            "vmovupd {a0}, [{a_ptr} + 128]",
+            "vmovupd {a1}, [{a_ptr} + 160]",
+            "vbroadcastsd {b_val}, [{b_ptr} + 64]",
+            "vfmadd231pd {c00}, {a0}, {b_val}",
+            "vfmadd231pd {c10}, {a1}, {b_val}",
+            "vbroadcastsd {b_val}, [{b_ptr} + 72]",
+            "vfmadd231pd {c01}, {a0}, {b_val}",
+            "vfmadd231pd {c11}, {a1}, {b_val}",
+            "vbroadcastsd {b_val}, [{b_ptr} + 80]",
+            "vfmadd231pd {c02}, {a0}, {b_val}",
+            "vfmadd231pd {c12}, {a1}, {b_val}",
+            "vbroadcastsd {b_val}, [{b_ptr} + 88]",
+            "vfmadd231pd {c03}, {a0}, {b_val}",
+            "vfmadd231pd {c13}, {a1}, {b_val}",
 
-                // Col 3
-                "vbroadcastsd {b_val}, [{b_ptr} + 24]",
-                "vfmadd231pd {c03}, {a0}, {b_val}",
-                "vfmadd231pd {c13}, {a1}, {b_val}",
+            // Iteration 3 (+192A, +96B)
+            "vmovupd {a0}, [{a_ptr} + 192]",
+            "vmovupd {a1}, [{a_ptr} + 224]",
+            "vbroadcastsd {b_val}, [{b_ptr} + 96]",
+            "vfmadd231pd {c00}, {a0}, {b_val}",
+            "vfmadd231pd {c10}, {a1}, {b_val}",
+            "vbroadcastsd {b_val}, [{b_ptr} + 104]",
+            "vfmadd231pd {c01}, {a0}, {b_val}",
+            "vfmadd231pd {c11}, {a1}, {b_val}",
+            "vbroadcastsd {b_val}, [{b_ptr} + 112]",
+            "vfmadd231pd {c02}, {a0}, {b_val}",
+            "vfmadd231pd {c12}, {a1}, {b_val}",
+            "vbroadcastsd {b_val}, [{b_ptr} + 120]",
+            "vfmadd231pd {c03}, {a0}, {b_val}",
+            "vfmadd231pd {c13}, {a1}, {b_val}",
 
-                // Update pointers
-                // a += 8 * 8 bytes = 64
-                // b += 4 * 8 bytes = 32
+            // Update pointers
+            // a += 256 bytes (4*64)
+            // b += 128 bytes (4*32)
+            "add {a_ptr}, 256",
+            "add {b_ptr}, 128",
 
-                a_ptr = in(reg) a_ptr,
-                b_ptr = in(reg) b_ptr,
+            // Loop control
+            "sub {k}, 4",
+            "jnz 2b",
 
-                c00 = inout(ymm_reg) c00, c01 = inout(ymm_reg) c01,
-                c02 = inout(ymm_reg) c02, c03 = inout(ymm_reg) c03,
-                c10 = inout(ymm_reg) c10, c11 = inout(ymm_reg) c11,
-                c12 = inout(ymm_reg) c12, c13 = inout(ymm_reg) c13,
+            a_ptr = inout(reg) a_ptr => _,
+            b_ptr = inout(reg) b_ptr => _,
+            k = inout(reg) k_loop => _,
 
-                a0 = out(ymm_reg) _,
-                a1 = out(ymm_reg) _,
-                b_val = out(ymm_reg) _,
-            );
-            a_ptr = a_ptr.add(8);
-            b_ptr = b_ptr.add(4);
-            k_loop -= 1;
-        }
+            c00 = inout(ymm_reg) c00, c01 = inout(ymm_reg) c01,
+            c02 = inout(ymm_reg) c02, c03 = inout(ymm_reg) c03,
+            c10 = inout(ymm_reg) c10, c11 = inout(ymm_reg) c11,
+            c12 = inout(ymm_reg) c12, c13 = inout(ymm_reg) c13,
+
+            a0 = out(ymm_reg) _,
+            a1 = out(ymm_reg) _,
+            b_val = out(ymm_reg) _,
+        );
 
         let alphav = _mm256_set1_pd(alpha);
 

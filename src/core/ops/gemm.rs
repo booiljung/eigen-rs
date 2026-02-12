@@ -28,6 +28,36 @@ const NC: usize = 4096; // wide panel of B (streaming)
 /// # Safety
 /// Pointers must be valid.
 #[allow(clippy::too_many_arguments)]
+// Thread-local workspace to avoid allocation in hot loops
+use std::cell::RefCell;
+thread_local! {
+    static GEMM_WORKSPACE: RefCell<Vec<u8>> = RefCell::new(Vec::with_capacity(3 * 1024 * 1024));
+}
+
+fn with_gemm_workspace<F, R>(size_bytes: usize, f: F) -> R
+where
+    F: FnOnce(*mut u8) -> R,
+{
+    GEMM_WORKSPACE.with(|ws_cell| {
+        let mut ws = ws_cell.borrow_mut();
+        let required_cap = size_bytes + 32;
+        if ws.capacity() < required_cap {
+            let current = ws.capacity();
+            let new_cap = std::cmp::max(required_cap, current * 2);
+            let current_len = ws.len();
+            ws.reserve(new_cap - current_len);
+        }
+        
+        let ptr = ws.as_mut_ptr();
+        let addr = ptr as usize;
+        let offset = (32 - (addr % 32)) % 32;
+        let aligned_ptr = unsafe { ptr.add(offset) };
+        
+        f(aligned_ptr)
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
 pub unsafe fn gemm_blocked<T, K>(
     m: usize,
     k: usize,
@@ -41,116 +71,134 @@ pub unsafe fn gemm_blocked<T, K>(
     c: *mut T,
     rs_c: isize,
     cs_c: isize,
+    alpha: T,
 ) -> Result<(), String>
 where
     T: Scalar + Copy + Default + num_traits::One,
     K: GemmKernel<Elem = T>,
 {
-    // Buffers for packed panels
-    // MC x KC, padded to multiple of MR
+    // Sizes for packing buffers
     let mc_rounded = MC.div_ceil(K::MR) * K::MR;
     let packed_a_len = mc_rounded * KC;
-    let mut packed_a = vec![T::default(); packed_a_len];
-
-    // KC x NC, padded to multiple of NR
+    
     let nc_rounded = NC.div_ceil(K::NR) * K::NR;
     let packed_b_len = KC * nc_rounded;
-    let mut packed_b = vec![T::default(); packed_b_len];
+    
+    let tmp_c_len = K::MR * K::NR;
+    
+    let size_t = std::mem::size_of::<T>();
+    let bytes_a = packed_a_len * size_t;
+    let bytes_b = packed_b_len * size_t;
+    let bytes_tmp = tmp_c_len * size_t;
+    
+    let total_bytes = bytes_a + bytes_b + bytes_tmp;
 
-    // Macro-kernel loops (GOTO BLAS Style)
-    // Loop 5: JC loop (Column blocks of C)
-    for jc in (0..n).step_by(NC) {
-        let nc_eff = std::cmp::min(n - jc, NC);
-
-        // Loop 4: KC loop (Accumulation blocks via K)
-        for pc in (0..k).step_by(KC) {
-            let kc_eff = std::cmp::min(k - pc, KC);
-
-            // Pack B (KC x NC) -> PackedB
-            // Submatrix B(pc..pc+kc_eff, jc..jc+nc_eff)
-            let b_sub_pointer = b.offset((pc as isize) * rs_b + (jc as isize) * cs_b);
-            packing::pack_rhs::<T>(
-                K::NR,
-                kc_eff,
-                nc_eff,
-                b_sub_pointer,
-                rs_b,
-                cs_b,
-                packed_b.as_mut_ptr(),
-            );
-
-            // Loop 3: IC loop (Row blocks of C)
-            for ic in (0..m).step_by(MC) {
-                let mc_eff = std::cmp::min(m - ic, MC);
-
-                // Pack A (MC x KC) -> PackedA
-                // Submatrix A(ic..ic+mc_eff, pc..pc+kc_eff)
-                let a_sub_pointer = a.offset((ic as isize) * rs_a + (pc as isize) * cs_a);
-                packing::pack_lhs::<T>(
-                    K::MR,
+    with_gemm_workspace(total_bytes, |ws_ptr| {
+        // Partition workspace
+        // A | B | TMP
+        let ptr_a = ws_ptr as *mut T;
+        let ptr_b = ws_ptr.add(bytes_a) as *mut T;
+        let ptr_tmp = ws_ptr.add(bytes_a + bytes_b) as *mut T;
+        
+        // Create mutable slices (unsafe alias to workspace)
+        // Note: we don't zero-init. packing overwrites. tmp_c overwrites.
+        
+        // Macro-kernel loops (GOTO BLAS Style)
+        // Loop 5: JC loop (Column blocks of C)
+        for jc in (0..n).step_by(NC) {
+            let nc_eff = std::cmp::min(n - jc, NC);
+    
+            // Loop 4: KC loop (Accumulation blocks via K)
+            for pc in (0..k).step_by(KC) {
+                let kc_eff = std::cmp::min(k - pc, KC);
+    
+                // Pack B (KC x NC)
+                let b_sub_pointer = b.offset((pc as isize) * rs_b + (jc as isize) * cs_b);
+                packing::pack_rhs::<T>(
+                    K::NR,
                     kc_eff,
-                    mc_eff,
-                    a_sub_pointer,
-                    rs_a,
-                    cs_a,
-                    packed_a.as_mut_ptr(),
+                    nc_eff,
+                    b_sub_pointer,
+                    rs_b,
+                    cs_b,
+                    ptr_b, // Packed B buffer
                 );
-
-                // Micro-kernel Loop (jr, ir)
-                // Temporary buffer for edge cases (allocated once per thread conceptually, but here locally)
-                // To avoid alloc inside loop, we should alloc outside, but for simplicity/safety let's alloc here or use small stack array if possible?
-                // Vec is safer.
-                let mut tmp_c = vec![T::default(); K::MR * K::NR];
-
-                for jr in (0..nc_eff).step_by(K::NR) {
-                    let nr_curr = std::cmp::min(nc_eff - jr, K::NR);
-
-                    for ir in (0..mc_eff).step_by(K::MR) {
-                        let mr_curr = std::cmp::min(mc_eff - ir, K::MR);
-
-                        // Call Micro-kernel
-                        let a_ptr = packed_a.as_ptr().add(ir * kc_eff);
-                        let b_ptr = packed_b.as_ptr().add(jr * kc_eff);
-
-                        // Check if we are at edge
-                        if mr_curr == K::MR && nr_curr == K::NR {
-                            // Fast path: Direct write
-                            let c_ptr = c.offset(
-                                (ic as isize + ir as isize) * rs_c
-                                    + (jc as isize + jr as isize) * cs_c,
-                            );
-                            K::microkernel(
-                                kc_eff,
-                                T::one(), // alpha
-                                a_ptr,
-                                b_ptr,
-                                T::one(), // beta=1 (accumulate)
-                                c_ptr,
-                                rs_c,
-                                cs_c,
-                            );
-                        } else {
-                            // Slow path: Compute to tmp, then accumulation
-                            // 1. Compute tmp = A * B (beta=0)
-                            K::microkernel(
-                                kc_eff,
-                                T::one(),
-                                a_ptr,
-                                b_ptr,
-                                T::default(), // beta=0
-                                tmp_c.as_mut_ptr(),
-                                1,              // rs (col-major)
-                                K::MR as isize, // cs
-                            );
-
-                            // 2. Accumulate tmp to C
-                            // C(ic+ir..ic+ir+mr_curr, jc+jr..jc+jr+nr_curr) += tmp
-                            for j in 0..nr_curr {
-                                for i in 0..mr_curr {
-                                    let c_idx = (ic as isize + (ir + i) as isize) * rs_c
-                                        + (jc as isize + (jr + j) as isize) * cs_c;
-                                    let tmp_val = tmp_c[j * K::MR + i];
-                                    *c.offset(c_idx) = *c.offset(c_idx) + tmp_val;
+    
+                // Loop 3: IC loop (Row blocks of C)
+                for ic in (0..m).step_by(MC) {
+                    let mc_eff = std::cmp::min(m - ic, MC);
+    
+                    // Pack A (MC x KC)
+                    let a_sub_pointer = a.offset((ic as isize) * rs_a + (pc as isize) * cs_a);
+                    packing::pack_lhs::<T>(
+                        K::MR,
+                        kc_eff,
+                        mc_eff,
+                        a_sub_pointer,
+                        rs_a,
+                        cs_a,
+                        ptr_a, // Packed A buffer
+                    );
+    
+                    // Micro-kernel Loop (jr, ir)
+                    for jr in (0..nc_eff).step_by(K::NR) {
+                        let nr_curr = std::cmp::min(nc_eff - jr, K::NR);
+    
+                        for ir in (0..mc_eff).step_by(K::MR) {
+                            let mr_curr = std::cmp::min(mc_eff - ir, K::MR);
+    
+                            // Call Micro-kernel
+                            // ptr_a is MC*KC. We access block at ir.
+                            // ptr_aLayout: [MC_strips]. Strip is KC*MR.
+                            // We need to offset carefully.
+                            // Check packing.rs: pack_lhs produces contiguous MR-strips.
+                            // Strip index = ir / MR.
+                            // Offset = (ir / MR) * (KC * MR).
+                            // My previous code used: `packed_a.as_ptr().add(ir * kc_eff)`.
+                            // Let's verify.
+                            // Iter ir (step MR). ir=0, MR, 2MR...
+                            // (ir/MR) * KC * MR == ir * KC.
+                            // This matches. 
+                            let a_ptr_k = ptr_a.add(ir * kc_eff);
+                            let b_ptr_k = ptr_b.add(jr * kc_eff);
+    
+                            if mr_curr == K::MR && nr_curr == K::NR {
+                                // Fast path
+                                let c_ptr = c.offset(
+                                    (ic as isize + ir as isize) * rs_c
+                                        + (jc as isize + jr as isize) * cs_c,
+                                );
+                                K::microkernel(
+                                    kc_eff,
+                                    alpha,
+                                    a_ptr_k,
+                                    b_ptr_k,
+                                    T::one(),
+                                    c_ptr,
+                                    rs_c,
+                                    cs_c,
+                                );
+                            } else {
+                                // Slow path using tmp_c
+                                K::microkernel(
+                                    kc_eff,
+                                    alpha,
+                                    a_ptr_k,
+                                    b_ptr_k,
+                                    T::default(),
+                                    ptr_tmp, // tmp_c
+                                    1,
+                                    K::MR as isize,
+                                );
+    
+                                // Accumulate
+                                let tmp_slice = std::slice::from_raw_parts(ptr_tmp, K::MR * K::NR);
+                                for j in 0..nr_curr {
+                                    for i in 0..mr_curr {
+                                        let c_idx = (ic as isize + (ir + i) as isize) * rs_c
+                                            + (jc as isize + (jr + j) as isize) * cs_c;
+                                        *c.offset(c_idx) = *c.offset(c_idx) + tmp_slice[j * K::MR + i];
+                                    }
                                 }
                             }
                         }
@@ -158,8 +206,8 @@ where
                 }
             }
         }
-    }
-    Ok(())
+        Ok(())
+    })
 }
 
 /// Baseline Column-Major GEMM that works on any MatrixXpr.
@@ -219,6 +267,8 @@ where
     {
         let tid = std::any::TypeId::of::<T>();
         if tid == std::any::TypeId::of::<f32>() && is_x86_feature_detected!("fma") {
+            // Debug: Confirm optimized path
+            eprintln!("DEBUG: Using AVX2 FMA Kernel for f32");
             use self::arch::x86::asm_kernel::AsmFmaKernelF32;
             c.set_zero();
 
@@ -255,6 +305,7 @@ where
                     c_ptr as *mut f32,
                     rs_c,
                     cs_c,
+                    1.0,
                 )?;
             }
             return Ok(());
@@ -289,6 +340,7 @@ where
                     c_ptr as *mut f64,
                     rs_c,
                     cs_c,
+                    1.0,
                 )?;
             }
             return Ok(());

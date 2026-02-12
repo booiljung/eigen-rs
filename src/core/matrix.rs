@@ -132,7 +132,7 @@ impl<T: Scalar, S: Storage<T>> Matrix<T, S> {
     /// Computes the LLT decomposition of the matrix.
     pub fn llt(&self) -> Result<crate::core::decompositions::LLT<T, S>, String>
     where
-        T: Scalar + 'static,
+        T: Scalar + num_traits::One + 'static,
         S: Storage<T> + 'static,
     {
         crate::core::decompositions::LLT::new(self)
