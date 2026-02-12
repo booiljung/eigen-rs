@@ -119,7 +119,7 @@ RUST_EXTENSIONS = {
     'intersection_with_ray', 'from_normal_and_point', 'from_parts',
     'assign_scalar_mul_cuda', 'assign_sub_cuda',
     'vector', 'variable', 'outer_starts', 'scale',
-    'matrix_z', 'index',
+    'matrix_z', 'index', 'dim',
 }
 
 def to_camel_case(snake_str):

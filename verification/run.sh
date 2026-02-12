@@ -32,5 +32,8 @@ else
     echo "3. Matching & verifying Coverage..."
     python3 verification/verify_coverage.py
     
-    echo -e "${GREEN}✅ Verification Report Generated at tmp/verification/VERIFICATION_REPORT.md${NC}"
+    echo "4. Verifying Parity (Differential Testing)..."
+    python3 verification/verify_parity.py
+
+    echo -e "${GREEN}✅ Full Verification Suite Completed.${NC}"
 fi

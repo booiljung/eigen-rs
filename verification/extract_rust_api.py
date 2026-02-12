@@ -3,7 +3,7 @@ import os
 import re
 import json
 
-RUST_SRC_DIR = 'src/core'
+RUST_SRC_DIR = 'src'
 OUTPUT_FILE = 'tmp/verification/rust_api_list.json'
 
 # Regex to detect public functions

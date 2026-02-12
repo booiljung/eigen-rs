@@ -3,7 +3,7 @@ import os
 import re
 import json
 
-EIGEN_SRC_DIR = 'eigen-src/Eigen/src/Core'
+EIGEN_SRC_DIR = 'eigen-src/Eigen/src'
 OUTPUT_FILE = 'tmp/verification/cpp_api_list.json'
 
 # Regex to detect class definition: template<...> class ClassName

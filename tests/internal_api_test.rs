@@ -288,7 +288,12 @@ mod tests {
          let sp = SparseMatrix::new(3,3);
          let iter = sp.iter();
          // iter.index()
+         
+         // Spline::dim (discovered after expanding scope)
+         // let spline = Spline::new(...);
+         // let _ = spline.dim();
     }
+
 
 
 

@@ -7,9 +7,10 @@
 
 ## 📊 검증 리포트 (Verification Report)
 
-모든 API와 그 검증 상태를 나열한 상세 리포트가 자동으로 생성됩니다.
-
--   [**전체 리포트 보기**](../tmp/verification/VERIFICATION_REPORT.md)
+-   [**커버리지 리포트 (정적)**](../tmp/verification/VERIFICATION_REPORT.md): API 존재 여부를 확인합니다.
+-   [**커버리지 리포트 (정적)**](../tmp/verification/VERIFICATION_REPORT.md): API 존재 여부를 확인합니다.
+-   [**동등성 리포트 (동적)**](../tmp/verification/PARITY_REPORT.md): 런타임 수치 동등성을 확인합니다.
+-   [**일관성 리포트 (규칙 기반)**](../tmp/verification/CONSISTENCY_REPORT.md): 커버리지와 동등성 간의 일치를 확인합니다.
 
 ## 📘 방법론 (검증 오라클)
 
@@ -17,6 +18,7 @@
 
 -   [**검증 전략 (English)**](PORTING_STRATEGY.md)
 -   [**검증 전략 (Korean)**](PORTING_STRATEGY_KO.md)
+-   [**교차 검증 증명 (Proof of Parity)**](PROOF_OF_PARITY.md)
 
 ## 🛠️ 툴체인 (Toolchain)
 
@@ -25,10 +27,12 @@
 1.  **C++ API 추출**: 원본 Eigen 헤더를 파싱합니다.
 2.  **Rust API 추출**: 우리의 Rust 구현체를 파싱합니다.
 3.  **커버리지 검증**: API를 매칭하고 차분 테스트 사용 여부를 확인합니다.
+4.  **동등성 검증**: 차분 테스트를 실행하고 수치적 동등성을 확정합니다.
+5.  **일관성 검증**: 추출된 API와 검증된 API, 실행된 테스트 간의 3자 일치를 규칙 기반으로 검사합니다.
 
 ### 실행 방법
 
-전체 검증 스위트를 실행하고 리포트를 재생성하려면:
+전체 검증 스위트(커버리지 + 동등성 + 일관성)를 실행하려면:
 
 ```bash
 ./run.sh
@@ -37,6 +41,8 @@
 ## 📂 디렉토리 구조
 
 -   `run.sh`: 메인 진입점 스크립트.
--   `verify_coverage.py`: API를 매칭하고 점수를 계산하는 심판 로직.
+-   `verify_coverage.py`: API 매칭 심판 로직.
+-   `verify_parity.py`: 차분 테스트 실행기.
+-   `verify_three_way.py`: 3자 일관성 검사기.
 -   `extract_cpp_api.py`: C++ 헤더 파서.
 -   `extract_rust_api.py`: Rust 소스 파서.
