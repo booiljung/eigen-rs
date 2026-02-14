@@ -73,10 +73,9 @@ use eigen_rs::core::matrix::Matrix3;
 
 ## Documentation
 
--   [**Project Guide**](PROJECT_GUIDE.md): Project overview, Tech Stack, and Development Rules.
+-   [**Project Guide**](GEMINI.md): Project overview, Tech Stack, and Development Rules.
 -   [**Benchmark Guide**](BENCHMARK.md): Methodology and Developer Guide.
--   [**Benchmark Log**](BENCHMARK_LOG.md): Historical performance data.
--   [**프로젝트 가이드 (Korean)**](PROJECT_GUIDE.KO.md): Project overview and Development Rules (Korean).
+-   [**프로젝트 가이드 (Korean)**](GEMINI.KO.md): Project overview and Development Rules (Korean).
 -   [**벤치마크 가이드 (Korean)**](BENCHMARK.KO.md): Benchmark Methodology (Korean).
 -   [**Roadmap**](ROADMAP.md): Feature parity progress across core modules.
 -   [**Verification**](verification/README.md): **100% Perfection** Verification Oracle and Strategy.

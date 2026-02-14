@@ -20,6 +20,30 @@ impl GemmKernel for AsmFmaKernelF32 {
                           // Let's stick to MR=16, NR=6 for f32 to start, matching intrinsic version but with explicit asm.
     const NR: usize = 6;
 
+    /// Override packing with AVX2 optimized version
+    unsafe fn pack_lhs(
+        kc: usize,
+        mc: usize,
+        a: *const f32,
+        rs: isize,
+        cs: isize,
+        packed: *mut f32,
+    ) {
+        crate::core::ops::gemm::packing::pack_lhs_f32_avx(Self::MR, kc, mc, a, rs, cs, packed)
+    }
+
+    /// Override packing with AVX2 optimized version
+    unsafe fn pack_rhs(
+        kc: usize,
+        nc: usize,
+        b: *const f32,
+        rs: isize,
+        cs: isize,
+        packed: *mut f32,
+    ) {
+        crate::core::ops::gemm::packing::pack_rhs_f32_avx(Self::NR, kc, nc, b, rs, cs, packed)
+    }
+
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn microkernel(
         kc: usize,
@@ -66,10 +90,12 @@ impl GemmKernel for AsmFmaKernelF32 {
 
         // Pointers to help asm
         // asm loop
-        // ASM Loop (Fused K-loop, Unrolled 4x)
-        // KC is guaranteed to be multiple of 4 (KC=128).
         asm!(
-            "2:", // Loop label
+            // ASM Loop (Fused K-loop, Unrolled 4x + Tail)
+                "cmp {k}, 4",
+            "jl 3f", // Jump to tail if k < 4
+
+            "2:", // Loop label 4x
 
             // Iteration 0
             "vmovups {a0}, [{a_ptr}]",
@@ -159,16 +185,45 @@ impl GemmKernel for AsmFmaKernelF32 {
             "vfmadd231ps {c05}, {a0}, {b_val}",
             "vfmadd231ps {c15}, {a1}, {b_val}",
 
-            // Update pointers
-            // a += 256 bytes (4*64)
-            // b += 96 bytes (4*24)
+            // Update pointers (4x)
             "add {a_ptr}, 256",
             "add {b_ptr}, 96",
-
-            // Decrement and Jump
             "sub {k}, 4",
-            "jnz 2b",
+            "cmp {k}, 4",
+            "jge 2b",
 
+            "3:", // Tail
+            "test {k}, {k}",
+            "jz 5f", // Exit if k=0
+
+            "4:", // Tail loop
+            "vmovups {a0}, [{a_ptr}]",
+            "vmovups {a1}, [{a_ptr} + 32]",
+            "vbroadcastss {b_val}, [{b_ptr}]",
+            "vfmadd231ps {c00}, {a0}, {b_val}",
+            "vfmadd231ps {c10}, {a1}, {b_val}",
+            "vbroadcastss {b_val}, [{b_ptr} + 4]",
+            "vfmadd231ps {c01}, {a0}, {b_val}",
+            "vfmadd231ps {c11}, {a1}, {b_val}",
+            "vbroadcastss {b_val}, [{b_ptr} + 8]",
+            "vfmadd231ps {c02}, {a0}, {b_val}",
+            "vfmadd231ps {c12}, {a1}, {b_val}",
+            "vbroadcastss {b_val}, [{b_ptr} + 12]",
+            "vfmadd231ps {c03}, {a0}, {b_val}",
+            "vfmadd231ps {c13}, {a1}, {b_val}",
+            "vbroadcastss {b_val}, [{b_ptr} + 16]",
+            "vfmadd231ps {c04}, {a0}, {b_val}",
+            "vfmadd231ps {c14}, {a1}, {b_val}",
+            "vbroadcastss {b_val}, [{b_ptr} + 20]",
+            "vfmadd231ps {c05}, {a0}, {b_val}",
+            "vfmadd231ps {c15}, {a1}, {b_val}",
+
+            "add {a_ptr}, 64",
+            "add {b_ptr}, 24",
+            "sub {k}, 1",
+            "jnz 4b",
+
+            "5:", // End
             a_ptr = inout(reg) a_ptr => _,
             b_ptr = inout(reg) b_ptr => _,
             k = inout(reg) k_loop => _,
@@ -227,6 +282,30 @@ impl GemmKernel for AsmFmaKernelF64 {
     const MR: usize = 8;
     const NR: usize = 4;
 
+    /// Override packing with AVX2 optimized version
+    unsafe fn pack_lhs(
+        kc: usize,
+        mc: usize,
+        a: *const f64,
+        rs: isize,
+        cs: isize,
+        packed: *mut f64,
+    ) {
+        crate::core::ops::gemm::packing::pack_lhs_f64_avx(Self::MR, kc, mc, a, rs, cs, packed)
+    }
+
+    /// Override packing with AVX2 optimized version
+    unsafe fn pack_rhs(
+        kc: usize,
+        nc: usize,
+        b: *const f64,
+        rs: isize,
+        cs: isize,
+        packed: *mut f64,
+    ) {
+        crate::core::ops::gemm::packing::pack_rhs_f64_avx(Self::NR, kc, nc, b, rs, cs, packed)
+    }
+
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn microkernel(
         kc: usize,
@@ -266,8 +345,11 @@ impl GemmKernel for AsmFmaKernelF64 {
         let b_ptr = b;
         let k_loop = kc;
 
-        // ASM Loop (Fused K-loop, Unrolled 4x)
         asm!(
+            // ASM Loop (Fused K-loop, Unrolled 4x + Tail)
+            "cmp {k}, 4",
+            "jl 3f", 
+
             "2:",
 
             // Iteration 0
@@ -334,15 +416,39 @@ impl GemmKernel for AsmFmaKernelF64 {
             "vfmadd231pd {c03}, {a0}, {b_val}",
             "vfmadd231pd {c13}, {a1}, {b_val}",
 
-            // Update pointers
-            // a += 256 bytes (4*64)
-            // b += 128 bytes (4*32)
+            // Update pointers (4x)
             "add {a_ptr}, 256",
             "add {b_ptr}, 128",
-
-            // Loop control
             "sub {k}, 4",
-            "jnz 2b",
+            "cmp {k}, 4",
+            "jge 2b",
+
+            "3:",
+            "test {k}, {k}",
+            "jz 5f",
+
+            "4:", // Tail 1x
+            "vmovupd {a0}, [{a_ptr}]",
+            "vmovupd {a1}, [{a_ptr} + 32]",
+            "vbroadcastsd {b_val}, [{b_ptr}]",
+            "vfmadd231pd {c00}, {a0}, {b_val}",
+            "vfmadd231pd {c10}, {a1}, {b_val}",
+            "vbroadcastsd {b_val}, [{b_ptr} + 8]",
+            "vfmadd231pd {c01}, {a0}, {b_val}",
+            "vfmadd231pd {c11}, {a1}, {b_val}",
+            "vbroadcastsd {b_val}, [{b_ptr} + 16]",
+            "vfmadd231pd {c02}, {a0}, {b_val}",
+            "vfmadd231pd {c12}, {a1}, {b_val}",
+            "vbroadcastsd {b_val}, [{b_ptr} + 24]",
+            "vfmadd231pd {c03}, {a0}, {b_val}",
+            "vfmadd231pd {c13}, {a1}, {b_val}",
+
+            "add {a_ptr}, 64",
+            "add {b_ptr}, 32",
+            "sub {k}, 1",
+            "jnz 4b",
+
+            "5:", // End
 
             a_ptr = inout(reg) a_ptr => _,
             b_ptr = inout(reg) b_ptr => _,

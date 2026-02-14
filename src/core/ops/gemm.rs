@@ -114,8 +114,7 @@ where
     
                 // Pack B (KC x NC)
                 let b_sub_pointer = b.offset((pc as isize) * rs_b + (jc as isize) * cs_b);
-                packing::pack_rhs::<T>(
-                    K::NR,
+                K::pack_rhs(
                     kc_eff,
                     nc_eff,
                     b_sub_pointer,
@@ -130,8 +129,7 @@ where
     
                     // Pack A (MC x KC)
                     let a_sub_pointer = a.offset((ic as isize) * rs_a + (pc as isize) * cs_a);
-                    packing::pack_lhs::<T>(
-                        K::MR,
+                    K::pack_lhs(
                         kc_eff,
                         mc_eff,
                         a_sub_pointer,
@@ -349,4 +347,51 @@ where
 
     // Fallback
     gemm_cm_unoptimized_xpr(a, b, c)
+}
+
+/// Dispatches GEMM based on runtime feature detection using raw pointers.
+/// 
+/// # Safety
+/// Pointers must be valid for the specified dimensions and strides.
+pub unsafe fn gemm_dispatch_pointers<T: Scalar + Copy + Default>(
+    m: usize,
+    k: usize,
+    n: usize,
+    a_ptr: *const T,
+    rs_a: isize,
+    cs_a: isize,
+    b_ptr: *const T,
+    rs_b: isize,
+    cs_b: isize,
+    c_ptr: *mut T,
+    rs_c: isize,
+    cs_c: isize,
+) -> Result<bool, String> {
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    {
+        let tid = std::any::TypeId::of::<T>();
+        if tid == std::any::TypeId::of::<f32>() && is_x86_feature_detected!("fma") {
+            use self::arch::x86::asm_kernel::AsmFmaKernelF32;
+            gemm_blocked::<f32, AsmFmaKernelF32>(
+                m, k, n,
+                a_ptr as *const f32, rs_a, cs_a,
+                b_ptr as *const f32, rs_b, cs_b,
+                c_ptr as *mut f32, rs_c, cs_c,
+                1.0,
+            )?;
+            return Ok(true);
+        }
+        if tid == std::any::TypeId::of::<f64>() && is_x86_feature_detected!("fma") {
+             use self::arch::x86::asm_kernel::AsmFmaKernelF64;
+             gemm_blocked::<f64, AsmFmaKernelF64>(
+                m, k, n,
+                a_ptr as *const f64, rs_a, cs_a,
+                b_ptr as *const f64, rs_b, cs_b,
+                c_ptr as *mut f64, rs_c, cs_c,
+                1.0,
+            )?;
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }

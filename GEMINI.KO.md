@@ -51,10 +51,7 @@
 ### 5. 성능 관리
 - **측정 도구**: `criterion` 라이브러리를 사용한 정밀 벤치마크 수행
 - **최적화 빌드**: 하드웨어 가속(SIMD)의 공정한 성능 평가를 위해 반드시 `RUSTFLAGS="-C target-cpu=native"` 환경에서 측정함
-- **결과 기록**: 모든 성능 측정 결과는 `BENCHMARK.md`에 공식 기록하며, 다음 항목을 포함함:
-  - 연산 유형 및 행렬 크기 (예: GEMM 256x256)
-  - `eigen-rs` vs `Eigen 3.4` 수행 시간 대조
-  - 성능 비율 (Ratio = eigen-rs / Eigen 3.4) 명시
+- **결과 기록**: 상세 로그는 `docs/reports/`를 확인하십시오.
 - **목표 가치**: 핵심 연산(GEMM, Decompositions)에 대해 Eigen 대비 **1.5x 이내**의 성능 유지를 기본 목표로 함
 
 ## 핵심 설계 원칙 (Advanced)

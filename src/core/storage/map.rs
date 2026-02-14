@@ -49,24 +49,34 @@ impl<'a, T> MapStorage<'a, T> {
 }
 
 impl<'a, T: Sync> Storage<T> for MapStorage<'a, T> {
+    #[inline]
     fn data(&self) -> &[T] {
         unsafe { std::slice::from_raw_parts(self.ptr, self.rows * self.cols) } // Valid only if contiguous with default stride
     }
 
+    #[inline]
     fn data_mut(&mut self) -> &mut [T] {
         unsafe { std::slice::from_raw_parts_mut(self.ptr, self.rows * self.cols) }
         // Valid only if contiguous
     }
 
+    #[inline]
     fn rows(&self) -> usize {
         self.rows
     }
+    #[inline]
     fn cols(&self) -> usize {
         self.cols
     }
 
+    #[inline]
     fn get_ptr(&self, row: usize, col: usize) -> *const T {
         unsafe { self.ptr.add(col * self.stride + row) }
+    }
+
+    #[inline]
+    fn is_contiguous(&self) -> bool {
+        self.stride == self.rows
     }
 }
 

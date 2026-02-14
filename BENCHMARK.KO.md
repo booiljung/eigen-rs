@@ -49,14 +49,12 @@ python3 verification/verify_perf.py --update-benchmark
 - **Ratio > 1.5**: ⚠️ 성능 격차 (최적화 필요).
 
 ### 커밋 시점 (When to Commit)
-로컬 벤치마크 결과를 매번 커밋하지 마십시오. `BENCHMARK.md` 또는 `docs/reports/` 변경 사항은 다음 경우에만 커밋하십시오:
+로컬 벤치마크 결과를 매번 커밋하지 마십시오. `BENCHMARK_LOG.md` 또는 `docs/reports/` 변경 사항은 다음 경우에만 커밋하십시오:
 1.  **마일스톤 달성**: 유의미한 성능 향상 (예: SIMD 구현).
 2.  **회귀 수정**: 성능 저하 복구 기록.
 3.  **기준 업데이트**: 새로운 릴리스를 위한 베이스라인 업데이트.
 
-## 5. 과거 데이터 (Historical Data)
-자동화된 벤치마크 실행 결과는 `BENCHMARK_LOG.md`에 추가될 수 있습니다.
-사용법: `python3 verification/verify_perf.py --update-benchmark`
+
 
 ## 6. 현재 성능 상태
 *최신 수치는 `docs/reports/LATEST_PERFORMANCE.md` 보고서를 참조하십시오.*

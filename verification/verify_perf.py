@@ -67,6 +67,11 @@ def run_rust():
     env = os.environ.copy()
     env["RUSTFLAGS"] = "-C target-cpu=native"
     res = subprocess.run(RUST_BENCH_CMD, capture_output=True, text=True, env=env)
+    if "DEBUG" in res.stderr:
+        print("--- STDERR DEBUG ---")
+        print(res.stderr)
+        print("--------------------")
+    
     if res.returncode != 0:
         print("❌ Rust Benchmark Failed:")
         print(res.stderr)
@@ -77,18 +82,19 @@ def run_rust():
 
 def parse_output(output):
     """
-    Parses "Operation,Size,TimeNs"
-    Returns dict: {(Op, Size): TimeNs}
+    Parses "Operation,Size,TimeNs,Checksum"
+    Returns dict: {(Op, Size): (TimeNs, Checksum)}
     """
     data = {}
     for line in output.splitlines():
         parts = line.split(',')
-        if len(parts) == 3:
+        if len(parts) >= 3:
             try:
                 op = parts[0].strip()
                 size = int(parts[1].strip())
                 time = int(parts[2].strip())
-                data[(op, size)] = time
+                checksum = float(parts[3].strip()) if len(parts) > 3 else None
+                data[(op, size)] = (time, checksum)
             except:
                 pass
     return data
@@ -114,37 +120,87 @@ def generate_report(cpp_data, rust_data):
     lines.append(f"- **Rust**: {sys_info.get('Rust', 'Unknown')}")
     lines.append(f"- **C++**: {sys_info.get('C++', 'Unknown')}\n")
     
-    lines.append("## Benchmark Results")
-    lines.append("| Operation | Size | C++ (ns) | Rust (ns) | Ratio | Status |")
-    lines.append("| :--- | :--- | :--- | :--- | :--- | :--- |")
+    # 1. Analyze Data & Statistics
+    stats = {} # Op -> {ratios: [], fail_count: 0}
+    
+    keys = sorted(cpp_data.keys())
+    table_lines = []
+    table_lines.append("| Operation | Size | C++ (ns) | Rust (ns) | Ratio | Status |")
+    table_lines.append("| :--- | :--- | :--- | :--- | :--- | :--- |")
     
     all_passed = True
     
-    # Iterate over sorted keys from C++ data (as source of truth for scope)
-    keys = sorted(cpp_data.keys())
-    
     for key in keys:
         op, size = key
-        cpp_time = cpp_data[key]
+        cpp_val = cpp_data[key]
+        cpp_time = cpp_val[0]
+        cpp_check = cpp_val[1]
+        
         if key in rust_data:
-            rust_time = rust_data[key]
+            rust_val = rust_data[key]
+            rust_time = rust_val[0]
+            rust_check = rust_val[1]
+            
             ratio = rust_time / cpp_time if cpp_time > 0 else 0.0
             
-            status = "✅ PASS"
-            if ratio > MAX_RATIO:
+            # Record Stat
+            if op not in stats: stats[op] = {'ratios': [], 'fail_count': 0}
+            stats[op]['ratios'].append(ratio)
+            
+            # Verify Checksum
+            check_pass = True
+            epsilon = 0.1 
+            # If checksum is very large, absolute epsilon is too strict. Use relative.
+            if cpp_check is not None and rust_check is not None:
+                 diff = abs(cpp_check - rust_check)
+                 # 1% relative error tolerance for very large numbers, or 0.1 absolute
+                 if diff > epsilon and diff > abs(cpp_check)*0.01:
+                     check_pass = False
+            
+            status = ""
+            if not check_pass:
+                status = f"❌ CHECKSUM ({cpp_check:.2f} vs {rust_check:.2f})"
+                all_passed = False
+                stats[op]['fail_count'] += 1
+            elif ratio > MAX_RATIO:
                 status = "❌ FAIL (Slow)"
                 all_passed = False
+                stats[op]['fail_count'] += 1
             elif ratio < 1.0:
                 status = "🚀 FASTER"
+            else:
+                status = "✅ PASS"
                 
-            lines.append(f"| {op} | {size} | {cpp_time} | {rust_time} | **{ratio:.2f}x** | {status} |")
+            table_lines.append(f"| {op} | {size} | {cpp_time} | {rust_time} | **{ratio:.2f}x** | {status} |")
         else:
-            lines.append(f"| {op} | {size} | {cpp_time} | - | - | ⚠️ MISSING |")
+            table_lines.append(f"| {op} | {size} | {cpp_time} | - | - | ⚠️ MISSING |")
+
+    # 2. Print Summary
+    lines.append("## Summary Statistics")
+    lines.append("| Operation | Count | Min Ratio | Max Ratio | Avg Ratio | Fails |")
+    lines.append("| :--- | :--- | :--- | :--- | :--- | :--- |")
+    
+    for op in sorted(stats.keys()):
+        s = stats[op]
+        ratios = s['ratios']
+        if ratios:
+            min_r = min(ratios)
+            max_r = max(ratios)
+            avg_r = sum(ratios) / len(ratios)
+            count = len(ratios)
+            fail = s['fail_count']
+            fail_mark = "❌" if fail > 0 else "✅"
+            lines.append(f"| {op} | {count} | {min_r:.2f}x | **{max_r:.2f}x** | {avg_r:.2f}x | {fail_mark} {fail} |")
+        else:
+            lines.append(f"| {op} | 0 | - | - | - | - |")
+    lines.append("\n")
+
+    lines.append("## Detailed Results")
+    lines.extend(table_lines)
             
     with open(report_path, 'w') as f:
         f.write("\n".join(lines))
     
-    # Also update LATEST link/copy
     with open(LATEST_REPORT_LINK, 'w') as f:
         f.write("\n".join(lines))
         
@@ -155,7 +211,7 @@ def generate_report(cpp_data, rust_data):
 def main():
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--update-benchmark", action="store_true", help="Append results to BENCHMARK.md")
+    # parser.add_argument("--update-benchmark", action="store_true", help="Append results to BENCHMARK.md")
     args = parser.parse_args()
 
     if not compile_cpp():
@@ -169,48 +225,12 @@ def main():
     
     success = generate_report(cpp_data, rust_data)
     
-    if args.update_benchmark:
-        update_benchmark_log(cpp_data, rust_data)
-
     if success:
         print("✅ Performance Verification PASSED")
         sys.exit(0)
     else:
         print("❌ Performance Verification FAILED (Some deviations too high)")
         sys.exit(1)
-
-def update_benchmark_log(cpp_data, rust_data):
-    log_file = "BENCHMARK_LOG.md"
-    if not os.path.exists(log_file):
-        print(f"⚠️ {log_file} not found. Skipping persistent log update.")
-        return
-
-    import datetime
-    today = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    
-    # Select key metrics for brevity
-    key_metrics = [
-        ("MatMul", 256),
-        ("LLT", 256),
-    ]
-    
-    lines = []
-    lines.append(f"\n### {today}: Automated Run")
-    lines.append("| Operation | Size | Ratio | Status |")
-    lines.append("| :--- | :--- | :--- | :--- |")
-    
-    for op, size in key_metrics:
-        key = (op, size)
-        if key in cpp_data and key in rust_data:
-            c = cpp_data[key]
-            r = rust_data[key]
-            ratio = r / c if c > 0 else 0.0
-            status = "✅" if ratio < MAX_RATIO else "❌"
-            lines.append(f"| {op} | {size} | **{ratio:.2f}x** | {status} |")
-            
-    with open(log_file, "a") as f:
-        f.write("\n".join(lines))
-    print(f"📝 Appended results to {log_file}")
 
 if __name__ == "__main__":
     main()

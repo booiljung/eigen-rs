@@ -49,14 +49,12 @@ The key metric is the **Ratio**:
 - **Ratio > 1.5**: ⚠️ Performance Gap (Optimization Required).
 
 ### When to Commit
-Do not commit every local benchmark run. Commit changes to `BENCHMARK.md` or `docs/reports/` only when:
+Do not commit every local benchmark run. Commit changes to `BENCHMARK_LOG.md` or `docs/reports/` only when:
 1.  **A Milestone is Reached**: Significant performance improvement (e.g., SIMD implementation).
 2.  **A Regression is Fixed**: Documenting the recovery.
 3.  **Reference Update**: Updating the baseline for a new release.
 
-## 5. Historical Data
-Automated benchmark runs can be appended to `BENCHMARK_LOG.md`.
-Use: `python3 verification/verify_perf.py --update-benchmark`
+
 
 ## 6. Current Performance Status
 *Refer to the latest report in `docs/reports/LATEST_PERFORMANCE.md` for the most up-to-date numbers.*

@@ -1,3 +1,4 @@
+pub mod allocator;
 pub mod arch;
 pub mod complex;
 pub mod cuda;

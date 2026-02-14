@@ -77,6 +77,34 @@ where
     {
         unsafe { P::load(self.storage.get_ptr(row, col)) }
     }
+
+    fn as_ptr(&self) -> Option<*const T> {
+        // Only return pointer if storage is valid and contiguous
+        Some(self.storage.data().as_ptr())
+    }
+
+    fn strides(&self) -> Option<(isize, isize)> {
+        // Column-major default
+        Some((1, self.rows() as isize))
+    }
+
+    #[inline]
+    fn has_linear_access(&self) -> bool {
+        self.storage.is_contiguous()
+    }
+
+    #[inline]
+    fn eval_linear(&self, i: usize) -> T {
+        self.storage.data()[i]
+    }
+
+    #[inline]
+    fn packet_eval_linear<P: crate::core::arch::Packet<T>>(&self, i: usize) -> P
+    where
+        T: Scalar,
+    {
+        unsafe { P::load(self.storage.get_ptr(0, 0).add(i)) }
+    }
 }
 
 impl<T: Scalar, S: Storage<T>> Matrix<T, S> {
@@ -219,12 +247,19 @@ impl<T: Scalar, S: Storage<T>> Matrix<T, S> {
             }
         }
 
+        // Try Vectorized Path (AVX2/FMA) via Scalar Trait specialization
+        if T::assign_vectorized(self, xpr) {
+            return Ok(());
+        }
+
         let rows = self.rows();
         let cols = self.cols();
 
         for c in 0..cols {
             for r in 0..rows {
                 let val = xpr.eval(r, c);
+                // Unchecked usage for performance if bounds checked above
+                // But get_mut is safe.
                 if let Some(mut_ref) = self.get_mut(r, c) {
                     *mut_ref = val;
                 }
@@ -426,16 +461,44 @@ impl<T: Scalar, S: Storage<T>> Matrix<T, S> {
         self.block(0, j, self.rows(), 1)
     }
 
-    /// Specialized assignment for matrix products.
     pub fn assign_product<'a, L, R>(
         &mut self,
         product: &crate::core::ops::Product<'a, T, L, R>,
     ) -> Result<(), String>
     where
-        T: Scalar,
+        T: Scalar + Copy + Default,
         L: crate::core::xpr::MatrixXpr<T>,
         R: crate::core::xpr::MatrixXpr<T>,
     {
+        // Try optimized dispatch
+        if let (Some(lhs_ptr), Some(lhs_strides)) = (product.lhs().as_ptr(), product.lhs().strides()) {
+             if let (Some(rhs_ptr), Some(rhs_strides)) = (product.rhs().as_ptr(), product.rhs().strides()) {
+                 let m = self.rows();
+                 let k = product.lhs().cols();
+                 let n = self.cols();
+                 let c_ptr = self.storage_mut().data_mut().as_mut_ptr();
+                 // Self is Col-Major
+                 let rs_c = 1;
+                 let cs_c = m as isize;
+                 
+                 // Clear C before accumulation because microkernel accumulates
+                 self.set_zero();
+
+                 let handled = unsafe {
+                     crate::core::ops::gemm::gemm_dispatch_pointers(
+                         m, k, n,
+                         lhs_ptr, lhs_strides.0, lhs_strides.1,
+                         rhs_ptr, rhs_strides.0, rhs_strides.1,
+                         c_ptr, rs_c, cs_c
+                     )?
+                 };
+                 
+                 if handled {
+                     return Ok(());
+                 }
+             }
+        }
+        
         crate::core::ops::gemm::gemm_cm_unoptimized_xpr(product.lhs(), product.rhs(), self)
     }
 
@@ -488,6 +551,12 @@ impl<T: Scalar, S: Storage<T>> Matrix<T, S> {
             other.size(),
             "Dot product requires vectors of equal size"
         );
+        
+        // Try vectorized path
+        if let Some(sum) = T::dot_vectorized(self, other) {
+            return sum;
+        }
+
         let mut sum = T::default();
         // Simple dot product for now
         for i in 0..self.size() {
@@ -531,6 +600,10 @@ impl<T: Scalar, S: Storage<T>> Matrix<T, S> {
 
     /// Scales all elements by a scalar factor in-place.
     pub fn scale(&mut self, factor: T) {
+        if T::scale_vectorized(self, factor) {
+            return;
+        }
+        
         let size = self.size();
         let data = self.storage_mut().data_mut();
         for val in data.iter_mut().take(size) {

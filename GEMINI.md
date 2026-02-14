@@ -52,10 +52,7 @@
 ### 5. Performance Management
 - **Measurement Tool**: Perform precise benchmarks using the `criterion` library.
 - **Optimized Build**: For fair performance evaluation of hardware acceleration (SIMD), always measure in `RUSTFLAGS="-C target-cpu=native"` environment.
-- **Result Recording**: Officially record all performance measurement results in `BENCHMARK.md`, including the following items:
-  - Operation type and matrix size (e.g., GEMM 256x256)
-  - Execution time comparison: `eigen-rs` vs `Eigen 3.4`
-  - Specify performance ratio (Ratio = eigen-rs / Eigen 3.4)
+- **Result Recording**: Check `docs/reports/` for detailed logs.
 - **Target Value**: Aim to maintain performance within **1.5x** of Eigen for core operations (GEMM, Decompositions).
 
 ## Core Design Principles (Advanced)

@@ -16,6 +16,11 @@ pub trait Storage<T>: Sync {
     fn cols(&self) -> usize;
     fn get_ptr(&self, row: usize, col: usize) -> *const T;
 
+    #[inline]
+    fn is_contiguous(&self) -> bool {
+        true
+    }
+
     fn as_cuda_storage(&self) -> Option<&crate::core::storage::cuda::CudaStorage<T>>
     where
         T: Scalar,
@@ -29,34 +34,28 @@ pub trait Storage<T>: Sync {
 pub struct AlignedStorage<T> {
     ptr: NonNull<T>,
     size: usize,
-    layout: Layout,
+    // Layout no longer needed as we use fixed 32-byte alignment allocator
 }
 
 unsafe impl<T: Send> Send for AlignedStorage<T> {}
 unsafe impl<T: Sync> Sync for AlignedStorage<T> {}
 
 impl<T> AlignedStorage<T> {
-    pub fn new(size: usize, alignment: usize) -> Result<Self, String> {
+    pub fn new(size: usize, _alignment: usize) -> Result<Self, String> {
+        // Ignore _alignment arg and force 32-byte via allocator
+        // Keeping arg for API compatibility if needed, though we only use 32 internally.
         if size == 0 {
             return Ok(Self {
                 ptr: NonNull::dangling(),
                 size: 0,
-                layout: Layout::from_size_align(0, alignment).map_err(|e| e.to_string())?,
             });
         }
 
-        let layout = Layout::from_size_align(size * std::mem::size_of::<T>(), alignment)
-            .map_err(|e| e.to_string())?;
-
         unsafe {
-            let ptr = alloc(layout) as *mut T;
-            if ptr.is_null() {
-                return Err("Failed to allocate aligned memory".to_string());
-            }
+            let ptr = crate::core::allocator::alloc_aligned::<T>(size);
             Ok(Self {
-                ptr: NonNull::new_unchecked(ptr),
+                ptr,
                 size,
-                layout,
             })
         }
     }
@@ -87,7 +86,7 @@ impl<T> AlignedStorage<T> {
 
 impl<T: Copy> Clone for AlignedStorage<T> {
     fn clone(&self) -> Self {
-        let mut storage = AlignedStorage::new(self.size, self.layout.align()).unwrap();
+        let mut storage = AlignedStorage::new(self.size, 32).unwrap();
         storage.as_mut_slice().copy_from_slice(self.as_slice());
         storage
     }
@@ -97,7 +96,7 @@ impl<T> Drop for AlignedStorage<T> {
     fn drop(&mut self) {
         if self.size > 0 {
             unsafe {
-                dealloc(self.ptr.as_ptr() as *mut u8, self.layout);
+                crate::core::allocator::dealloc_aligned(self.ptr, self.size);
             }
         }
     }
@@ -138,18 +137,23 @@ impl<T: Default + Copy, const R: usize, const C: usize, const S: usize> FixedSto
 impl<T: Scalar + 'static, const R: usize, const C: usize, const S: usize> Storage<T>
     for FixedStorage<T, R, C, S>
 {
+    #[inline]
     fn data(&self) -> &[T] {
         &self.data
     }
+    #[inline]
     fn data_mut(&mut self) -> &mut [T] {
         &mut self.data
     }
+    #[inline]
     fn rows(&self) -> usize {
         R
     }
+    #[inline]
     fn cols(&self) -> usize {
         C
     }
+    #[inline]
     fn get_ptr(&self, row: usize, col: usize) -> *const T {
         unsafe { self.data.as_ptr().add(col * R + row) }
     }
@@ -201,18 +205,23 @@ impl<T: Copy> Clone for DynamicStorage<T> {
 }
 
 impl<T: Scalar + 'static> Storage<T> for DynamicStorage<T> {
+    #[inline]
     fn data(&self) -> &[T] {
         self.data.as_slice()
     }
+    #[inline]
     fn data_mut(&mut self) -> &mut [T] {
         self.data.as_mut_slice()
     }
+    #[inline]
     fn rows(&self) -> usize {
         self.rows
     }
+    #[inline]
     fn cols(&self) -> usize {
         self.cols
     }
+    #[inline]
     fn get_ptr(&self, row: usize, col: usize) -> *const T {
         unsafe { self.data.as_ptr().add(col * self.rows + row) }
     }

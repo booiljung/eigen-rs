@@ -9,6 +9,18 @@ pub trait MatrixXpr<T: Scalar>: crate::core::cuda::CudaDispatcher<T> + Sync {
     fn rows(&self) -> usize;
     fn cols(&self) -> usize;
 
+    /// Optional: Returns a raw pointer to the storage if contiguous.
+    /// Used for BLAS/GEMM optimizations.
+    fn as_ptr(&self) -> Option<*const T> {
+        None
+    }
+
+    /// Optional: Returns (row_stride, col_stride).
+    /// Used for BLAS/GEMM optimizations.
+    fn strides(&self) -> Option<(isize, isize)> {
+        None
+    }
+
     /// Evaluates the expression at a specific coordinate.
     /// This is the heart of lazy evaluation.
     fn eval(&self, row: usize, col: usize) -> T;
@@ -27,6 +39,31 @@ pub trait MatrixXpr<T: Scalar>: crate::core::cuda::CudaDispatcher<T> + Sync {
             *val = self.eval(row, col + i);
         }
         unsafe { P::load(data.as_ptr()) }
+    }
+
+    /// Returns true if the expression allows linear access (1D indexing).
+    fn has_linear_access(&self) -> bool {
+        false
+    }
+
+    /// Evaluates the expression at linear index `i`.
+    /// User should verify `has_linear_access()` before calling this.
+    fn eval_linear(&self, _i: usize) -> T {
+        panic!("Linear evaluation not supported for this expression");
+    }
+
+    /// Evaluates a packet at linear index `i`.
+    fn packet_eval_linear<P: crate::core::arch::Packet<T>>(&self, _i: usize) -> P
+    where
+        T: Scalar,
+    {
+        panic!("Linear packet evaluation not supported for this expression");
+    }
+
+    /// Optimized linear evaluation directly to a destination buffer.
+    /// Returns true if the evaluation was performed using a fast path.
+    fn try_eval_to<P: crate::core::arch::Packet<T>>(&self, _dest: *mut T, _size: usize) -> bool {
+        false
     }
 
     /// Returns the total size of the expression.

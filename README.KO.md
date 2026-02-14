@@ -60,9 +60,9 @@ let x = llt.solve(&b).expect("Solve failed");
 
 ## 문서 (Documentation)
 
--   [**프로젝트 가이드 (Korean)**](PROJECT_GUIDE.KO.md): 프로젝트 개요, 기술 스택 및 개발 규칙.
+-   [**Project Guide**](GEMINI.md): Project overview and Development Rules.
+-   [**프로젝트 가이드 (Korean)**](GEMINI.KO.md): 프로젝트 개요, 기술 스택 및 개발 규칙.
 -   [**벤치마크 가이드 (Korean)**](BENCHMARK.KO.md): 벤치마크 방법론 및 개발자 가이드.
--   [**벤치마크 로그 (Benchmark Log)**](BENCHMARK_LOG.md): 과거 성능 데이터.
 -   [**Roadmap**](ROADMAP.md): 핵심 모듈별 기능 동등성 달성 현황.
 
 ## 로드맵 (Roadmap)

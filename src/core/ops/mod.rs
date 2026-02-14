@@ -101,15 +101,147 @@ where
         self.lhs.cols()
     }
 
+    #[inline]
     fn eval(&self, row: usize, col: usize) -> T {
         self.lhs.eval(row, col) + self.rhs.eval(row, col)
     }
 
+    #[inline]
     fn packet_eval<P: crate::core::arch::Packet<T>>(&self, row: usize, col: usize) -> P
     where
         T: Scalar,
     {
         self.lhs.packet_eval::<P>(row, col) + self.rhs.packet_eval::<P>(row, col)
+    }
+
+    #[inline]
+    fn has_linear_access(&self) -> bool {
+        self.lhs.has_linear_access() && self.rhs.has_linear_access()
+    }
+
+    #[inline]
+    fn eval_linear(&self, i: usize) -> T {
+        self.lhs.eval_linear(i) + self.rhs.eval_linear(i)
+    }
+
+    #[inline]
+    fn packet_eval_linear<P: crate::core::arch::Packet<T>>(&self, i: usize) -> P
+    where
+        T: Scalar,
+    {
+        self.lhs.packet_eval_linear::<P>(i) + self.rhs.packet_eval_linear::<P>(i)
+    }
+
+    #[inline(always)]
+    fn try_eval_to<P: crate::core::arch::Packet<T>>(&self, dest: *mut T, size: usize) -> bool {
+        if let (Some(l_ptr), Some(r_ptr)) = (self.lhs.as_ptr(), self.rhs.as_ptr()) {
+            let packet_size = P::SIZE;
+            let mut i = 0;
+            
+            // Heuristic for Streaming Store:
+            // Use streaming stores only for very large matrices where cache pollution is a major concern.
+            // Alignment check is strict for _mm256_stream_ps.
+            let use_stream = size >= 32000 && (dest as usize) % 32 == 0;
+            let prefetch_dist = 4 * packet_size;
+
+            unsafe {
+                if use_stream {
+                    while i + 8 * packet_size <= size {
+                        // Prefetch enabled for large streaming path
+                        P::prefetch(l_ptr.add(i + prefetch_dist * 2));
+                        P::prefetch(r_ptr.add(i + prefetch_dist * 2));
+
+                        let a0 = P::load(l_ptr.add(i));
+                        let b0 = P::load(r_ptr.add(i));
+                        (a0 + b0).store_stream(dest.add(i));
+
+                        let a1 = P::load(l_ptr.add(i + packet_size));
+                        let b1 = P::load(r_ptr.add(i + packet_size));
+                        (a1 + b1).store_stream(dest.add(i + packet_size));
+
+                        let a2 = P::load(l_ptr.add(i + 2 * packet_size));
+                        let b2 = P::load(r_ptr.add(i + 2 * packet_size));
+                        (a2 + b2).store_stream(dest.add(i + 2 * packet_size));
+
+                        let a3 = P::load(l_ptr.add(i + 3 * packet_size));
+                        let b3 = P::load(r_ptr.add(i + 3 * packet_size));
+                        (a3 + b3).store_stream(dest.add(i + 3 * packet_size));
+
+                        let a4 = P::load(l_ptr.add(i + 4 * packet_size));
+                        let b4 = P::load(r_ptr.add(i + 4 * packet_size));
+                        (a4 + b4).store_stream(dest.add(i + 4 * packet_size));
+
+                        let a5 = P::load(l_ptr.add(i + 5 * packet_size));
+                        let b5 = P::load(r_ptr.add(i + 5 * packet_size));
+                        (a5 + b5).store_stream(dest.add(i + 5 * packet_size));
+
+                        let a6 = P::load(l_ptr.add(i + 6 * packet_size));
+                        let b6 = P::load(r_ptr.add(i + 6 * packet_size));
+                        (a6 + b6).store_stream(dest.add(i + 6 * packet_size));
+
+                        let a7 = P::load(l_ptr.add(i + 7 * packet_size));
+                        let b7 = P::load(r_ptr.add(i + 7 * packet_size));
+                        (a7 + b7).store_stream(dest.add(i + 7 * packet_size));
+
+                        i += 8 * packet_size;
+                    }
+                } else {
+                     while i + 8 * packet_size <= size {
+                        // Standard path (Now with Prefetch for L2/L3 latency hiding)
+                        P::prefetch(l_ptr.add(i + prefetch_dist * 2));
+                        P::prefetch(r_ptr.add(i + prefetch_dist * 2));
+                        
+                        let a0 = P::load(l_ptr.add(i));
+                        let b0 = P::load(r_ptr.add(i));
+                        (a0 + b0).store(dest.add(i));
+
+                        let a1 = P::load(l_ptr.add(i + packet_size));
+                        let b1 = P::load(r_ptr.add(i + packet_size));
+                        (a1 + b1).store(dest.add(i + packet_size));
+
+                        let a2 = P::load(l_ptr.add(i + 2 * packet_size));
+                        let b2 = P::load(r_ptr.add(i + 2 * packet_size));
+                        (a2 + b2).store(dest.add(i + 2 * packet_size));
+
+                        let a3 = P::load(l_ptr.add(i + 3 * packet_size));
+                        let b3 = P::load(r_ptr.add(i + 3 * packet_size));
+                        (a3 + b3).store(dest.add(i + 3 * packet_size));
+
+                        let a4 = P::load(l_ptr.add(i + 4 * packet_size));
+                        let b4 = P::load(r_ptr.add(i + 4 * packet_size));
+                        (a4 + b4).store(dest.add(i + 4 * packet_size));
+
+                        let a5 = P::load(l_ptr.add(i + 5 * packet_size));
+                        let b5 = P::load(r_ptr.add(i + 5 * packet_size));
+                        (a5 + b5).store(dest.add(i + 5 * packet_size));
+
+                        let a6 = P::load(l_ptr.add(i + 6 * packet_size));
+                        let b6 = P::load(r_ptr.add(i + 6 * packet_size));
+                        (a6 + b6).store(dest.add(i + 6 * packet_size));
+
+                        let a7 = P::load(l_ptr.add(i + 7 * packet_size));
+                        let b7 = P::load(r_ptr.add(i + 7 * packet_size));
+                        (a7 + b7).store(dest.add(i + 7 * packet_size));
+
+                        i += 8 * packet_size;
+                    }
+                }
+                
+                // Remainder loops
+                while i + packet_size <= size {
+                    let a = P::load(l_ptr.add(i));
+                    let b = P::load(r_ptr.add(i));
+                    (a + b).store(dest.add(i));
+                    i += packet_size;
+                }
+                while i < size {
+                    *dest.add(i) = *l_ptr.add(i) + *r_ptr.add(i);
+                    i += 1;
+                }
+            }
+            return true;
+        }
+        false
     }
 }
 
@@ -204,15 +336,143 @@ where
         self.lhs.cols()
     }
 
+    #[inline]
     fn eval(&self, row: usize, col: usize) -> T {
         self.lhs.eval(row, col) - self.rhs.eval(row, col)
     }
 
+    #[inline]
     fn packet_eval<P: crate::core::arch::Packet<T>>(&self, row: usize, col: usize) -> P
     where
         T: Scalar,
     {
         self.lhs.packet_eval::<P>(row, col) - self.rhs.packet_eval::<P>(row, col)
+    }
+
+    #[inline]
+    fn has_linear_access(&self) -> bool {
+        self.lhs.has_linear_access() && self.rhs.has_linear_access()
+    }
+
+    #[inline]
+    fn eval_linear(&self, i: usize) -> T {
+        self.lhs.eval_linear(i) - self.rhs.eval_linear(i)
+    }
+
+    #[inline]
+    fn packet_eval_linear<P: crate::core::arch::Packet<T>>(&self, i: usize) -> P
+    where
+        T: Scalar,
+    {
+        self.lhs.packet_eval_linear::<P>(i) - self.rhs.packet_eval_linear::<P>(i)
+    }
+
+    #[inline(always)]
+    fn try_eval_to<P: crate::core::arch::Packet<T>>(&self, dest: *mut T, size: usize) -> bool {
+        if let (Some(l_ptr), Some(r_ptr)) = (self.lhs.as_ptr(), self.rhs.as_ptr()) {
+            let packet_size = P::SIZE;
+            let mut i = 0;
+
+            // Heuristic for Streaming Store:
+            let use_stream = size >= 32000 && (dest as usize) % 32 == 0;
+            let prefetch_dist = 4 * packet_size;
+
+            unsafe {
+                if use_stream {
+                    while i + 8 * packet_size <= size {
+                        P::prefetch(l_ptr.add(i + prefetch_dist * 2));
+                        P::prefetch(r_ptr.add(i + prefetch_dist * 2));
+
+                        let a0 = P::load(l_ptr.add(i));
+                        let b0 = P::load(r_ptr.add(i));
+                        (a0 - b0).store_stream(dest.add(i));
+
+                        let a1 = P::load(l_ptr.add(i + packet_size));
+                        let b1 = P::load(r_ptr.add(i + packet_size));
+                        (a1 - b1).store_stream(dest.add(i + packet_size));
+
+                        let a2 = P::load(l_ptr.add(i + 2 * packet_size));
+                        let b2 = P::load(r_ptr.add(i + 2 * packet_size));
+                        (a2 - b2).store_stream(dest.add(i + 2 * packet_size));
+
+                        let a3 = P::load(l_ptr.add(i + 3 * packet_size));
+                        let b3 = P::load(r_ptr.add(i + 3 * packet_size));
+                        (a3 - b3).store_stream(dest.add(i + 3 * packet_size));
+
+                        let a4 = P::load(l_ptr.add(i + 4 * packet_size));
+                        let b4 = P::load(r_ptr.add(i + 4 * packet_size));
+                        (a4 - b4).store_stream(dest.add(i + 4 * packet_size));
+
+                        let a5 = P::load(l_ptr.add(i + 5 * packet_size));
+                        let b5 = P::load(r_ptr.add(i + 5 * packet_size));
+                        (a5 - b5).store_stream(dest.add(i + 5 * packet_size));
+
+                        let a6 = P::load(l_ptr.add(i + 6 * packet_size));
+                        let b6 = P::load(r_ptr.add(i + 6 * packet_size));
+                        (a6 - b6).store_stream(dest.add(i + 6 * packet_size));
+
+                        let a7 = P::load(l_ptr.add(i + 7 * packet_size));
+                        let b7 = P::load(r_ptr.add(i + 7 * packet_size));
+                        (a7 - b7).store_stream(dest.add(i + 7 * packet_size));
+
+                        i += 8 * packet_size;
+                    }
+                } else {
+                    while i + 8 * packet_size <= size {
+                        // Standard path (Now with Prefetch)
+                        P::prefetch(l_ptr.add(i + prefetch_dist * 2));
+                        P::prefetch(r_ptr.add(i + prefetch_dist * 2));
+                        
+                        let a0 = P::load(l_ptr.add(i));
+                        let b0 = P::load(r_ptr.add(i));
+                        (a0 - b0).store(dest.add(i));
+
+                        let a1 = P::load(l_ptr.add(i + packet_size));
+                        let b1 = P::load(r_ptr.add(i + packet_size));
+                        (a1 - b1).store(dest.add(i + packet_size));
+
+                        let a2 = P::load(l_ptr.add(i + 2 * packet_size));
+                        let b2 = P::load(r_ptr.add(i + 2 * packet_size));
+                        (a2 - b2).store(dest.add(i + 2 * packet_size));
+
+                        let a3 = P::load(l_ptr.add(i + 3 * packet_size));
+                        let b3 = P::load(r_ptr.add(i + 3 * packet_size));
+                        (a3 - b3).store(dest.add(i + 3 * packet_size));
+
+                        let a4 = P::load(l_ptr.add(i + 4 * packet_size));
+                        let b4 = P::load(r_ptr.add(i + 4 * packet_size));
+                        (a4 - b4).store(dest.add(i + 4 * packet_size));
+
+                        let a5 = P::load(l_ptr.add(i + 5 * packet_size));
+                        let b5 = P::load(r_ptr.add(i + 5 * packet_size));
+                        (a5 - b5).store(dest.add(i + 5 * packet_size));
+
+                        let a6 = P::load(l_ptr.add(i + 6 * packet_size));
+                        let b6 = P::load(r_ptr.add(i + 6 * packet_size));
+                        (a6 - b6).store(dest.add(i + 6 * packet_size));
+
+                        let a7 = P::load(l_ptr.add(i + 7 * packet_size));
+                        let b7 = P::load(r_ptr.add(i + 7 * packet_size));
+                        (a7 - b7).store(dest.add(i + 7 * packet_size));
+
+                        i += 8 * packet_size;
+                    }
+                }
+
+                while i + packet_size <= size {
+                    let a = P::load(l_ptr.add(i));
+                    let b = P::load(r_ptr.add(i));
+                    (a - b).store(dest.add(i));
+                    i += packet_size;
+                }
+                while i < size {
+                    *dest.add(i) = *l_ptr.add(i) - *r_ptr.add(i);
+                    i += 1;
+                }
+            }
+            return true;
+        }
+        false
     }
 }
 
@@ -287,15 +547,92 @@ where
         self.xpr.cols()
     }
 
+    #[inline]
     fn eval(&self, row: usize, col: usize) -> T {
         self.xpr.eval(row, col) * self.scalar
     }
 
+    #[inline]
     fn packet_eval<P: crate::core::arch::Packet<T>>(&self, row: usize, col: usize) -> P
     where
         T: Scalar,
     {
         self.xpr.packet_eval::<P>(row, col) * P::set1(self.scalar)
+    }
+
+    #[inline]
+    fn has_linear_access(&self) -> bool {
+        self.xpr.has_linear_access()
+    }
+
+    #[inline]
+    fn eval_linear(&self, i: usize) -> T {
+        self.xpr.eval_linear(i) * self.scalar
+    }
+
+    #[inline]
+    fn packet_eval_linear<P: crate::core::arch::Packet<T>>(&self, i: usize) -> P
+    where
+        T: Scalar,
+    {
+        self.xpr.packet_eval_linear::<P>(i) * P::set1(self.scalar)
+    }
+
+    #[inline(always)]
+    fn try_eval_to<P: crate::core::arch::Packet<T>>(&self, dest: *mut T, size: usize) -> bool {
+        if let Some(x_ptr) = self.xpr.as_ptr() {
+            let packet_size = P::SIZE;
+            let mut i = 0;
+            let s_packet = P::set1(self.scalar);
+            
+            // Prefetch distance
+            let prefetch_dist = 4 * packet_size;
+
+            unsafe {
+                while i + 8 * packet_size <= size {
+                    // Prefetch only x_ptr (no streaming store used here as size unknown or scalar mult might not benefit enough from NT)
+                    // But for consistency:
+                    P::prefetch(x_ptr.add(i + prefetch_dist * 2));
+
+                    let a0 = P::load(x_ptr.add(i));
+                    (a0 * s_packet).store(dest.add(i));
+
+                    let a1 = P::load(x_ptr.add(i + packet_size));
+                    (a1 * s_packet).store(dest.add(i + packet_size));
+
+                    let a2 = P::load(x_ptr.add(i + 2 * packet_size));
+                    (a2 * s_packet).store(dest.add(i + 2 * packet_size));
+
+                    let a3 = P::load(x_ptr.add(i + 3 * packet_size));
+                    (a3 * s_packet).store(dest.add(i + 3 * packet_size));
+
+                    let a4 = P::load(x_ptr.add(i + 4 * packet_size));
+                    (a4 * s_packet).store(dest.add(i + 4 * packet_size));
+
+                    let a5 = P::load(x_ptr.add(i + 5 * packet_size));
+                    (a5 * s_packet).store(dest.add(i + 5 * packet_size));
+
+                    let a6 = P::load(x_ptr.add(i + 6 * packet_size));
+                    (a6 * s_packet).store(dest.add(i + 6 * packet_size));
+
+                    let a7 = P::load(x_ptr.add(i + 7 * packet_size));
+                    (a7 * s_packet).store(dest.add(i + 7 * packet_size));
+
+                    i += 8 * packet_size;
+                }
+                while i + packet_size <= size {
+                    let a = P::load(x_ptr.add(i));
+                    (a * s_packet).store(dest.add(i));
+                    i += packet_size;
+                }
+                while i < size {
+                    *dest.add(i) = *x_ptr.add(i) * self.scalar;
+                    i += 1;
+                }
+            }
+            return true;
+        }
+        false
     }
 }
 

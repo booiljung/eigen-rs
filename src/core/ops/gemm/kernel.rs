@@ -34,4 +34,34 @@ pub trait GemmKernel {
         rs_c: isize,
         cs_c: isize,
     );
+
+    /// Pack LHS matrix panel A into block-major format
+    /// Default implementation uses generic scalar packing.
+    /// # Safety
+    /// Pointers must be valid.
+    unsafe fn pack_lhs(
+        kc: usize,
+        mc: usize,
+        a: *const Self::Elem,
+        rs: isize,
+        cs: isize,
+        packed: *mut Self::Elem,
+    ) {
+        crate::core::ops::gemm::packing::pack_lhs(Self::MR, kc, mc, a, rs, cs, packed)
+    }
+
+    /// Pack RHS matrix panel B into block-major format
+    /// Default implementation uses generic scalar packing.
+    /// # Safety
+    /// Pointers must be valid.
+    unsafe fn pack_rhs(
+        kc: usize,
+        nc: usize,
+        b: *const Self::Elem,
+        rs: isize,
+        cs: isize,
+        packed: *mut Self::Elem,
+    ) {
+        crate::core::ops::gemm::packing::pack_rhs(Self::NR, kc, nc, b, rs, cs, packed)
+    }
 }

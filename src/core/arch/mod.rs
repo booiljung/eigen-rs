@@ -23,6 +23,19 @@ pub trait Packet<T: Scalar>:
     /// The pointer must be valid for writing `SIZE` elements.
     unsafe fn store(self, ptr: *mut T);
 
+    /// Stores a packet to a memory pointer using non-temporal hint (streaming store).
+    /// Bypasses cache hierarchy. Use for large data writes.
+    ///
+    /// # Safety
+    /// The pointer must be aligned to the packet size (32 bytes for AVX) for stream instructions.
+    /// If not aligned, implementation may fall back to normal store or crash depending on intrinsic.
+    unsafe fn store_stream(self, ptr: *mut T) {
+        self.store(ptr);
+    }
+
+    /// Prefetches memory at `ptr` into L1 cache (`_MM_HINT_T0`).
+    fn prefetch(_ptr: *const T) {}
+
     /// Sets all elements in the packet to a single scalar value.
     fn set1(val: T) -> Self;
 
@@ -52,6 +65,9 @@ pub trait Packet<T: Scalar>:
     fn pabs(self) -> Self {
         unimplemented!("pabs not implemented for this packet")
     }
+
+    /// Computes the sum of all elements in the packet.
+    fn sum(self) -> T;
 }
 
 /// Fallback scalar packet (SIMD size 1).
@@ -86,12 +102,14 @@ impl<T: Scalar> Packet<T> for ScalarPacket<T> {
         unsafe { Self(*ptr) }
     }
 
+    #[inline(always)]
     unsafe fn store(self, ptr: *mut T) {
         unsafe {
             *ptr = self.0;
         }
     }
 
+    #[inline(always)]
     fn set1(val: T) -> Self {
         Self(val)
     }
@@ -121,6 +139,10 @@ impl<T: Scalar> Packet<T> for ScalarPacket<T> {
     fn pabs(self) -> Self {
         Self(self.0.abs())
     }
+
+    fn sum(self) -> T {
+        self.0
+    }
 }
 
 // x86_64 Specializations
@@ -134,18 +156,21 @@ pub mod x86 {
 
     impl Add for SsePacketF32 {
         type Output = Self;
+        #[inline(always)]
         fn add(self, rhs: Self) -> Self {
             unsafe { Self(_mm_add_ps(self.0, rhs.0)) }
         }
     }
     impl Sub for SsePacketF32 {
         type Output = Self;
+        #[inline(always)]
         fn sub(self, rhs: Self) -> Self {
             unsafe { Self(_mm_sub_ps(self.0, rhs.0)) }
         }
     }
     impl Mul for SsePacketF32 {
         type Output = Self;
+        #[inline(always)]
         fn mul(self, rhs: Self) -> Self {
             unsafe { Self(_mm_mul_ps(self.0, rhs.0)) }
         }
@@ -164,6 +189,7 @@ pub mod x86 {
         fn set1(val: f32) -> Self {
             unsafe { Self(_mm_set1_ps(val)) }
         }
+        #[inline(always)]
         fn fused_add_mul(&mut self, a: Self, b: Self) {
             unsafe {
                 self.0 = _mm_add_ps(self.0, _mm_mul_ps(a.0, b.0));
@@ -194,6 +220,19 @@ pub mod x86 {
                 Self(_mm_andnot_ps(sign_bit, self.0))
             }
         }
+
+        #[inline(always)]
+        fn sum(self) -> f32 {
+            unsafe {
+                // Efficient horizontal sum for SSE
+                // shuf = (3, 2, 1, 0)
+                let mut shuf = _mm_movehdup_ps(self.0); // (3, 3, 1, 1)
+                let mut sums = _mm_add_ps(self.0, shuf);
+                shuf = _mm_movehl_ps(shuf, sums); // (3, 3, 3+1, 3+1)
+                sums = _mm_add_ss(sums, shuf);
+                _mm_cvtss_f32(sums)
+            }
+        }
     }
 
     #[derive(Debug, Clone, Copy)]
@@ -201,18 +240,24 @@ pub mod x86 {
 
     impl Add for AvxPacketF32 {
         type Output = Self;
+        #[inline(always)]
+        #[inline(always)]
         fn add(self, rhs: Self) -> Self {
             unsafe { Self(_mm256_add_ps(self.0, rhs.0)) }
         }
     }
     impl Sub for AvxPacketF32 {
         type Output = Self;
+        #[inline(always)]
+        #[inline(always)]
         fn sub(self, rhs: Self) -> Self {
             unsafe { Self(_mm256_sub_ps(self.0, rhs.0)) }
         }
     }
     impl Mul for AvxPacketF32 {
         type Output = Self;
+        #[inline(always)]
+        #[inline(always)]
         fn mul(self, rhs: Self) -> Self {
             unsafe { Self(_mm256_mul_ps(self.0, rhs.0)) }
         }
@@ -220,17 +265,34 @@ pub mod x86 {
 
     impl Packet<f32> for AvxPacketF32 {
         const SIZE: usize = 8;
+        #[inline(always)]
         unsafe fn load(ptr: *const f32) -> Self {
             unsafe { Self(_mm256_loadu_ps(ptr)) }
         }
+        #[inline(always)]
         unsafe fn store(self, ptr: *mut f32) {
             unsafe {
                 _mm256_storeu_ps(ptr, self.0);
             }
         }
+        #[inline(always)]
+        unsafe fn store_stream(self, ptr: *mut f32) {
+             unsafe {
+                _mm256_stream_ps(ptr, self.0);
+            }
+        }
+        #[inline(always)]
+        fn prefetch(ptr: *const f32) {
+            unsafe {
+                _mm_prefetch(ptr as *const i8, _MM_HINT_T0);
+            }
+        }
+        #[inline(always)]
         fn set1(val: f32) -> Self {
             unsafe { Self(_mm256_set1_ps(val)) }
         }
+        #[inline(always)]
+        #[inline(always)]
         fn fused_add_mul(&mut self, a: Self, b: Self) {
             unsafe {
                 self.0 = _mm256_add_ps(self.0, _mm256_mul_ps(a.0, b.0));
@@ -249,16 +311,33 @@ pub mod x86 {
         fn plog(self) -> Self {
             unimplemented!("AVX plog")
         }
+        #[inline(always)]
         fn psqrt(self) -> Self {
             unsafe { Self(_mm256_sqrt_ps(self.0)) }
         }
+        #[inline(always)]
         fn prsqrt(self) -> Self {
             unsafe { Self(_mm256_rsqrt_ps(self.0)) }
         }
+        #[inline(always)]
         fn pabs(self) -> Self {
             unsafe {
                 let sign_bit = _mm256_castsi256_ps(_mm256_set1_epi32(0x80000000u32 as i32));
                 Self(_mm256_andnot_ps(sign_bit, self.0))
+            }
+        }
+
+        #[inline(always)]
+        fn sum(self) -> f32 {
+            unsafe {
+                let hi128 = _mm256_extractf128_ps(self.0, 1);
+                let lo128 = _mm256_castps256_ps128(self.0);
+                let sum128 = _mm_add_ps(lo128, hi128);
+                let mut shuf = _mm_movehdup_ps(sum128);
+                let mut sums = _mm_add_ps(sum128, shuf);
+                shuf = _mm_movehl_ps(shuf, sums);
+                sums = _mm_add_ss(sums, shuf);
+                _mm_cvtss_f32(sums)
             }
         }
     }
@@ -268,18 +347,21 @@ pub mod x86 {
 
     impl Add for AvxFmaPacketF32 {
         type Output = Self;
+        #[inline(always)]
         fn add(self, rhs: Self) -> Self {
             unsafe { Self(_mm256_add_ps(self.0, rhs.0)) }
         }
     }
     impl Sub for AvxFmaPacketF32 {
         type Output = Self;
+        #[inline(always)]
         fn sub(self, rhs: Self) -> Self {
             unsafe { Self(_mm256_sub_ps(self.0, rhs.0)) }
         }
     }
     impl Mul for AvxFmaPacketF32 {
         type Output = Self;
+        #[inline(always)]
         fn mul(self, rhs: Self) -> Self {
             unsafe { Self(_mm256_mul_ps(self.0, rhs.0)) }
         }
@@ -295,9 +377,22 @@ pub mod x86 {
                 _mm256_storeu_ps(ptr, self.0);
             }
         }
+        #[inline(always)]
+        unsafe fn store_stream(self, ptr: *mut f32) {
+             unsafe {
+                _mm256_stream_ps(ptr, self.0);
+            }
+        }
+        #[inline(always)]
+        fn prefetch(ptr: *const f32) {
+            unsafe {
+                _mm_prefetch(ptr as *const i8, _MM_HINT_T0);
+            }
+        }
         fn set1(val: f32) -> Self {
             unsafe { Self(_mm256_set1_ps(val)) }
         }
+        #[inline(always)]
         fn fused_add_mul(&mut self, a: Self, b: Self) {
             unsafe {
                 self.0 = _mm256_fmadd_ps(a.0, b.0, self.0);
@@ -328,6 +423,20 @@ pub mod x86 {
                 Self(_mm256_andnot_ps(sign_bit, self.0))
             }
         }
+
+        #[inline(always)]
+        fn sum(self) -> f32 {
+             unsafe {
+                let hi128 = _mm256_extractf128_ps(self.0, 1);
+                let lo128 = _mm256_castps256_ps128(self.0);
+                let sum128 = _mm_add_ps(lo128, hi128);
+                let mut shuf = _mm_movehdup_ps(sum128);
+                let mut sums = _mm_add_ps(sum128, shuf);
+                shuf = _mm_movehl_ps(shuf, sums);
+                sums = _mm_add_ss(sums, shuf);
+                _mm_cvtss_f32(sums)
+            }
+        }
     }
 
     #[derive(Debug, Clone, Copy)]
@@ -335,18 +444,21 @@ pub mod x86 {
 
     impl Add for SsePacketF64 {
         type Output = Self;
+        #[inline(always)]
         fn add(self, rhs: Self) -> Self {
             unsafe { Self(_mm_add_pd(self.0, rhs.0)) }
         }
     }
     impl Sub for SsePacketF64 {
         type Output = Self;
+        #[inline(always)]
         fn sub(self, rhs: Self) -> Self {
             unsafe { Self(_mm_sub_pd(self.0, rhs.0)) }
         }
     }
     impl Mul for SsePacketF64 {
         type Output = Self;
+        #[inline(always)]
         fn mul(self, rhs: Self) -> Self {
             unsafe { Self(_mm_mul_pd(self.0, rhs.0)) }
         }
@@ -362,9 +474,22 @@ pub mod x86 {
                 _mm_storeu_pd(ptr, self.0);
             }
         }
+        #[inline(always)]
+        unsafe fn store_stream(self, ptr: *mut f64) {
+             unsafe {
+                _mm_stream_pd(ptr, self.0);
+            }
+        }
+        #[inline(always)]
+        fn prefetch(ptr: *const f64) {
+            unsafe {
+                _mm_prefetch(ptr as *const i8, _MM_HINT_T0);
+            }
+        }
         fn set1(val: f64) -> Self {
             unsafe { Self(_mm_set1_pd(val)) }
         }
+        #[inline(always)]
         fn fused_add_mul(&mut self, a: Self, b: Self) {
             unsafe {
                 self.0 = _mm_add_pd(self.0, _mm_mul_pd(a.0, b.0));
@@ -396,6 +521,15 @@ pub mod x86 {
                 Self(_mm_andnot_pd(sign_bit, self.0))
             }
         }
+
+        #[inline(always)]
+        fn sum(self) -> f64 {
+            unsafe {
+                let hi = _mm_unpackhi_pd(self.0, self.0);
+                let sum = _mm_add_pd(self.0, hi);
+                _mm_cvtsd_f64(sum)
+            }
+        }
     }
 
     #[derive(Debug, Clone, Copy)]
@@ -403,18 +537,21 @@ pub mod x86 {
 
     impl Add for AvxPacketF64 {
         type Output = Self;
+        #[inline(always)]
         fn add(self, rhs: Self) -> Self {
             unsafe { Self(_mm256_add_pd(self.0, rhs.0)) }
         }
     }
     impl Sub for AvxPacketF64 {
         type Output = Self;
+        #[inline(always)]
         fn sub(self, rhs: Self) -> Self {
             unsafe { Self(_mm256_sub_pd(self.0, rhs.0)) }
         }
     }
     impl Mul for AvxPacketF64 {
         type Output = Self;
+        #[inline(always)]
         fn mul(self, rhs: Self) -> Self {
             unsafe { Self(_mm256_mul_pd(self.0, rhs.0)) }
         }
@@ -430,9 +567,22 @@ pub mod x86 {
                 _mm256_storeu_pd(ptr, self.0);
             }
         }
+        #[inline(always)]
+        unsafe fn store_stream(self, ptr: *mut f64) {
+             unsafe {
+                _mm256_stream_pd(ptr, self.0);
+            }
+        }
+        #[inline(always)]
+        fn prefetch(ptr: *const f64) {
+             unsafe {
+                _mm_prefetch(ptr as *const i8, _MM_HINT_T0);
+            }
+        }
         fn set1(val: f64) -> Self {
             unsafe { Self(_mm256_set1_pd(val)) }
         }
+        #[inline(always)]
         fn fused_add_mul(&mut self, a: Self, b: Self) {
             unsafe {
                 self.0 = _mm256_add_pd(self.0, _mm256_mul_pd(a.0, b.0));
@@ -463,6 +613,18 @@ pub mod x86 {
                 Self(_mm256_andnot_pd(sign_bit, self.0))
             }
         }
+
+        #[inline(always)]
+        fn sum(self) -> f64 {
+            unsafe {
+                let hi128 = _mm256_extractf128_pd(self.0, 1);
+                let lo128 = _mm256_castpd256_pd128(self.0);
+                let sum128 = _mm_add_pd(lo128, hi128);
+                let hi = _mm_unpackhi_pd(sum128, sum128);
+                let sum = _mm_add_pd(sum128, hi);
+                _mm_cvtsd_f64(sum)
+            }
+        }
     }
 
     #[derive(Debug, Clone, Copy)]
@@ -470,18 +632,21 @@ pub mod x86 {
 
     impl Add for AvxFmaPacketF64 {
         type Output = Self;
+        #[inline(always)]
         fn add(self, rhs: Self) -> Self {
             unsafe { Self(_mm256_add_pd(self.0, rhs.0)) }
         }
     }
     impl Sub for AvxFmaPacketF64 {
         type Output = Self;
+        #[inline(always)]
         fn sub(self, rhs: Self) -> Self {
             unsafe { Self(_mm256_sub_pd(self.0, rhs.0)) }
         }
     }
     impl Mul for AvxFmaPacketF64 {
         type Output = Self;
+        #[inline(always)]
         fn mul(self, rhs: Self) -> Self {
             unsafe { Self(_mm256_mul_pd(self.0, rhs.0)) }
         }
@@ -497,11 +662,24 @@ pub mod x86 {
                 _mm256_storeu_pd(ptr, self.0);
             }
         }
+        #[inline(always)]
+        unsafe fn store_stream(self, ptr: *mut f64) {
+             unsafe {
+                _mm256_stream_pd(ptr, self.0);
+            }
+        }
+        #[inline(always)]
+        fn prefetch(ptr: *const f64) {
+             unsafe {
+                _mm_prefetch(ptr as *const i8, _MM_HINT_T0);
+            }
+        }
         fn set1(val: f64) -> Self {
             unsafe { Self(_mm256_set1_pd(val)) }
         }
+        #[inline(always)]
         fn fused_add_mul(&mut self, a: Self, b: Self) {
-            unsafe {
+             unsafe {
                 self.0 = _mm256_fmadd_pd(a.0, b.0, self.0);
             }
         }
@@ -528,6 +706,18 @@ pub mod x86 {
             unsafe {
                 let sign_bit = _mm256_castsi256_pd(_mm256_set1_epi64x(i64::MIN));
                 Self(_mm256_andnot_pd(sign_bit, self.0))
+            }
+        }
+
+        #[inline(always)]
+        fn sum(self) -> f64 {
+             unsafe {
+                let hi128 = _mm256_extractf128_pd(self.0, 1);
+                let lo128 = _mm256_castpd256_pd128(self.0);
+                let sum128 = _mm_add_pd(lo128, hi128);
+                let hi = _mm_unpackhi_pd(sum128, sum128);
+                let sum = _mm_add_pd(sum128, hi);
+                _mm_cvtsd_f64(sum)
             }
         }
     }
