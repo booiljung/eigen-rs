@@ -21,7 +21,7 @@ where
 
 impl<'a, T, S> MatrixExponential<'a, T, S>
 where
-    T: Scalar + Copy + PartialOrd + StaticFloatConsts + 'static,
+    T: Scalar + Copy + PartialOrd + StaticFloatConsts + 'static + num_traits::One,
     S: Storage<T> + 'static,
 {
     pub fn new(matrix: &'a Matrix<T, S>) -> Self {
@@ -193,7 +193,7 @@ where
 
 impl<'a, T, S> MatrixLogarithm<'a, T, S>
 where
-    T: Scalar + Copy + PartialOrd + StaticFloatConsts + 'static,
+    T: Scalar + Copy + PartialOrd + StaticFloatConsts + 'static + num_traits::One,
     S: Storage<T> + 'static,
 {
     pub fn new(matrix: &'a Matrix<T, S>) -> Self {

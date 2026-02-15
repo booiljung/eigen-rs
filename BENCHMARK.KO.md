@@ -26,6 +26,9 @@
 # 벤치마크를 실행하고 docs/reports/에 보고서 생성
 python3 verification/verify_perf.py
 
+# 무작위 크기로 실행 (과적합 방지)
+python3 verification/verify_perf.py --random-sweep
+
 # 실행 후 결과를 이 파일(BENCHMARK_LOG.md)에 자동 추가 (주의해서 사용)
 python3 verification/verify_perf.py --update-benchmark
 ```
@@ -41,6 +44,8 @@ python3 verification/verify_perf.py --update-benchmark
 ### 보고서 위치
 상세한 타임스탬프가 찍힌 보고서는 다음 경로에 생성됩니다:
 `docs/reports/performance_YYYY-MM-DD_HHMMSS.md`
+
+> **엄격한 규칙**: 이 파일들을 수동으로 생성하거나 이름을 변경하지 마십시오. 벤치마크 보고서는 데이터 무결성과 포맷 준수를 위해 반드시 `verify_perf.py` 스크립트에 의해 생성되어야 합니다.
 
 ### 결과 해석
 핵심 지표는 **비율(Ratio)**입니다:

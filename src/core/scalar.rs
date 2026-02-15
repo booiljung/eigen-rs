@@ -46,10 +46,7 @@ pub trait Scalar:
 
     /// Vectorized assignment helper.
     /// Returns true if vectorized assignment was performed.
-    fn assign_vectorized<S, X>(
-        _mat: &mut crate::core::matrix::Matrix<Self, S>,
-        _xpr: &X,
-    ) -> bool
+    fn assign_vectorized<S, X>(_mat: &mut crate::core::matrix::Matrix<Self, S>, _xpr: &X) -> bool
     where
         S: crate::core::storage::Storage<Self>,
         X: crate::core::xpr::MatrixXpr<Self>,
@@ -70,14 +67,19 @@ pub trait Scalar:
     }
 
     /// Vectorized scale helper.
-    fn scale_vectorized<S>(
-        _mat: &mut crate::core::matrix::Matrix<Self, S>,
-        _factor: Self,
-    ) -> bool
+    fn scale_vectorized<S>(_mat: &mut crate::core::matrix::Matrix<Self, S>, _factor: Self) -> bool
     where
         S: crate::core::storage::Storage<Self>,
     {
         false
+    }
+
+    /// Vectorized squared norm helper.
+    fn squared_norm_vectorized<S>(_mat: &crate::core::matrix::Matrix<Self, S>) -> Option<Self>
+    where
+        S: crate::core::storage::Storage<Self>,
+    {
+        None
     }
 }
 
@@ -134,10 +136,7 @@ impl Scalar for f32 {
         self as f64
     }
 
-    fn assign_vectorized<S, X>(
-        mat: &mut crate::core::matrix::Matrix<Self, S>,
-        xpr: &X,
-    ) -> bool
+    fn assign_vectorized<S, X>(mat: &mut crate::core::matrix::Matrix<Self, S>, xpr: &X) -> bool
     where
         S: crate::core::storage::Storage<Self>,
         X: crate::core::xpr::MatrixXpr<Self>,
@@ -147,7 +146,7 @@ impl Scalar for f32 {
             if is_x86_feature_detected!("avx2") {
                 use crate::core::arch::x86::AvxPacketF32;
                 use crate::core::arch::Packet;
-                
+
                 let rows = mat.rows();
                 let cols = mat.cols();
                 let size = rows * cols;
@@ -157,7 +156,7 @@ impl Scalar for f32 {
                 if mat.has_linear_access() && xpr.has_linear_access() {
                     // eprintln!("DEBUG: assign_vectorized linear path taken");
                     if xpr.try_eval_to::<AvxPacketF32>(data_ptr, size) {
-                         // eprintln!("DEBUG: try_eval_to succeeded");
+                        // eprintln!("DEBUG: try_eval_to succeeded");
                         return true;
                     }
                     // eprintln!("DEBUG: try_eval_to failed, using unrolled loop");
@@ -166,29 +165,29 @@ impl Scalar for f32 {
                     while i + 64 <= size {
                         unsafe {
                             let p0 = xpr.packet_eval_linear::<AvxPacketF32>(i);
-                            let p1 = xpr.packet_eval_linear::<AvxPacketF32>(i+8);
-                            let p2 = xpr.packet_eval_linear::<AvxPacketF32>(i+16);
-                            let p3 = xpr.packet_eval_linear::<AvxPacketF32>(i+24);
-                            let p4 = xpr.packet_eval_linear::<AvxPacketF32>(i+32);
-                            let p5 = xpr.packet_eval_linear::<AvxPacketF32>(i+40);
-                            let p6 = xpr.packet_eval_linear::<AvxPacketF32>(i+48);
-                            let p7 = xpr.packet_eval_linear::<AvxPacketF32>(i+56);
-                            
+                            let p1 = xpr.packet_eval_linear::<AvxPacketF32>(i + 8);
+                            let p2 = xpr.packet_eval_linear::<AvxPacketF32>(i + 16);
+                            let p3 = xpr.packet_eval_linear::<AvxPacketF32>(i + 24);
+                            let p4 = xpr.packet_eval_linear::<AvxPacketF32>(i + 32);
+                            let p5 = xpr.packet_eval_linear::<AvxPacketF32>(i + 40);
+                            let p6 = xpr.packet_eval_linear::<AvxPacketF32>(i + 48);
+                            let p7 = xpr.packet_eval_linear::<AvxPacketF32>(i + 56);
+
                             p0.store(data_ptr.add(i));
-                            p1.store(data_ptr.add(i+8));
-                            p2.store(data_ptr.add(i+16));
-                            p3.store(data_ptr.add(i+24));
-                            p4.store(data_ptr.add(i+32));
-                            p5.store(data_ptr.add(i+40));
-                            p6.store(data_ptr.add(i+48));
-                            p7.store(data_ptr.add(i+56));
+                            p1.store(data_ptr.add(i + 8));
+                            p2.store(data_ptr.add(i + 16));
+                            p3.store(data_ptr.add(i + 24));
+                            p4.store(data_ptr.add(i + 32));
+                            p5.store(data_ptr.add(i + 40));
+                            p6.store(data_ptr.add(i + 48));
+                            p7.store(data_ptr.add(i + 56));
                         }
                         i += 64;
                     }
                     while i + 8 <= size {
                         unsafe {
                             let packet = xpr.packet_eval_linear::<AvxPacketF32>(i);
-                             packet.store(data_ptr.add(i));
+                            packet.store(data_ptr.add(i));
                         }
                         i += 8;
                     }
@@ -205,7 +204,7 @@ impl Scalar for f32 {
                 for c in 0..cols {
                     let col_offset = c * rows;
                     let mut r = 0;
-                    
+
                     // Vectorized Loop
                     while r + 8 <= rows {
                         unsafe {
@@ -240,19 +239,32 @@ impl Scalar for f32 {
     {
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
+            #[cfg(target_feature = "avx2")]
+            {
+                return unsafe { dot_vectorized_avx2_f32(lhs, rhs) };
+            }
+            #[cfg(not(target_feature = "avx2"))]
             if is_x86_feature_detected!("avx2") {
-                
+                return unsafe { dot_vectorized_avx2_f32(lhs, rhs) };
+            }
+        }
+        None
+    }
+
+    fn squared_norm_vectorized<S>(mat: &crate::core::matrix::Matrix<Self, S>) -> Option<Self>
+    where
+        S: crate::core::storage::Storage<Self>,
+    {
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        {
+            if is_x86_feature_detected!("avx2") {
                 use crate::core::arch::x86::AvxFmaPacketF32;
                 use crate::core::arch::Packet;
 
-                let size = lhs.size();
-                if size != rhs.size() {
-                    return None;
-                }
-                
-                if lhs.has_linear_access() && rhs.has_linear_access() {
-                    let ptr_l = lhs.storage().data().as_ptr();
-                    let ptr_r = rhs.storage().data().as_ptr();
+                let size = mat.size();
+
+                if mat.has_linear_access() {
+                    let ptr = mat.storage().data().as_ptr();
                     let packet_size = AvxFmaPacketF32::SIZE;
                     let mut i = 0;
                     let mut sum0 = AvxFmaPacketF32::set1(0.0);
@@ -263,58 +275,61 @@ impl Scalar for f32 {
                     let mut sum5 = AvxFmaPacketF32::set1(0.0);
                     let mut sum6 = AvxFmaPacketF32::set1(0.0);
                     let mut sum7 = AvxFmaPacketF32::set1(0.0);
-                    
-                     unsafe {
-                        while i + 64 <= size {
-                            // Prefetch ahead (e.g. 2 cache lines / 128 bytes ahead)
-                            AvxFmaPacketF32::prefetch(ptr_l.add(i + 128));
-                            AvxFmaPacketF32::prefetch(ptr_r.add(i + 128));
 
-                            sum0.fused_add_mul(AvxFmaPacketF32::load(ptr_l.add(i)), AvxFmaPacketF32::load(ptr_r.add(i)));
-                            sum1.fused_add_mul(AvxFmaPacketF32::load(ptr_l.add(i+8)), AvxFmaPacketF32::load(ptr_r.add(i+8)));
-                            sum2.fused_add_mul(AvxFmaPacketF32::load(ptr_l.add(i+16)), AvxFmaPacketF32::load(ptr_r.add(i+16)));
-                            sum3.fused_add_mul(AvxFmaPacketF32::load(ptr_l.add(i+24)), AvxFmaPacketF32::load(ptr_r.add(i+24)));
-                            sum4.fused_add_mul(AvxFmaPacketF32::load(ptr_l.add(i+32)), AvxFmaPacketF32::load(ptr_r.add(i+32)));
-                            sum5.fused_add_mul(AvxFmaPacketF32::load(ptr_l.add(i+40)), AvxFmaPacketF32::load(ptr_r.add(i+40)));
-                            sum6.fused_add_mul(AvxFmaPacketF32::load(ptr_l.add(i+48)), AvxFmaPacketF32::load(ptr_r.add(i+48)));
-                            sum7.fused_add_mul(AvxFmaPacketF32::load(ptr_l.add(i+56)), AvxFmaPacketF32::load(ptr_r.add(i+56)));
+                    unsafe {
+                        while i + 64 <= size {
+                            let v0 = AvxFmaPacketF32::load(ptr.add(i));
+                            let v1 = AvxFmaPacketF32::load(ptr.add(i + 8));
+                            let v2 = AvxFmaPacketF32::load(ptr.add(i + 16));
+                            let v3 = AvxFmaPacketF32::load(ptr.add(i + 24));
+                            let v4 = AvxFmaPacketF32::load(ptr.add(i + 32));
+                            let v5 = AvxFmaPacketF32::load(ptr.add(i + 40));
+                            let v6 = AvxFmaPacketF32::load(ptr.add(i + 48));
+                            let v7 = AvxFmaPacketF32::load(ptr.add(i + 56));
+
+                            sum0.fused_add_mul(v0, v0);
+                            sum1.fused_add_mul(v1, v1);
+                            sum2.fused_add_mul(v2, v2);
+                            sum3.fused_add_mul(v3, v3);
+                            sum4.fused_add_mul(v4, v4);
+                            sum5.fused_add_mul(v5, v5);
+                            sum6.fused_add_mul(v6, v6);
+                            sum7.fused_add_mul(v7, v7);
                             i += 64;
                         }
                         while i + packet_size <= size {
-                            sum0.fused_add_mul(AvxFmaPacketF32::load(ptr_l.add(i)), AvxFmaPacketF32::load(ptr_r.add(i)));
+                            let v = AvxFmaPacketF32::load(ptr.add(i));
+                            sum0.fused_add_mul(v, v);
                             i += packet_size;
                         }
                     }
-                    
-                    let mut sum_packet = (sum0 + sum1) + (sum2 + sum3) + (sum4 + sum5) + (sum6 + sum7);
-                    
+
+                    let mut sum_packet =
+                        (sum0 + sum1) + (sum2 + sum3) + (sum4 + sum5) + (sum6 + sum7);
+
                     let mut sum = sum_packet.sum();
-                    
+
                     while i < size {
                         unsafe {
-                            sum += *ptr_l.add(i) * *ptr_r.add(i);
+                            let v = *ptr.add(i);
+                            sum += v * v;
                         }
                         i += 1;
                     }
                     return Some(sum);
-                } else {
                 }
-            } else {
             }
         }
         None
     }
 
-    fn scale_vectorized<S>(
-        mat: &mut crate::core::matrix::Matrix<Self, S>,
-        factor: Self,
-    ) -> bool
+    fn scale_vectorized<S>(mat: &mut crate::core::matrix::Matrix<Self, S>, factor: Self) -> bool
     where
         S: crate::core::storage::Storage<Self>,
     {
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
-             if is_x86_feature_detected!("avx2") {
+            if is_x86_feature_detected!("avx2") {
                 use crate::core::arch::x86::AvxPacketF32;
                 use crate::core::arch::Packet;
 
@@ -324,33 +339,33 @@ impl Scalar for f32 {
                     let packet_size = AvxPacketF32::SIZE;
                     let vec_factor = AvxPacketF32::set1(factor);
                     let mut i = 0;
-                    
+
                     unsafe {
                         while i + 64 <= size {
-                             let v0 = AvxPacketF32::load(ptr.add(i));
-                             let v1 = AvxPacketF32::load(ptr.add(i+8));
-                             let v2 = AvxPacketF32::load(ptr.add(i+16));
-                             let v3 = AvxPacketF32::load(ptr.add(i+24));
-                             let v4 = AvxPacketF32::load(ptr.add(i+32));
-                             let v5 = AvxPacketF32::load(ptr.add(i+40));
-                             let v6 = AvxPacketF32::load(ptr.add(i+48));
-                             let v7 = AvxPacketF32::load(ptr.add(i+56));
-                             
-                             (v0 * vec_factor).store(ptr.add(i));
-                             (v1 * vec_factor).store(ptr.add(i+8));
-                             (v2 * vec_factor).store(ptr.add(i+16));
-                             (v3 * vec_factor).store(ptr.add(i+24));
-                             (v4 * vec_factor).store(ptr.add(i+32));
-                             (v5 * vec_factor).store(ptr.add(i+40));
-                             (v6 * vec_factor).store(ptr.add(i+48));
-                             (v7 * vec_factor).store(ptr.add(i+56));
-                             
-                             i += 64;
+                            let v0 = AvxPacketF32::load(ptr.add(i));
+                            let v1 = AvxPacketF32::load(ptr.add(i + 8));
+                            let v2 = AvxPacketF32::load(ptr.add(i + 16));
+                            let v3 = AvxPacketF32::load(ptr.add(i + 24));
+                            let v4 = AvxPacketF32::load(ptr.add(i + 32));
+                            let v5 = AvxPacketF32::load(ptr.add(i + 40));
+                            let v6 = AvxPacketF32::load(ptr.add(i + 48));
+                            let v7 = AvxPacketF32::load(ptr.add(i + 56));
+
+                            (v0 * vec_factor).store(ptr.add(i));
+                            (v1 * vec_factor).store(ptr.add(i + 8));
+                            (v2 * vec_factor).store(ptr.add(i + 16));
+                            (v3 * vec_factor).store(ptr.add(i + 24));
+                            (v4 * vec_factor).store(ptr.add(i + 32));
+                            (v5 * vec_factor).store(ptr.add(i + 40));
+                            (v6 * vec_factor).store(ptr.add(i + 48));
+                            (v7 * vec_factor).store(ptr.add(i + 56));
+
+                            i += 64;
                         }
                         while i + packet_size <= size {
-                             let val = AvxPacketF32::load(ptr.add(i));
-                             (val * vec_factor).store(ptr.add(i));
-                             i += packet_size;
+                            let val = AvxPacketF32::load(ptr.add(i));
+                            (val * vec_factor).store(ptr.add(i));
+                            i += packet_size;
                         }
                         while i < size {
                             *ptr.add(i) *= factor;
@@ -359,7 +374,7 @@ impl Scalar for f32 {
                     }
                     return true;
                 }
-             }
+            }
         }
         false
     }
@@ -417,26 +432,23 @@ impl Scalar for f64 {
     fn to_f64(self) -> f64 {
         self
     }
-    
-    fn assign_vectorized<S, X>(
-        mat: &mut crate::core::matrix::Matrix<Self, S>,
-        xpr: &X,
-    ) -> bool
+
+    fn assign_vectorized<S, X>(mat: &mut crate::core::matrix::Matrix<Self, S>, xpr: &X) -> bool
     where
         S: crate::core::storage::Storage<Self>,
         X: crate::core::xpr::MatrixXpr<Self>,
     {
-         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
             if is_x86_feature_detected!("avx2") {
                 use crate::core::arch::x86::AvxPacketF64;
                 use crate::core::arch::Packet;
-                
+
                 let rows = mat.rows();
                 let cols = mat.cols();
                 let size = rows * cols;
                 let data_ptr = mat.storage_mut().data_mut().as_mut_ptr();
-                
+
                 // 1. Linear Access Optimization
                 if mat.has_linear_access() && xpr.has_linear_access() {
                     if xpr.try_eval_to::<AvxPacketF64>(data_ptr, size) {
@@ -447,7 +459,7 @@ impl Scalar for f64 {
                     while i + 4 <= size {
                         unsafe {
                             let packet = xpr.packet_eval_linear::<AvxPacketF64>(i);
-                             packet.store(data_ptr.add(i));
+                            packet.store(data_ptr.add(i));
                         }
                         i += 4;
                     }
@@ -459,18 +471,18 @@ impl Scalar for f64 {
                     }
                     return true;
                 }
-                
+
                 // 2. Fallback
                 for c in 0..cols {
                     let col_offset = c * rows;
                     let mut r = 0;
                     while r + 4 <= rows {
-                         unsafe {
-                             let dest_ptr = data_ptr.add(col_offset + r);
-                             let packet = xpr.packet_eval::<AvxPacketF64>(r, c);
-                             packet.store(dest_ptr);
-                         }
-                         r += 4;
+                        unsafe {
+                            let dest_ptr = data_ptr.add(col_offset + r);
+                            let packet = xpr.packet_eval::<AvxPacketF64>(r, c);
+                            packet.store(dest_ptr);
+                        }
+                        r += 4;
                     }
                     while r < rows {
                         unsafe {
@@ -503,7 +515,7 @@ impl Scalar for f64 {
                 if size != rhs.size() {
                     return None;
                 }
-                
+
                 if lhs.has_linear_access() && rhs.has_linear_access() {
                     let ptr_l = lhs.storage().data().as_ptr();
                     let ptr_r = rhs.storage().data().as_ptr();
@@ -513,16 +525,25 @@ impl Scalar for f64 {
                     let mut sum1 = AvxFmaPacketF64::set1(0.0);
                     let mut sum2 = AvxFmaPacketF64::set1(0.0);
                     let mut sum3 = AvxFmaPacketF64::set1(0.0);
-                    
-                     unsafe {
-                        while i + 16 <= size {
-                            AvxFmaPacketF64::prefetch(ptr_l.add(i + 32));
-                            AvxFmaPacketF64::prefetch(ptr_r.add(i + 32));
 
-                            sum0.fused_add_mul(AvxFmaPacketF64::load(ptr_l.add(i)), AvxFmaPacketF64::load(ptr_r.add(i)));
-                            sum1.fused_add_mul(AvxFmaPacketF64::load(ptr_l.add(i+4)), AvxFmaPacketF64::load(ptr_r.add(i+4)));
-                            sum2.fused_add_mul(AvxFmaPacketF64::load(ptr_l.add(i+8)), AvxFmaPacketF64::load(ptr_r.add(i+8)));
-                            sum3.fused_add_mul(AvxFmaPacketF64::load(ptr_l.add(i+12)), AvxFmaPacketF64::load(ptr_r.add(i+12)));
+                    unsafe {
+                        while i + 16 <= size {
+                            sum0.fused_add_mul(
+                                AvxFmaPacketF64::load(ptr_l.add(i)),
+                                AvxFmaPacketF64::load(ptr_r.add(i)),
+                            );
+                            sum1.fused_add_mul(
+                                AvxFmaPacketF64::load(ptr_l.add(i + 4)),
+                                AvxFmaPacketF64::load(ptr_r.add(i + 4)),
+                            );
+                            sum2.fused_add_mul(
+                                AvxFmaPacketF64::load(ptr_l.add(i + 8)),
+                                AvxFmaPacketF64::load(ptr_r.add(i + 8)),
+                            );
+                            sum3.fused_add_mul(
+                                AvxFmaPacketF64::load(ptr_l.add(i + 12)),
+                                AvxFmaPacketF64::load(ptr_r.add(i + 12)),
+                            );
                             i += 16;
                         }
                         while i + packet_size <= size {
@@ -532,9 +553,9 @@ impl Scalar for f64 {
                             i += packet_size;
                         }
                     }
-                    
+
                     let mut sum = (sum0 + sum1 + sum2 + sum3).sum();
-                    
+
                     while i < size {
                         unsafe {
                             sum += *ptr_l.add(i) * *ptr_r.add(i);
@@ -548,16 +569,70 @@ impl Scalar for f64 {
         None
     }
 
-    fn scale_vectorized<S>(
-        mat: &mut crate::core::matrix::Matrix<Self, S>,
-        factor: Self,
-    ) -> bool
+    fn squared_norm_vectorized<S>(mat: &crate::core::matrix::Matrix<Self, S>) -> Option<Self>
     where
         S: crate::core::storage::Storage<Self>,
     {
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
-             if is_x86_feature_detected!("avx2") {
+            if is_x86_feature_detected!("avx2") {
+                use crate::core::arch::x86::AvxFmaPacketF64;
+                use crate::core::arch::Packet;
+
+                let size = mat.size();
+
+                if mat.has_linear_access() {
+                    let ptr = mat.storage().data().as_ptr();
+                    let packet_size = AvxFmaPacketF64::SIZE;
+                    let mut i = 0;
+                    let mut sum0 = AvxFmaPacketF64::set1(0.0);
+                    let mut sum1 = AvxFmaPacketF64::set1(0.0);
+                    let mut sum2 = AvxFmaPacketF64::set1(0.0);
+                    let mut sum3 = AvxFmaPacketF64::set1(0.0);
+
+                    unsafe {
+                        while i + 16 <= size {
+                            let v0 = AvxFmaPacketF64::load(ptr.add(i));
+                            let v1 = AvxFmaPacketF64::load(ptr.add(i + 4));
+                            let v2 = AvxFmaPacketF64::load(ptr.add(i + 8));
+                            let v3 = AvxFmaPacketF64::load(ptr.add(i + 12));
+
+                            sum0.fused_add_mul(v0, v0);
+                            sum1.fused_add_mul(v1, v1);
+                            sum2.fused_add_mul(v2, v2);
+                            sum3.fused_add_mul(v3, v3);
+                            i += 16;
+                        }
+                        while i + packet_size <= size {
+                            let v = AvxFmaPacketF64::load(ptr.add(i));
+                            sum0.fused_add_mul(v, v);
+                            i += packet_size;
+                        }
+                    }
+
+                    let mut sum = (sum0 + sum1 + sum2 + sum3).sum();
+
+                    while i < size {
+                        unsafe {
+                            let v = *ptr.add(i);
+                            sum += v * v;
+                        }
+                        i += 1;
+                    }
+                    return Some(sum);
+                }
+            }
+        }
+        None
+    }
+
+    fn scale_vectorized<S>(mat: &mut crate::core::matrix::Matrix<Self, S>, factor: Self) -> bool
+    where
+        S: crate::core::storage::Storage<Self>,
+    {
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        {
+            if is_x86_feature_detected!("avx2") {
                 use crate::core::arch::x86::AvxPacketF64;
                 use crate::core::arch::Packet;
 
@@ -567,12 +642,12 @@ impl Scalar for f64 {
                     let packet_size = AvxPacketF64::SIZE;
                     let vec_factor = AvxPacketF64::set1(factor);
                     let mut i = 0;
-                    
+
                     unsafe {
                         while i + packet_size <= size {
-                             let val = AvxPacketF64::load(ptr.add(i));
-                             (val * vec_factor).store(ptr.add(i));
-                             i += packet_size;
+                            let val = AvxPacketF64::load(ptr.add(i));
+                            (val * vec_factor).store(ptr.add(i));
+                            i += packet_size;
                         }
                         while i < size {
                             *ptr.add(i) *= factor;
@@ -581,9 +656,106 @@ impl Scalar for f64 {
                     }
                     return true;
                 }
-             }
+            }
         }
         false
     }
 }
 // Future: impl Scalar for Complex<f32>, etc.
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[target_feature(enable = "avx2", enable = "fma")]
+#[inline]
+unsafe fn dot_vectorized_avx2_f32<S1, S2>(
+    lhs: &crate::core::matrix::Matrix<f32, S1>,
+    rhs: &crate::core::matrix::Matrix<f32, S2>,
+) -> Option<f32>
+where
+    S1: crate::core::storage::Storage<f32>,
+    S2: crate::core::storage::Storage<f32>,
+{
+    use crate::core::arch::x86::AvxFmaPacketF32;
+    use crate::core::arch::Packet;
+
+    // eprintln!("DEBUG: dot_vectorized_avx2_f32 called");
+
+    let size = lhs.size();
+    if size != rhs.size() {
+        return None;
+    }
+
+    if lhs.has_linear_access() && rhs.has_linear_access() {
+        let ptr_l = lhs.storage().data().as_ptr();
+        let ptr_r = rhs.storage().data().as_ptr();
+        let packet_size = AvxFmaPacketF32::SIZE; // 8
+        let mut i = 0;
+
+        // Accumulators
+        let mut sum0 = AvxFmaPacketF32::set1(0.0);
+        let mut sum1 = AvxFmaPacketF32::set1(0.0);
+        let mut sum2 = AvxFmaPacketF32::set1(0.0);
+        let mut sum3 = AvxFmaPacketF32::set1(0.0);
+        let mut sum4 = AvxFmaPacketF32::set1(0.0);
+        let mut sum5 = AvxFmaPacketF32::set1(0.0);
+        let mut sum6 = AvxFmaPacketF32::set1(0.0);
+        let mut sum7 = AvxFmaPacketF32::set1(0.0);
+
+        // 64-element unrolling (8 packets)
+        while i + 64 <= size {
+            sum0.fused_add_mul(
+                AvxFmaPacketF32::load(ptr_l.add(i)),
+                AvxFmaPacketF32::load(ptr_r.add(i)),
+            );
+            sum1.fused_add_mul(
+                AvxFmaPacketF32::load(ptr_l.add(i + 8)),
+                AvxFmaPacketF32::load(ptr_r.add(i + 8)),
+            );
+            sum2.fused_add_mul(
+                AvxFmaPacketF32::load(ptr_l.add(i + 16)),
+                AvxFmaPacketF32::load(ptr_r.add(i + 16)),
+            );
+            sum3.fused_add_mul(
+                AvxFmaPacketF32::load(ptr_l.add(i + 24)),
+                AvxFmaPacketF32::load(ptr_r.add(i + 24)),
+            );
+            sum4.fused_add_mul(
+                AvxFmaPacketF32::load(ptr_l.add(i + 32)),
+                AvxFmaPacketF32::load(ptr_r.add(i + 32)),
+            );
+            sum5.fused_add_mul(
+                AvxFmaPacketF32::load(ptr_l.add(i + 40)),
+                AvxFmaPacketF32::load(ptr_r.add(i + 40)),
+            );
+            sum6.fused_add_mul(
+                AvxFmaPacketF32::load(ptr_l.add(i + 48)),
+                AvxFmaPacketF32::load(ptr_r.add(i + 48)),
+            );
+            sum7.fused_add_mul(
+                AvxFmaPacketF32::load(ptr_l.add(i + 56)),
+                AvxFmaPacketF32::load(ptr_r.add(i + 56)),
+            );
+            i += 64;
+        }
+
+        // Single packet cleanup
+        while i + packet_size <= size {
+            sum0.fused_add_mul(
+                AvxFmaPacketF32::load(ptr_l.add(i)),
+                AvxFmaPacketF32::load(ptr_r.add(i)),
+            );
+            i += packet_size;
+        }
+
+        // Reduce packets
+        let mut sum_packet = (sum0 + sum1) + (sum2 + sum3) + (sum4 + sum5) + (sum6 + sum7);
+        let mut sum = sum_packet.sum();
+
+        // Scalar cleanup
+        while i < size {
+            sum += *ptr_l.add(i) * *ptr_r.add(i);
+            i += 1;
+        }
+        return Some(sum);
+    }
+    None
+}

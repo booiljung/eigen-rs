@@ -11,10 +11,8 @@ pub unsafe fn alloc_aligned<T>(capacity: usize) -> NonNull<T> {
         return NonNull::dangling();
     }
 
-    let layout = Layout::from_size_align(
-        capacity * std::mem::size_of::<T>(),
-        ALIGNMENT,
-    ).expect("Failed to create layout");
+    let layout = Layout::from_size_align(capacity * std::mem::size_of::<T>(), ALIGNMENT)
+        .expect("Failed to create layout");
 
     let ptr = alloc(layout) as *mut T;
     NonNull::new(ptr).expect("Failed to allocate memory")
@@ -26,10 +24,8 @@ pub unsafe fn dealloc_aligned<T>(ptr: NonNull<T>, capacity: usize) {
         return;
     }
 
-    let layout = Layout::from_size_align(
-        capacity * std::mem::size_of::<T>(),
-        ALIGNMENT,
-    ).expect("Failed to create layout");
+    let layout = Layout::from_size_align(capacity * std::mem::size_of::<T>(), ALIGNMENT)
+        .expect("Failed to create layout");
 
     dealloc(ptr.as_ptr() as *mut u8, layout);
 }

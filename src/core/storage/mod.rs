@@ -53,10 +53,7 @@ impl<T> AlignedStorage<T> {
 
         unsafe {
             let ptr = crate::core::allocator::alloc_aligned::<T>(size);
-            Ok(Self {
-                ptr,
-                size,
-            })
+            Ok(Self { ptr, size })
         }
     }
 

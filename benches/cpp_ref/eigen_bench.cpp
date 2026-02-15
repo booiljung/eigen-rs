@@ -5,6 +5,8 @@
 #include <chrono>
 #include <vector>
 #include <string>
+#include <sstream>
+#include <algorithm>
 
 using namespace std;
 using namespace std::chrono;
@@ -102,19 +104,21 @@ void bench_vector_ops(int size) {
     auto start = high_resolution_clock::now();
     for(int i=0; i<iterations; ++i) {
         res += v1.dot(v2);
-        v1[0] += 0.00001f;
+        __asm__ __volatile__("" : : "g"(v1.data()) : "memory");
     }
     auto end = high_resolution_clock::now();
     cout << "VecDot," << size << "," << duration_cast<nanoseconds>(end - start).count() / iterations << endl;
+    cerr << "VecDot Res: " << res << endl; // Prevent DCE
 
     // Norm
     start = high_resolution_clock::now();
     for(int i=0; i<iterations; ++i) {
         res += v1.norm();
-        v1[0] += 0.00001f;
+        __asm__ __volatile__("" : : "g"(v1.data()) : "memory");
     }
     end = high_resolution_clock::now();
     cout << "VecNorm," << size << "," << duration_cast<nanoseconds>(end - start).count() / iterations << endl;
+    cerr << "VecNorm Res: " << res << endl; // Prevent DCE
 }
 
 void bench_matrix_arithmetic(int size) {
@@ -189,6 +193,15 @@ void bench_dense_decomp_extra(int size) {
     }
     end = high_resolution_clock::now();
     cout << "QR," << size << "," << duration_cast<nanoseconds>(end - start).count() / iterations << endl;
+
+    // Inverse (using PartialPivLU)
+    Eigen::MatrixXf inv_res(size, size);
+    start = high_resolution_clock::now();
+    for(int i=0; i<iterations; ++i) {
+         inv_res.noalias() = a.inverse();
+    }
+    end = high_resolution_clock::now();
+    cout << "Inverse," << size << "," << duration_cast<nanoseconds>(end - start).count() / iterations << endl;
 }
 
 void bench_sparse(int size) {
@@ -231,26 +244,61 @@ void bench_sparse(int size) {
     cout << "SpMM_Dense," << size << "," << duration_cast<nanoseconds>(end - start).count() / iterations << endl;
 }
 
-int main() {
-    // 1. Standard Sweep: 16 to 384, stride 13 (avoid power of 2)
-    vector<int> sizes;
-    for (int s = 16; s <= 384; s += 13) {
-        sizes.push_back(s);
+// Helper to parse comma-separated ints
+std::vector<int> parse_csv(const std::string& input) {
+    std::vector<int> result;
+    std::stringstream ss(input);
+    std::string item;
+    while (getline(ss, item, ',')) {
+        if (!item.empty()) {
+            result.push_back(stoi(item));
+        }
     }
-    // Include the standard reference sizes for continuity
-    sizes.push_back(64);
-    sizes.push_back(128);
-    sizes.push_back(256);
+    return result;
+}
 
-    // 2. Small Sweep for heavy ops: 16 to 64, stride 7
+int main(int argc, char* argv[]) {
+    // defaults
+    vector<int> sizes;
     vector<int> small_sizes;
-    for (int s = 16; s <= 64; s += 7) {
-        small_sizes.push_back(s);
-    }
-    small_sizes.push_back(32);
-    small_sizes.push_back(64);
     
-    // Sort and unique to avoid duplicates
+    // Check args
+    std::string arg_sizes = "";
+    std::string arg_small_sizes = "";
+    
+    for(int i=1; i<argc; ++i) {
+        std::string arg = argv[i];
+        if (arg == "--sizes" && i+1 < argc) {
+            arg_sizes = argv[++i];
+        } else if (arg == "--small-sizes" && i+1 < argc) {
+            arg_small_sizes = argv[++i];
+        }
+    }
+    
+    if (!arg_sizes.empty()) {
+        sizes = parse_csv(arg_sizes);
+    } else {
+        // Default Sweep: 16 to 384, stride 13
+        for (int s = 16; s <= 384; s += 13) {
+            sizes.push_back(s);
+        }
+        sizes.push_back(64);
+        sizes.push_back(128);
+        sizes.push_back(256);
+    }
+    
+    if (!arg_small_sizes.empty()) {
+        small_sizes = parse_csv(arg_small_sizes);
+    } else {
+        // Default Small Sweep: 16 to 64, stride 7
+        for (int s = 16; s <= 64; s += 7) {
+            small_sizes.push_back(s);
+        }
+        small_sizes.push_back(32);
+        small_sizes.push_back(64);
+    }
+    
+    // Sort and unique
     sort(sizes.begin(), sizes.end());
     sizes.erase(unique(sizes.begin(), sizes.end()), sizes.end());
     
@@ -266,7 +314,7 @@ int main() {
         bench_sparse(s);
     }
     
-    // 3. Large Vector Benchmarks
+    // 3. Large Vector Benchmarks (Fixed for now, or could be added to args)
     vector<int> large_vec_sizes = {4096, 16384, 65536};
     for(int s : large_vec_sizes) {
         bench_vector_ops(s);

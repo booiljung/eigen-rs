@@ -18,6 +18,12 @@ impl<T: Scalar> num_traits::Zero for Complex<T> {
     }
 }
 
+impl<T: Scalar + num_traits::One> num_traits::One for Complex<T> {
+    fn one() -> Self {
+        Self::new(T::one(), T::zero())
+    }
+}
+
 impl<T: Scalar> std::fmt::Display for Complex<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "({:?}, {:?})", self.re, self.im)

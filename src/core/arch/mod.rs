@@ -277,7 +277,7 @@ pub mod x86 {
         }
         #[inline(always)]
         unsafe fn store_stream(self, ptr: *mut f32) {
-             unsafe {
+            unsafe {
                 _mm256_stream_ps(ptr, self.0);
             }
         }
@@ -379,7 +379,7 @@ pub mod x86 {
         }
         #[inline(always)]
         unsafe fn store_stream(self, ptr: *mut f32) {
-             unsafe {
+            unsafe {
                 _mm256_stream_ps(ptr, self.0);
             }
         }
@@ -426,7 +426,7 @@ pub mod x86 {
 
         #[inline(always)]
         fn sum(self) -> f32 {
-             unsafe {
+            unsafe {
                 let hi128 = _mm256_extractf128_ps(self.0, 1);
                 let lo128 = _mm256_castps256_ps128(self.0);
                 let sum128 = _mm_add_ps(lo128, hi128);
@@ -476,7 +476,7 @@ pub mod x86 {
         }
         #[inline(always)]
         unsafe fn store_stream(self, ptr: *mut f64) {
-             unsafe {
+            unsafe {
                 _mm_stream_pd(ptr, self.0);
             }
         }
@@ -569,13 +569,13 @@ pub mod x86 {
         }
         #[inline(always)]
         unsafe fn store_stream(self, ptr: *mut f64) {
-             unsafe {
+            unsafe {
                 _mm256_stream_pd(ptr, self.0);
             }
         }
         #[inline(always)]
         fn prefetch(ptr: *const f64) {
-             unsafe {
+            unsafe {
                 _mm_prefetch(ptr as *const i8, _MM_HINT_T0);
             }
         }
@@ -664,13 +664,13 @@ pub mod x86 {
         }
         #[inline(always)]
         unsafe fn store_stream(self, ptr: *mut f64) {
-             unsafe {
+            unsafe {
                 _mm256_stream_pd(ptr, self.0);
             }
         }
         #[inline(always)]
         fn prefetch(ptr: *const f64) {
-             unsafe {
+            unsafe {
                 _mm_prefetch(ptr as *const i8, _MM_HINT_T0);
             }
         }
@@ -679,7 +679,7 @@ pub mod x86 {
         }
         #[inline(always)]
         fn fused_add_mul(&mut self, a: Self, b: Self) {
-             unsafe {
+            unsafe {
                 self.0 = _mm256_fmadd_pd(a.0, b.0, self.0);
             }
         }
@@ -711,7 +711,7 @@ pub mod x86 {
 
         #[inline(always)]
         fn sum(self) -> f64 {
-             unsafe {
+            unsafe {
                 let hi128 = _mm256_extractf128_pd(self.0, 1);
                 let lo128 = _mm256_castpd256_pd128(self.0);
                 let sum128 = _mm_add_pd(lo128, hi128);

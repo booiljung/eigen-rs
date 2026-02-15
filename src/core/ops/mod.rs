@@ -137,7 +137,7 @@ where
         if let (Some(l_ptr), Some(r_ptr)) = (self.lhs.as_ptr(), self.rhs.as_ptr()) {
             let packet_size = P::SIZE;
             let mut i = 0;
-            
+
             // Heuristic for Streaming Store:
             // Use streaming stores only for very large matrices where cache pollution is a major concern.
             // Alignment check is strict for _mm256_stream_ps.
@@ -186,11 +186,11 @@ where
                         i += 8 * packet_size;
                     }
                 } else {
-                     while i + 8 * packet_size <= size {
+                    while i + 8 * packet_size <= size {
                         // Standard path (Now with Prefetch for L2/L3 latency hiding)
                         P::prefetch(l_ptr.add(i + prefetch_dist * 2));
                         P::prefetch(r_ptr.add(i + prefetch_dist * 2));
-                        
+
                         let a0 = P::load(l_ptr.add(i));
                         let b0 = P::load(r_ptr.add(i));
                         (a0 + b0).store(dest.add(i));
@@ -226,7 +226,7 @@ where
                         i += 8 * packet_size;
                     }
                 }
-                
+
                 // Remainder loops
                 while i + packet_size <= size {
                     let a = P::load(l_ptr.add(i));
@@ -422,7 +422,7 @@ where
                         // Standard path (Now with Prefetch)
                         P::prefetch(l_ptr.add(i + prefetch_dist * 2));
                         P::prefetch(r_ptr.add(i + prefetch_dist * 2));
-                        
+
                         let a0 = P::load(l_ptr.add(i));
                         let b0 = P::load(r_ptr.add(i));
                         (a0 - b0).store(dest.add(i));
@@ -584,7 +584,7 @@ where
             let packet_size = P::SIZE;
             let mut i = 0;
             let s_packet = P::set1(self.scalar);
-            
+
             // Prefetch distance
             let prefetch_dist = 4 * packet_size;
 

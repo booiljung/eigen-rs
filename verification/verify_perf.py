@@ -211,9 +211,60 @@ def generate_report(cpp_data, rust_data):
 def main():
     import argparse
     parser = argparse.ArgumentParser()
-    # parser.add_argument("--update-benchmark", action="store_true", help="Append results to BENCHMARK.md")
+    parser.add_argument("--random-sweep", action="store_true", help="Run randomized size sweep")
+    parser.add_argument("--update-benchmark", action="store_true", help="Append results to BENCHMARK.md")
     args = parser.parse_args()
 
+    if args.random_sweep:
+        import random
+        print("🎲 Running Randomized Sweep...")
+        # Generate random sizes
+        # Large range: [16, 512]
+        sizes = sorted([random.randint(16, 512) for _ in range(20)])
+        # Small range: [4, 64]
+        small_sizes = sorted([random.randint(4, 64) for _ in range(10)])
+        
+        # Deduplicate
+        sizes = sorted(list(set(sizes)))
+        small_sizes = sorted(list(set(small_sizes)))
+        
+        print(f"Random Sizes: {sizes}")
+        print(f"Random Small Sizes: {small_sizes}")
+        
+        sizes_str = ",".join(map(str, sizes))
+        small_sizes_str = ",".join(map(str, small_sizes))
+        
+        if not compile_cpp():
+            sys.exit(1)
+
+        print("Running C++ Benchmark with Random Sizes...")
+        cpp_cmd = [f"./{CPP_BENCH_BIN}", "--sizes", sizes_str, "--small-sizes", small_sizes_str]
+        res = subprocess.run(cpp_cmd, capture_output=True, text=True)
+        if res.returncode != 0:
+            print("❌ C++ Benchmark Failed:")
+            print(res.stderr)
+            sys.exit(1)
+        cpp_data = parse_output(res.stdout)
+
+        print("Running Rust Benchmark with Random Sizes...")
+        env = os.environ.copy()
+        env["RUSTFLAGS"] = "-C target-cpu=native"
+        rust_cmd = RUST_BENCH_CMD + ["--", "--sizes", sizes_str, "--small-sizes", small_sizes_str]
+        res = subprocess.run(rust_cmd, capture_output=True, text=True, env=env)
+        if res.returncode != 0:
+            print("❌ Rust Benchmark Failed:")
+            print(res.stderr)
+            sys.exit(1)
+        rust_data = parse_output(res.stdout)
+
+        success = generate_report(cpp_data, rust_data)
+        if success:
+            print("✅ Performance Verification PASSED (Randomized)")
+            sys.exit(0)
+        else:
+            print("❌ Performance Verification FAILED (Randomized)")
+            sys.exit(1)
+            
     if not compile_cpp():
         sys.exit(1)
         

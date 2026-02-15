@@ -146,7 +146,10 @@ impl<T: Scalar, S: Storage<T>> Matrix<T, S> {
     }
 
     /// Computes the Partial Pivoting LU decomposition of the matrix.
-    pub fn partial_piv_lu(&self) -> Result<PartialPivLU<T, S>, String> {
+    pub fn partial_piv_lu(&self) -> Result<PartialPivLU<T, S>, String>
+    where
+        T: num_traits::One,
+    {
         PartialPivLU::new(self)
     }
 
@@ -185,7 +188,10 @@ impl<T: Scalar, S: Storage<T>> Matrix<T, S> {
     }
 
     /// Computes the inverse of the matrix.
-    pub fn inverse(&self) -> Result<Matrix<T, DynamicStorage<T>>, String> {
+    pub fn inverse(&self) -> Result<Matrix<T, DynamicStorage<T>>, String>
+    where
+        T: num_traits::One,
+    {
         let rows = self.rows();
         let cols = self.cols();
         if rows != cols {
@@ -242,7 +248,7 @@ impl<T: Scalar, S: Storage<T>> Matrix<T, S> {
 
         #[cfg(feature = "parallel")]
         {
-            if self.size() > 10000 {
+            if self.size() > 500000 {
                 return self.par_assign(xpr);
             }
         }
@@ -471,34 +477,46 @@ impl<T: Scalar, S: Storage<T>> Matrix<T, S> {
         R: crate::core::xpr::MatrixXpr<T>,
     {
         // Try optimized dispatch
-        if let (Some(lhs_ptr), Some(lhs_strides)) = (product.lhs().as_ptr(), product.lhs().strides()) {
-             if let (Some(rhs_ptr), Some(rhs_strides)) = (product.rhs().as_ptr(), product.rhs().strides()) {
-                 let m = self.rows();
-                 let k = product.lhs().cols();
-                 let n = self.cols();
-                 let c_ptr = self.storage_mut().data_mut().as_mut_ptr();
-                 // Self is Col-Major
-                 let rs_c = 1;
-                 let cs_c = m as isize;
-                 
-                 // Clear C before accumulation because microkernel accumulates
-                 self.set_zero();
+        if let (Some(lhs_ptr), Some(lhs_strides)) =
+            (product.lhs().as_ptr(), product.lhs().strides())
+        {
+            if let (Some(rhs_ptr), Some(rhs_strides)) =
+                (product.rhs().as_ptr(), product.rhs().strides())
+            {
+                let m = self.rows();
+                let k = product.lhs().cols();
+                let n = self.cols();
+                let c_ptr = self.storage_mut().data_mut().as_mut_ptr();
+                // Self is Col-Major
+                let rs_c = 1;
+                let cs_c = m as isize;
 
-                 let handled = unsafe {
-                     crate::core::ops::gemm::gemm_dispatch_pointers(
-                         m, k, n,
-                         lhs_ptr, lhs_strides.0, lhs_strides.1,
-                         rhs_ptr, rhs_strides.0, rhs_strides.1,
-                         c_ptr, rs_c, cs_c
-                     )?
-                 };
-                 
-                 if handled {
-                     return Ok(());
-                 }
-             }
+                // Clear C before accumulation because microkernel accumulates
+                self.set_zero();
+
+                let handled = unsafe {
+                    crate::core::ops::gemm::gemm_dispatch_pointers(
+                        m,
+                        k,
+                        n,
+                        lhs_ptr,
+                        lhs_strides.0,
+                        lhs_strides.1,
+                        rhs_ptr,
+                        rhs_strides.0,
+                        rhs_strides.1,
+                        c_ptr,
+                        rs_c,
+                        cs_c,
+                    )?
+                };
+
+                if handled {
+                    return Ok(());
+                }
+            }
         }
-        
+
         crate::core::ops::gemm::gemm_cm_unoptimized_xpr(product.lhs(), product.rhs(), self)
     }
 
@@ -551,7 +569,7 @@ impl<T: Scalar, S: Storage<T>> Matrix<T, S> {
             other.size(),
             "Dot product requires vectors of equal size"
         );
-        
+
         // Try vectorized path
         if let Some(sum) = T::dot_vectorized(self, other) {
             return sum;
@@ -567,6 +585,10 @@ impl<T: Scalar, S: Storage<T>> Matrix<T, S> {
 
     /// Computes the squared norm of the vector.
     pub fn squared_norm(&self) -> T {
+        // Try vectorized path
+        if let Some(res) = T::squared_norm_vectorized(self) {
+            return res;
+        }
         self.dot(self)
     }
 
@@ -603,7 +625,7 @@ impl<T: Scalar, S: Storage<T>> Matrix<T, S> {
         if T::scale_vectorized(self, factor) {
             return;
         }
-        
+
         let size = self.size();
         let data = self.storage_mut().data_mut();
         for val in data.iter_mut().take(size) {

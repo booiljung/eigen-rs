@@ -75,3 +75,6 @@
 
 ## 6. 벤치마크 방법론 (Benchmark Methodology)
 상세한 벤치마크 방법론 및 개발자 가이드는 [BENCHMARK.KO.md](BENCHMARK.KO.md)를 참조하십시오.
+
+## 7. 성능 최적화 워크플로우 (Performance Workflow)
+표준 최적화 절차는 [PERFORMANCE_WORKFLOW.KO.md](PERFORMANCE_WORKFLOW.KO.md)를 참조하십시오.

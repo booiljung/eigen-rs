@@ -358,13 +358,113 @@ impl<T: Scalar, S: Storage<T>> SelfAdjointEigenSolver<T, S> {
             }
             if compute_eigenvectors {
                 let vecs = self.eigenvectors.as_mut().unwrap();
-                for i in 0..n_total {
-                    let v1 = *vecs.get(i, k).unwrap();
-                    let v2 = *vecs.get(i, k + 1).unwrap();
-                    *vecs.get_mut(i, k).unwrap() = c * v1 + s * v2;
-                    *vecs.get_mut(i, k + 1).unwrap() = -s * v1 + c * v2;
+                Self::apply_rotation(vecs, k, k + 1, c, s);
+            }
+        }
+    }
+
+    // Helper: Apply rotation to columns i and j (EigenValues variant)
+    // v1' = c*v1 + s*v2
+    // v2' = -s*v1 + c*v2
+    fn apply_rotation(mat: &mut Matrix<T, DynamicStorage<T>>, i: usize, j: usize, c: T, s: T) {
+        let rows = mat.rows();
+
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        {
+            if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() {
+                if is_x86_feature_detected!("fma") {
+                    use std::arch::x86_64::*;
+                    unsafe {
+                        // Cast to f32
+                        let c_f32: f32 = *(&c as *const T as *const f32);
+                        let s_f32: f32 = *(&s as *const T as *const f32);
+
+                        let ptr_i = mat.get_mut(0, i).unwrap() as *mut T as *mut f32;
+                        let ptr_j = mat.get_mut(0, j).unwrap() as *mut T as *mut f32;
+
+                        let c_vec = _mm256_set1_ps(c_f32);
+                        let s_vec = _mm256_set1_ps(s_f32);
+
+                        let mut k = 0;
+                        while k + 8 <= rows {
+                            let val_i = _mm256_loadu_ps(ptr_i.add(k));
+                            let val_j = _mm256_loadu_ps(ptr_j.add(k));
+
+                            // v1' = c*v1 + s*v2
+                            // v2' = -s*v1 + c*v2
+
+                            let term1_i = _mm256_mul_ps(c_vec, val_i);
+                            let term2_i = _mm256_mul_ps(s_vec, val_j);
+                            let new_i = _mm256_add_ps(term1_i, term2_i);
+
+                            let term1_j = _mm256_mul_ps(s_vec, val_i); // s*v1
+                            let term2_j = _mm256_mul_ps(c_vec, val_j); // c*v2
+                            let new_j = _mm256_sub_ps(term2_j, term1_j); // c*v2 - s*v1
+
+                            _mm256_storeu_ps(ptr_i.add(k), new_i);
+                            _mm256_storeu_ps(ptr_j.add(k), new_j);
+                            k += 8;
+                        }
+
+                        // Scalar tail
+                        for kk in k..rows {
+                            let val_i = *ptr_i.add(kk);
+                            let val_j = *ptr_j.add(kk);
+                            *ptr_i.add(kk) = c_f32 * val_i + s_f32 * val_j;
+                            *ptr_j.add(kk) = c_f32 * val_j - s_f32 * val_i;
+                        }
+                    }
+                    return;
                 }
             }
+            if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>() {
+                if is_x86_feature_detected!("fma") {
+                    use std::arch::x86_64::*;
+                    unsafe {
+                        let c_f64: f64 = *(&c as *const T as *const f64);
+                        let s_f64: f64 = *(&s as *const T as *const f64);
+
+                        let ptr_i = mat.get_mut(0, i).unwrap() as *mut T as *mut f64;
+                        let ptr_j = mat.get_mut(0, j).unwrap() as *mut T as *mut f64;
+
+                        let c_vec = _mm256_set1_pd(c_f64);
+                        let s_vec = _mm256_set1_pd(s_f64);
+
+                        let mut k = 0;
+                        while k + 4 <= rows {
+                            let val_i = _mm256_loadu_pd(ptr_i.add(k));
+                            let val_j = _mm256_loadu_pd(ptr_j.add(k));
+
+                            let term1_i = _mm256_mul_pd(c_vec, val_i);
+                            let term2_i = _mm256_mul_pd(s_vec, val_j);
+                            let new_i = _mm256_add_pd(term1_i, term2_i);
+
+                            let term1_j = _mm256_mul_pd(s_vec, val_i);
+                            let term2_j = _mm256_mul_pd(c_vec, val_j);
+                            let new_j = _mm256_sub_pd(term2_j, term1_j);
+
+                            _mm256_storeu_pd(ptr_i.add(k), new_i);
+                            _mm256_storeu_pd(ptr_j.add(k), new_j);
+                            k += 4;
+                        }
+                        for kk in k..rows {
+                            let val_i = *ptr_i.add(kk);
+                            let val_j = *ptr_j.add(kk);
+                            *ptr_i.add(kk) = c_f64 * val_i + s_f64 * val_j;
+                            *ptr_j.add(kk) = c_f64 * val_j - s_f64 * val_i;
+                        }
+                    }
+                    return;
+                }
+            }
+        }
+
+        // Scalar fallback (generic T)
+        for k in 0..rows {
+            let val_i = *mat.get(k, i).unwrap();
+            let val_j = *mat.get(k, j).unwrap();
+            *mat.get_mut(k, i).unwrap() = c * val_i + s * val_j;
+            *mat.get_mut(k, j).unwrap() = c * val_j - s * val_i;
         }
     }
 

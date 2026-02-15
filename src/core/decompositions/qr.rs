@@ -60,6 +60,15 @@ impl<T: Scalar, S: Storage<T>> HouseholderQR<T, S> {
                 *qr.get_mut(k, k).unwrap() = T::default() - sigma;
 
                 // Apply reflection to remaining columns from the left
+                #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+                {
+                    if is_x86_feature_detected!("fma") {
+                        Self::apply_householder_avx(&mut qr, k, tau, rows, cols);
+                        continue;
+                    }
+                }
+
+                // Scalar Fallback
                 for j in k + 1..cols {
                     let mut dot = *qr.get(k, j).unwrap();
                     for i in k + 1..rows {
@@ -222,6 +231,356 @@ impl<T: Scalar, S: Storage<T>> HouseholderQR<T, S> {
             Ok(x_final)
         } else {
             Ok(x)
+        }
+    }
+
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    fn apply_householder_avx(
+        qr: &mut Matrix<T, DynamicStorage<T>>,
+        k: usize,
+        tau: T,
+        rows: usize,
+        cols: usize,
+    ) {
+        use std::any::TypeId;
+        let tid = TypeId::of::<T>();
+
+        if tid == TypeId::of::<f32>() {
+            use std::arch::x86_64::*;
+            // f32 path
+            unsafe {
+                let start_ptr = qr.storage().data().as_ptr() as *const f32;
+                let mut_ptr = qr.storage_mut().data_mut().as_mut_ptr() as *mut f32;
+                let rows_stride = rows;
+
+                // Pointer to v (k-th column)
+                let v_ptr = start_ptr.add(k * rows_stride);
+                let tau_f32 = *(&tau as *const T as *const f32);
+
+                let mut j = k + 1;
+                while j + 4 <= cols {
+                    let c0_ptr = mut_ptr.add(j * rows_stride);
+                    let c1_ptr = mut_ptr.add((j + 1) * rows_stride);
+                    let c2_ptr = mut_ptr.add((j + 2) * rows_stride);
+                    let c3_ptr = mut_ptr.add((j + 3) * rows_stride);
+
+                    let mut dot0 = *c0_ptr.add(k);
+                    let mut dot1 = *c1_ptr.add(k);
+                    let mut dot2 = *c2_ptr.add(k);
+                    let mut dot3 = *c3_ptr.add(k);
+
+                    let mut dot0_vec = _mm256_setzero_ps();
+                    let mut dot1_vec = _mm256_setzero_ps();
+                    let mut dot2_vec = _mm256_setzero_ps();
+                    let mut dot3_vec = _mm256_setzero_ps();
+
+                    let mut i = k + 1;
+                    while i + 7 < rows {
+                        let v_vec = _mm256_loadu_ps(v_ptr.add(i));
+
+                        let c0_vec = _mm256_loadu_ps(c0_ptr.add(i));
+                        dot0_vec = _mm256_fmadd_ps(v_vec, c0_vec, dot0_vec);
+
+                        let c1_vec = _mm256_loadu_ps(c1_ptr.add(i));
+                        dot1_vec = _mm256_fmadd_ps(v_vec, c1_vec, dot1_vec);
+
+                        let c2_vec = _mm256_loadu_ps(c2_ptr.add(i));
+                        dot2_vec = _mm256_fmadd_ps(v_vec, c2_vec, dot2_vec);
+
+                        let c3_vec = _mm256_loadu_ps(c3_ptr.add(i));
+                        dot3_vec = _mm256_fmadd_ps(v_vec, c3_vec, dot3_vec);
+
+                        i += 8;
+                    }
+
+                    // HSum
+                    let mut arr0 = [0.0; 8];
+                    _mm256_storeu_ps(arr0.as_mut_ptr(), dot0_vec);
+                    let mut arr1 = [0.0; 8];
+                    _mm256_storeu_ps(arr1.as_mut_ptr(), dot1_vec);
+                    let mut arr2 = [0.0; 8];
+                    _mm256_storeu_ps(arr2.as_mut_ptr(), dot2_vec);
+                    let mut arr3 = [0.0; 8];
+                    _mm256_storeu_ps(arr3.as_mut_ptr(), dot3_vec);
+
+                    for x in arr0 {
+                        dot0 += x;
+                    }
+                    for x in arr1 {
+                        dot1 += x;
+                    }
+                    for x in arr2 {
+                        dot2 += x;
+                    }
+                    for x in arr3 {
+                        dot3 += x;
+                    }
+
+                    for ii in i..rows {
+                        let v_val = *v_ptr.add(ii);
+                        dot0 += v_val * (*c0_ptr.add(ii));
+                        dot1 += v_val * (*c1_ptr.add(ii));
+                        dot2 += v_val * (*c2_ptr.add(ii));
+                        dot3 += v_val * (*c3_ptr.add(ii));
+                    }
+
+                    let factor0 = tau_f32 * dot0;
+                    let factor1 = tau_f32 * dot1;
+                    let factor2 = tau_f32 * dot2;
+                    let factor3 = tau_f32 * dot3;
+
+                    let f0_vec = _mm256_set1_ps(factor0);
+                    let f1_vec = _mm256_set1_ps(factor1);
+                    let f2_vec = _mm256_set1_ps(factor2);
+                    let f3_vec = _mm256_set1_ps(factor3);
+
+                    *c0_ptr.add(k) -= factor0;
+                    *c1_ptr.add(k) -= factor1;
+                    *c2_ptr.add(k) -= factor2;
+                    *c3_ptr.add(k) -= factor3;
+
+                    i = k + 1;
+                    while i + 7 < rows {
+                        let v_vec = _mm256_loadu_ps(v_ptr.add(i));
+
+                        let mut c0_vec = _mm256_loadu_ps(c0_ptr.add(i));
+                        c0_vec = _mm256_fnmadd_ps(v_vec, f0_vec, c0_vec);
+                        _mm256_storeu_ps(c0_ptr.add(i), c0_vec);
+
+                        let mut c1_vec = _mm256_loadu_ps(c1_ptr.add(i));
+                        c1_vec = _mm256_fnmadd_ps(v_vec, f1_vec, c1_vec);
+                        _mm256_storeu_ps(c1_ptr.add(i), c1_vec);
+
+                        let mut c2_vec = _mm256_loadu_ps(c2_ptr.add(i));
+                        c2_vec = _mm256_fnmadd_ps(v_vec, f2_vec, c2_vec);
+                        _mm256_storeu_ps(c2_ptr.add(i), c2_vec);
+
+                        let mut c3_vec = _mm256_loadu_ps(c3_ptr.add(i));
+                        c3_vec = _mm256_fnmadd_ps(v_vec, f3_vec, c3_vec);
+                        _mm256_storeu_ps(c3_ptr.add(i), c3_vec);
+
+                        i += 8;
+                    }
+
+                    for ii in i..rows {
+                        let v_val = *v_ptr.add(ii);
+                        *c0_ptr.add(ii) -= factor0 * v_val;
+                        *c1_ptr.add(ii) -= factor1 * v_val;
+                        *c2_ptr.add(ii) -= factor2 * v_val;
+                        *c3_ptr.add(ii) -= factor3 * v_val;
+                    }
+                    j += 4;
+                }
+
+                for j_col in j..cols {
+                    let c_ptr = mut_ptr.add(j_col * rows_stride);
+
+                    let mut dot = *c_ptr.add(k);
+                    let mut dot_vec = _mm256_setzero_ps();
+                    let mut i = k + 1;
+                    while i + 7 < rows {
+                        let v_vec = _mm256_loadu_ps(v_ptr.add(i));
+                        let c_vec = _mm256_loadu_ps(c_ptr.add(i));
+                        dot_vec = _mm256_fmadd_ps(v_vec, c_vec, dot_vec);
+                        i += 8;
+                    }
+                    let mut temp_arr = [0.0; 8];
+                    _mm256_storeu_ps(temp_arr.as_mut_ptr(), dot_vec);
+                    for x in temp_arr {
+                        dot += x;
+                    }
+
+                    for ii in i..rows {
+                        dot += (*v_ptr.add(ii)) * (*c_ptr.add(ii));
+                    }
+
+                    let factor = tau_f32 * dot;
+                    let factor_vec = _mm256_set1_ps(factor);
+
+                    *c_ptr.add(k) -= factor;
+
+                    i = k + 1;
+                    while i + 7 < rows {
+                        let v_vec = _mm256_loadu_ps(v_ptr.add(i));
+                        let mut c_vec = _mm256_loadu_ps(c_ptr.add(i));
+                        c_vec = _mm256_fnmadd_ps(v_vec, factor_vec, c_vec);
+                        _mm256_storeu_ps(c_ptr.add(i), c_vec);
+                        i += 8;
+                    }
+                    for ii in i..rows {
+                        *c_ptr.add(ii) -= factor * (*v_ptr.add(ii));
+                    }
+                }
+            }
+        } else if tid == TypeId::of::<f64>() {
+            use std::arch::x86_64::*;
+            // f64 path
+            unsafe {
+                let start_ptr = qr.storage().data().as_ptr() as *const f64;
+                let mut_ptr = qr.storage_mut().data_mut().as_mut_ptr() as *mut f64;
+                let rows_stride = rows;
+
+                // Pointer to v (k-th column)
+                let v_ptr = start_ptr.add(k * rows_stride);
+                let tau_f64 = *(&tau as *const T as *const f64);
+
+                let mut j = k + 1;
+                while j + 4 <= cols {
+                    let c0_ptr = mut_ptr.add(j * rows_stride);
+                    let c1_ptr = mut_ptr.add((j + 1) * rows_stride);
+                    let c2_ptr = mut_ptr.add((j + 2) * rows_stride);
+                    let c3_ptr = mut_ptr.add((j + 3) * rows_stride);
+
+                    let mut dot0 = *c0_ptr.add(k);
+                    let mut dot1 = *c1_ptr.add(k);
+                    let mut dot2 = *c2_ptr.add(k);
+                    let mut dot3 = *c3_ptr.add(k);
+
+                    let mut dot0_vec = _mm256_setzero_pd();
+                    let mut dot1_vec = _mm256_setzero_pd();
+                    let mut dot2_vec = _mm256_setzero_pd();
+                    let mut dot3_vec = _mm256_setzero_pd();
+
+                    let mut i = k + 1;
+                    while i + 3 < rows {
+                        let v_vec = _mm256_loadu_pd(v_ptr.add(i));
+
+                        let c0_vec = _mm256_loadu_pd(c0_ptr.add(i));
+                        dot0_vec = _mm256_fmadd_pd(v_vec, c0_vec, dot0_vec);
+
+                        let c1_vec = _mm256_loadu_pd(c1_ptr.add(i));
+                        dot1_vec = _mm256_fmadd_pd(v_vec, c1_vec, dot1_vec);
+
+                        let c2_vec = _mm256_loadu_pd(c2_ptr.add(i));
+                        dot2_vec = _mm256_fmadd_pd(v_vec, c2_vec, dot2_vec);
+
+                        let c3_vec = _mm256_loadu_pd(c3_ptr.add(i));
+                        dot3_vec = _mm256_fmadd_pd(v_vec, c3_vec, dot3_vec);
+
+                        i += 4;
+                    }
+
+                    let mut arr0 = [0.0; 4];
+                    _mm256_storeu_pd(arr0.as_mut_ptr(), dot0_vec);
+                    let mut arr1 = [0.0; 4];
+                    _mm256_storeu_pd(arr1.as_mut_ptr(), dot1_vec);
+                    let mut arr2 = [0.0; 4];
+                    _mm256_storeu_pd(arr2.as_mut_ptr(), dot2_vec);
+                    let mut arr3 = [0.0; 4];
+                    _mm256_storeu_pd(arr3.as_mut_ptr(), dot3_vec);
+
+                    for x in arr0 {
+                        dot0 += x;
+                    }
+                    for x in arr1 {
+                        dot1 += x;
+                    }
+                    for x in arr2 {
+                        dot2 += x;
+                    }
+                    for x in arr3 {
+                        dot3 += x;
+                    }
+
+                    for ii in i..rows {
+                        let v_val = *v_ptr.add(ii);
+                        dot0 += v_val * (*c0_ptr.add(ii));
+                        dot1 += v_val * (*c1_ptr.add(ii));
+                        dot2 += v_val * (*c2_ptr.add(ii));
+                        dot3 += v_val * (*c3_ptr.add(ii));
+                    }
+
+                    let factor0 = tau_f64 * dot0;
+                    let factor1 = tau_f64 * dot1;
+                    let factor2 = tau_f64 * dot2;
+                    let factor3 = tau_f64 * dot3;
+
+                    let f0_vec = _mm256_set1_pd(factor0);
+                    let f1_vec = _mm256_set1_pd(factor1);
+                    let f2_vec = _mm256_set1_pd(factor2);
+                    let f3_vec = _mm256_set1_pd(factor3);
+
+                    *c0_ptr.add(k) -= factor0;
+                    *c1_ptr.add(k) -= factor1;
+                    *c2_ptr.add(k) -= factor2;
+                    *c3_ptr.add(k) -= factor3;
+
+                    i = k + 1;
+                    while i + 3 < rows {
+                        let v_vec = _mm256_loadu_pd(v_ptr.add(i));
+
+                        let mut c0_vec = _mm256_loadu_pd(c0_ptr.add(i));
+                        c0_vec = _mm256_fnmadd_pd(v_vec, f0_vec, c0_vec);
+                        _mm256_storeu_pd(c0_ptr.add(i), c0_vec);
+
+                        let mut c1_vec = _mm256_loadu_pd(c1_ptr.add(i));
+                        c1_vec = _mm256_fnmadd_pd(v_vec, f1_vec, c1_vec);
+                        _mm256_storeu_pd(c1_ptr.add(i), c1_vec);
+
+                        let mut c2_vec = _mm256_loadu_pd(c2_ptr.add(i));
+                        c2_vec = _mm256_fnmadd_pd(v_vec, f2_vec, c2_vec);
+                        _mm256_storeu_pd(c2_ptr.add(i), c2_vec);
+
+                        let mut c3_vec = _mm256_loadu_pd(c3_ptr.add(i));
+                        c3_vec = _mm256_fnmadd_pd(v_vec, f3_vec, c3_vec);
+                        _mm256_storeu_pd(c3_ptr.add(i), c3_vec);
+
+                        i += 4;
+                    }
+
+                    for ii in i..rows {
+                        let v_val = *v_ptr.add(ii);
+                        *c0_ptr.add(ii) -= factor0 * v_val;
+                        *c1_ptr.add(ii) -= factor1 * v_val;
+                        *c2_ptr.add(ii) -= factor2 * v_val;
+                        *c3_ptr.add(ii) -= factor3 * v_val;
+                    }
+                    j += 4;
+                }
+
+                for j_col in j..cols {
+                    let c_ptr = mut_ptr.add(j_col * rows_stride);
+
+                    let mut dot = *c_ptr.add(k);
+                    let mut dot_vec = _mm256_setzero_pd();
+
+                    let mut i = k + 1;
+                    while i + 3 < rows {
+                        let v_vec = _mm256_loadu_pd(v_ptr.add(i));
+                        let c_vec = _mm256_loadu_pd(c_ptr.add(i));
+                        dot_vec = _mm256_fmadd_pd(v_vec, c_vec, dot_vec);
+                        i += 4;
+                    }
+
+                    let mut temp_arr = [0.0; 4];
+                    _mm256_storeu_pd(temp_arr.as_mut_ptr(), dot_vec);
+                    for x in temp_arr {
+                        dot += x;
+                    }
+
+                    for ii in i..rows {
+                        dot += (*v_ptr.add(ii)) * (*c_ptr.add(ii));
+                    }
+
+                    let factor = tau_f64 * dot;
+                    let factor_vec = _mm256_set1_pd(factor);
+
+                    *c_ptr.add(k) -= factor;
+
+                    i = k + 1;
+                    while i + 3 < rows {
+                        let v_vec = _mm256_loadu_pd(v_ptr.add(i));
+                        let mut c_vec = _mm256_loadu_pd(c_ptr.add(i));
+                        c_vec = _mm256_fnmadd_pd(v_vec, factor_vec, c_vec);
+                        _mm256_storeu_pd(c_ptr.add(i), c_vec);
+                        i += 4;
+                    }
+
+                    for ii in i..rows {
+                        *c_ptr.add(ii) -= factor * (*v_ptr.add(ii));
+                    }
+                }
+            }
         }
     }
 }

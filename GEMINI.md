@@ -54,6 +54,7 @@
 - **Optimized Build**: For fair performance evaluation of hardware acceleration (SIMD), always measure in `RUSTFLAGS="-C target-cpu=native"` environment.
 - **Result Recording**: Check `docs/reports/` for detailed logs.
 - **Target Value**: Aim to maintain performance within **1.5x** of Eigen for core operations (GEMM, Decompositions).
+- **Randomized Benchmarking**: All performance benchmarks must be conducted using randomly generated matrix/vector sizes (e.g., via `verify_perf.py --random-sweep`) to prevent overfitting to fixed dimensions or L1/L2 cache boundaries.
 
 ## Core Design Principles (Advanced)
 
@@ -76,3 +77,6 @@
 
 ## 6. Benchmark Methodology
 Please refer to [BENCHMARK.md](BENCHMARK.md) for the detailed benchmark methodology and developer guide.
+
+## 7. Performance Workflow
+For the standard optimization procedure, refer to [PERFORMANCE_WORKFLOW.md](PERFORMANCE_WORKFLOW.md).
