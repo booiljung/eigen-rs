@@ -178,6 +178,7 @@ pub mod x86 {
 
     impl Packet<f32> for SsePacketF32 {
         const SIZE: usize = 4;
+        #[inline(always)]
         unsafe fn load(ptr: *const f32) -> Self {
             unsafe { Self(_mm_loadu_ps(ptr)) }
         }
@@ -186,6 +187,7 @@ pub mod x86 {
                 _mm_storeu_ps(ptr, self.0);
             }
         }
+        #[inline(always)]
         fn set1(val: f32) -> Self {
             unsafe { Self(_mm_set1_ps(val)) }
         }
@@ -369,9 +371,11 @@ pub mod x86 {
 
     impl Packet<f32> for AvxFmaPacketF32 {
         const SIZE: usize = 8;
+        #[inline(always)]
         unsafe fn load(ptr: *const f32) -> Self {
             unsafe { Self(_mm256_loadu_ps(ptr)) }
         }
+        #[inline(always)]
         unsafe fn store(self, ptr: *mut f32) {
             unsafe {
                 _mm256_storeu_ps(ptr, self.0);
@@ -389,6 +393,7 @@ pub mod x86 {
                 _mm_prefetch(ptr as *const i8, _MM_HINT_T0);
             }
         }
+        #[inline(always)]
         fn set1(val: f32) -> Self {
             unsafe { Self(_mm256_set1_ps(val)) }
         }
@@ -466,9 +471,11 @@ pub mod x86 {
 
     impl Packet<f64> for SsePacketF64 {
         const SIZE: usize = 2;
+        #[inline(always)]
         unsafe fn load(ptr: *const f64) -> Self {
             unsafe { Self(_mm_loadu_pd(ptr)) }
         }
+        #[inline(always)]
         unsafe fn store(self, ptr: *mut f64) {
             unsafe {
                 _mm_storeu_pd(ptr, self.0);
@@ -486,6 +493,7 @@ pub mod x86 {
                 _mm_prefetch(ptr as *const i8, _MM_HINT_T0);
             }
         }
+        #[inline(always)]
         fn set1(val: f64) -> Self {
             unsafe { Self(_mm_set1_pd(val)) }
         }
@@ -559,9 +567,11 @@ pub mod x86 {
 
     impl Packet<f64> for AvxPacketF64 {
         const SIZE: usize = 4;
+        #[inline(always)]
         unsafe fn load(ptr: *const f64) -> Self {
             unsafe { Self(_mm256_loadu_pd(ptr)) }
         }
+        #[inline(always)]
         unsafe fn store(self, ptr: *mut f64) {
             unsafe {
                 _mm256_storeu_pd(ptr, self.0);
@@ -654,9 +664,12 @@ pub mod x86 {
 
     impl Packet<f64> for AvxFmaPacketF64 {
         const SIZE: usize = 4;
+        #[inline(always)]
         unsafe fn load(ptr: *const f64) -> Self {
             unsafe { Self(_mm256_loadu_pd(ptr)) }
         }
+        #[inline(always)]
+        #[inline(always)]
         unsafe fn store(self, ptr: *mut f64) {
             unsafe {
                 _mm256_storeu_pd(ptr, self.0);
@@ -674,6 +687,7 @@ pub mod x86 {
                 _mm_prefetch(ptr as *const i8, _MM_HINT_T0);
             }
         }
+        #[inline(always)]
         fn set1(val: f64) -> Self {
             unsafe { Self(_mm256_set1_pd(val)) }
         }

@@ -276,6 +276,59 @@ impl<T: Scalar> SparseMatrix<T> {
             }
         }
 
+        // Specialized path for Matrix-Vector multiplication (RHS cols == 1)
+        if rhs.cols() == 1 {
+            // Helper to get raw pointer to RHS data (assuming contiguous column)
+            let rhs_ptr = rhs.storage().data().as_ptr();
+            let res_ptr = res.storage_mut().data_mut().as_mut_ptr();
+
+            match self.order {
+                StorageOrder::RowMajor => {
+                    // CSR SpMV
+                    for i in 0..self.rows {
+                        unsafe {
+                            let start = *self.outer_starts.get_unchecked(i);
+                            let end = *self.outer_starts.get_unchecked(i + 1);
+                            let mut sum = T::zero();
+
+                            for idx in start..end {
+                                let val = *self.values.get_unchecked(idx);
+                                let col = *self.inner_indices.get_unchecked(idx);
+                                let rhs_val = *rhs_ptr.add(col);
+                                sum += val * rhs_val;
+                            }
+                            *res_ptr.add(i) = sum;
+                        }
+                    }
+                }
+                StorageOrder::ColMajor => {
+                    // CSC SpMV
+                    // Initialize result to zero
+                    unsafe {
+                        std::ptr::write_bytes(res_ptr, 0, self.rows);
+                    }
+
+                    for j in 0..self.cols {
+                        unsafe {
+                            let rhs_val = *rhs_ptr.add(j);
+                            // Skip if rhs is zero? (Optimization)
+                            // if rhs_val == T::zero() { continue; }
+
+                            let start = *self.outer_starts.get_unchecked(j);
+                            let end = *self.outer_starts.get_unchecked(j + 1);
+
+                            for idx in start..end {
+                                let val = *self.values.get_unchecked(idx);
+                                let row = *self.inner_indices.get_unchecked(idx);
+                                *res_ptr.add(row) += val * rhs_val;
+                            }
+                        }
+                    }
+                }
+            }
+            return Ok(res);
+        }
+
         match self.order {
             StorageOrder::RowMajor => {
                 for i in 0..self.rows {
@@ -284,8 +337,10 @@ impl<T: Scalar> SparseMatrix<T> {
                         let val = it.value();
                         let col = it.index();
                         for j in 0..rhs.cols() {
-                            *res.get_mut(i, j).unwrap() =
-                                *res.get(i, j).unwrap() + val * (*rhs.get(col, j).unwrap());
+                            unsafe {
+                                *res.get_mut(i, j).unwrap() =
+                                    *res.get(i, j).unwrap() + val * (*rhs.get(col, j).unwrap());
+                            }
                         }
                         it.next();
                     }
@@ -298,8 +353,10 @@ impl<T: Scalar> SparseMatrix<T> {
                         let val = it.value();
                         let row = it.index();
                         for k in 0..rhs.cols() {
-                            *res.get_mut(row, k).unwrap() =
-                                *res.get(row, k).unwrap() + val * (*rhs.get(j, k).unwrap());
+                             unsafe {
+                                *res.get_mut(row, k).unwrap() =
+                                    *res.get(row, k).unwrap() + val * (*rhs.get(j, k).unwrap());
+                            }
                         }
                         it.next();
                     }
@@ -330,13 +387,12 @@ impl<T: Scalar> SparseMatrix<T> {
         // But more importantly, we assume we PACK the RHS block into contiguous memory
 
         // Block Size: 32 floats (4 YMMs of 8) or 16 doubles (4 YMMs of 4)
-        let block_size = 32;
+        let block_size = if tid == TypeId::of::<f64>() { 16 } else { 32 };
 
         // Temporary buffer for packed RHS block
         // Size: rhs_rows * block_size
         // We reuse this buffer for each block
-        let mut packed_rhs: Vec<T> = Vec::with_capacity(rhs_rows * block_size);
-        packed_rhs.set_len(rhs_rows * block_size);
+        let mut packed_rhs: Vec<T> = vec![T::default(); rhs_rows * block_size];
 
         for c in (0..rhs_cols).step_by(block_size) {
             let cz = std::cmp::min(block_size, rhs_cols - c);
@@ -583,9 +639,9 @@ impl<T: Scalar> SparseMatrix<T> {
                     while it.is_valid() {
                         let val = it.value();
                         let col = it.index();
-                        for j in 0..res_cols {
+                        for j in 0..rhs.cols() { // Note: using rhs.cols() instead of res_cols
                             unsafe {
-                                let target = res_ptr.add(j * res_rows + i);
+                                let target = res_ptr.add(j * self.rows + i);
                                 *target += val * (*rhs.get(col, j).unwrap());
                             }
                         }

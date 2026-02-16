@@ -276,6 +276,249 @@ fn bench_dense_decomp_extra(size: usize) {
     println!("QR,{},{}", size, duration / iterations as u128);
 }
 
+fn bench_decompositions_advanced(size: usize) {
+    use eigen_rs::core::decompositions::{
+        GeneralizedEigenSolver, HessenbergDecomposition, RealSchur, Tridiagonalization,
+    };
+
+    let mut a = MatrixX::<f32>::new_dynamic(size, size).unwrap();
+    // fill
+    for i in 0..size * size {
+        *a.get_mut(i % size, i / size).unwrap() = (i % 17) as f32;
+    }
+
+    // Symmetric for LDLT, Tridiagonal
+    let mut sym = MatrixX::<f32>::new_dynamic(size, size).unwrap();
+    sym.assign_product(&(&a * &a.transpose())).unwrap();
+
+    // PD for GeneralizedEigen B
+    let mut pd = sym.clone();
+    for i in 0..size {
+        *pd.get_mut(i, i).unwrap() += size as f32;
+    }
+
+    let iterations = if size < 64 { 20 } else { 1 };
+
+    // 1. Determinant
+    let start = Instant::now();
+    let mut det_sum = 0.0;
+    for _ in 0..iterations {
+        // eigen-rs requires explicit LU for N > 3
+        det_sum += a.partial_piv_lu().unwrap().determinant();
+    }
+    let duration = start.elapsed().as_nanos();
+    println!("Determinant,{},{}", size, duration / iterations as u128);
+    black_box(det_sum);
+
+    // 2. LDLT
+    let start = Instant::now();
+    for _ in 0..iterations {
+        let _ = sym.ldlt();
+    }
+    let duration = start.elapsed().as_nanos();
+    println!("LDLT,{},{}", size, duration / iterations as u128);
+
+    // 3. Hessenberg
+    let start = Instant::now();
+    for _ in 0..iterations {
+        let _ = HessenbergDecomposition::new(&a);
+    }
+    let duration = start.elapsed().as_nanos();
+    println!("Hessenberg,{},{}", size, duration / iterations as u128);
+
+    // 4. Tridiagonalization
+    let start = Instant::now();
+    for _ in 0..iterations {
+        let _ = Tridiagonalization::new(&sym);
+    }
+    let duration = start.elapsed().as_nanos();
+    println!("Tridiagonal,{},{}", size, duration / iterations as u128);
+
+    // 5. GeneralizedSelfAdjointEigenSolver (A, B) -> Ax = lambda Bx
+    // Use the specialized solver for symmetric-definite problems, matching C++ benchmark.
+    use eigen_rs::core::decompositions::GeneralizedSelfAdjointEigenSolver;
+    let start = Instant::now();
+    for _ in 0..iterations {
+        let _ = GeneralizedSelfAdjointEigenSolver::new(&sym, &pd, false);
+    }
+    let duration = start.elapsed().as_nanos();
+    println!("GeneralizedEigen,{},{}", size, duration / iterations as u128);
+
+    // 6. RealSchur
+    let start = Instant::now();
+    for _ in 0..iterations {
+        let _ = RealSchur::new(&a);
+    }
+    let duration = start.elapsed().as_nanos();
+    println!("RealSchur,{},{}", size, duration / iterations as u128);
+}
+
+fn bench_geometry_advanced() {
+    use eigen_rs::core::geometry::{AngleAxis, EulerAngles, Scaling, Transform3, Translation};
+    use eigen_rs::core::matrix::{Vector3, Matrix3};
+    use std::ops::Mul; // For .mul() calls or * syntax
+    
+    let iterations = 1000000;
+    
+    // Transform
+    // C++: Translation * Scaling
+    let tr = Translation::new(Vector3::from_array([1.0, 2.0, 3.0]));
+    let sc = Scaling::uniform(0.5);
+    let t_tr = Transform3::from_translation(&tr);
+    let t_sc = Transform3::from_scaling(&sc);
+    let t = t_tr.mul(&t_sc);
+    
+    let mut v = Vector3::<f32>::from_array([0.5, 0.5, 0.5]); 
+    
+    let start = Instant::now();
+    for _ in 0..iterations {
+        v = t.transform_point(&v);
+    }
+    let duration = start.elapsed().as_nanos();
+    println!("Transform,3,{}", duration / iterations as u128);
+    black_box(v);
+
+    // Translation
+    let mut v = Vector3::<f32>::from_array([0.5, 0.5, 0.5]);
+    let start = Instant::now();
+    for _ in 0..iterations {
+        // v = tr * v
+        v = (&tr).mul(&v);
+    }
+    let duration = start.elapsed().as_nanos();
+    println!("Translation,3,{}", duration / iterations as u128);
+
+    // Scaling
+    let mut v = Vector3::<f32>::from_array([0.5, 0.5, 0.5]);
+    let start = Instant::now();
+    for _ in 0..iterations {
+        v = (&sc).mul(&v);
+    }
+    let duration = start.elapsed().as_nanos();
+    println!("Scaling,3,{}", duration / iterations as u128);
+
+    // AngleAxis -> Matrix
+    let aa = AngleAxis::new(0.5, Vector3::from_array([1.0, 0.0, 0.0]));
+    let mut rot = Matrix3::<f32>::identity();
+    
+    let mut v_dummy = 0.0;
+    let start = Instant::now();
+    for _ in 0..iterations {
+        rot = aa.to_rotation_matrix();
+        let val = *rot.get(0, 0).unwrap(); 
+        v_dummy += val * 1e-6; 
+    }
+    let duration = start.elapsed().as_nanos();
+    println!("AngleAxis,3,{}", duration / iterations as u128);
+    black_box(v_dummy);
+
+    // EulerAngles
+    let start = Instant::now();
+    for _ in 0..iterations {
+        let _euler = EulerAngles::from_rotation_matrix(&rot);
+    }
+    let duration = start.elapsed().as_nanos();
+    println!("EulerAngles,3,{}", duration / iterations as u128);
+}
+
+fn bench_sparse_advanced(size: usize) {
+    use eigen_rs::core::sparse::solvers::{SparseLU, SparseQR};
+    use eigen_rs::core::sparse::{SparseMatrix, StorageOrder, Triplet};
+    
+    // Generate sparse matrix
+    let mut sp = SparseMatrix::<f32>::new(size, size, StorageOrder::ColMajor);
+    let density = 0.05;
+    let nnz = (size as f32 * size as f32 * density) as usize;
+    let mut triplets = Vec::with_capacity(nnz + size);
+    
+    for i in 0..nnz {
+        let r = (i * 17) % size;
+        let c = (i * 23) % size;
+        triplets.push(Triplet::new(r, c, 1.0));
+    }
+    for i in 0..size {
+        triplets.push(Triplet::new(i, i, 2.0));
+    }
+    sp.set_from_triplets(triplets);
+    
+    // new_random not available. Use set random.
+    let mut b = MatrixX::<f32>::new_dynamic(size, 1).unwrap();
+    for i in 0..size {
+        *b.get_mut(i, 0).unwrap() = (i % 100) as f32 / 10.0;
+    }
+    
+    let iterations = if size < 64 { 20 } else { 1 };
+    
+    // SparseLU
+    {
+        let mut lu = SparseLU::new();
+        let start = Instant::now();
+        for _ in 0..iterations {
+            if let Ok(_) = lu.compute(&sp) {
+                let _ = lu.solve(&b);
+            }
+        }
+        let duration = start.elapsed().as_nanos();
+        println!("SparseLU,{},{}", size, duration / iterations as u128);
+    }
+    
+    // SparseQR
+    {
+        let mut qr = SparseQR::new();
+        let start = Instant::now();
+        for _ in 0..iterations {
+            if let Ok(_) = qr.compute(&sp) {
+                let _ = qr.solve(&b);
+            }
+        }
+        let duration = start.elapsed().as_nanos();
+        println!("SparseQR,{},{}", size, duration / iterations as u128);
+    }
+
+    // SparseView (Dense -> Sparse Conversion)
+    {
+        use eigen_rs::core::matrix::MatrixX;
+        let mut dense = MatrixX::<f32>::new_dynamic(size, size).unwrap();
+        // Make it sparse-ish (same logic as C++)
+        for i in 0..size*size {
+            // "if (rand() % 100 > 5) dense(i%size, i/size) = 0.0f;"
+            // This means 5% density (95% zeros).
+            let r = i % size;
+            let c = i / size;
+             if (i % 100) > 5 {
+                *dense.get_mut(r, c).unwrap() = 0.0;
+             } else {
+                *dense.get_mut(r, c).unwrap() = (i % 10) as f32;
+             }
+        }
+
+        let start = Instant::now();
+        // C++ runs iterations * 10
+        let loop_iters = iterations * 10;
+        for _ in 0..loop_iters {
+            // Emulate sparseView: dense -> triplets -> sparse
+            // We count this whole process as "SparseView".
+            let mut triplets = Vec::with_capacity(size * size / 20); // Approx 5%
+            for c in 0..size {
+                for r in 0..size {
+                     let val = *dense.get(r, c).unwrap();
+                     if val != 0.0 {
+                         triplets.push(Triplet::new(r, c, val));
+                     }
+                }
+            }
+            let mut s = SparseMatrix::<f32>::new(size, size, StorageOrder::ColMajor);
+            s.set_from_triplets(triplets);
+            black_box(s.non_zeros());
+        }
+        let duration = start.elapsed().as_nanos();
+        println!("SparseView,{},{}", size, duration / loop_iters as u128);
+    }
+}
+
+fn bench_optimization() {
+    // Placeholder
+}
 fn bench_sparse(size: usize) {
     use eigen_rs::core::sparse::{SparseMatrix, StorageOrder, Triplet};
     use eigen_rs::core::xpr::MatrixXpr; // Import for sum()
@@ -423,9 +666,11 @@ fn main() {
         bench_matmul(size);
         bench_llt(size);
         bench_dense_decomp_extra(size); // This contains LU and QR
+        bench_decompositions_advanced(size);
         bench_matrix_arithmetic(size); // This contains MatAdd and MatScale
         bench_vector_ops(size); // This contains VecDot and VecNorm
         bench_sparse(size); // This contains SpMV and SpMM
+        bench_sparse_advanced(size);
         bench_inverse(size); // Enabled
     }
 
@@ -441,4 +686,6 @@ fn main() {
     }
 
     bench_geometry();
+    bench_geometry_advanced();
+    bench_optimization();
 }

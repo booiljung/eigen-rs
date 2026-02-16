@@ -138,8 +138,24 @@ impl<T: Scalar, S: Storage<T>> SelfAdjointEigenSolver<T, S> {
                 *vecs.get_mut(0, 1).unwrap() = s;
                 *vecs.get_mut(1, 1).unwrap() = c;
             }
-            // Ensure eigenvectors are sorted along with eigenvalues
-            // (l1 < l2)
+            
+            // Fix: If a > d, the columns correspond to (a, d), i.e., (Desc, Asc) order for identity-like case?
+            // Actually, we established that if a > d, the first column corresponds to the larger eigenvalue (approx a).
+            // But we stored eigenvalues as (l1, l2) where l1 < l2.
+            // So we need to swap the columns if a > d.
+            if a > d {
+                // Swap columns
+                let v00 = *vecs.get(0, 0).unwrap();
+                let v10 = *vecs.get(1, 0).unwrap();
+                let v01 = *vecs.get(0, 1).unwrap();
+                let v11 = *vecs.get(1, 1).unwrap();
+                
+                *vecs.get_mut(0, 0).unwrap() = v01;
+                *vecs.get_mut(1, 0).unwrap() = v11;
+                *vecs.get_mut(0, 1).unwrap() = v00;
+                *vecs.get_mut(1, 1).unwrap() = v10;
+            }
+            
             self.eigenvectors = Some(vecs);
         }
 

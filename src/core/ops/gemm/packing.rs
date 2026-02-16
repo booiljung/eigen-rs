@@ -319,9 +319,9 @@ pub unsafe fn pack_rhs_f64_avx(
                     // r0: a0 b0 c0 d0 (permute 128)
                     let r0 = _mm256_permute2f128_pd(t0, t2, 0x20);
                     // r1: a1 b1 c1 d1
-                    let r1 = _mm256_permute2f128_pd(t0, t2, 0x31);
+                    let r1 = _mm256_permute2f128_pd(t1, t3, 0x20);
                     // r2: a2 b2 c2 d2
-                    let r2 = _mm256_permute2f128_pd(t1, t3, 0x20);
+                    let r2 = _mm256_permute2f128_pd(t0, t2, 0x31);
                     // r3: a3 b3 c3 d3
                     let r3 = _mm256_permute2f128_pd(t1, t3, 0x31);
 

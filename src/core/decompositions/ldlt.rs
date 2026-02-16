@@ -59,28 +59,63 @@ impl<T: Scalar + 'static, S: Storage<T> + 'static> LDLT<T, S> {
                 }
             }
 
-            // 2. Standard LDLT step on the pivoted matrix
-            let mut s = T::from_usize(0);
-            for (k, dk) in d.iter().enumerate().take(j) {
-                let l_jk = *mat.get(j, k).unwrap();
-                s += l_jk * l_jk * *dk;
+            // 2. Standard LDLT step on the pivoted matrix (Vectorized Left-Looking)
+            let mut ptr_mut = mat.storage_mut().data_mut().as_mut_ptr(); // Safe? We need raw pointer.
+            // Actually proper way:
+            
+            unsafe {
+                 // Check if we can use AVX2
+                 // Assuming f64 mostly, but handle f32
+                 if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>() && is_x86_feature_detected!("fma") {
+                    let ptr = mat.storage_mut().data_mut().as_mut_ptr() as *mut f64;
+                    for k in 0..j {
+                        let l_jk_val = *mat.get(j, k).unwrap();
+                        let d_k_val = d[k];
+                        let val_kj = l_jk_val * d_k_val; // Value to propagate
+                        
+                        let val_f64 = *(std::mem::transmute::<&T, &f64>(&val_kj));
+                        
+                        // Apply update to column j using column k
+                        // L(j:N, j) -= val * L(j:N, k)
+                        Self::update_column_vectorized_f64(ptr, rows, j, k, val_f64);
+                    }
+                 } else if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() && is_x86_feature_detected!("fma") {
+                    let ptr = mat.storage_mut().data_mut().as_mut_ptr() as *mut f32;
+                    for k in 0..j {
+                        let l_jk_val = *mat.get(j, k).unwrap();
+                        let d_k_val = d[k];
+                        let val_kj = l_jk_val * d_k_val;
+                        let val_f32 = *(std::mem::transmute::<&T, &f32>(&val_kj));
+                        Self::update_column_vectorized_f32(ptr, rows, j, k, val_f32);
+                    }
+                 } else {
+                     // Scalar Fallback (Column-Oriented)
+                     for k in 0..j {
+                         let val = *mat.get(j, k).unwrap() * d[k];
+                         for i in j..rows {
+                             let lik = *mat.get(i, k).unwrap();
+                             *mat.get_mut(i, j).unwrap() -= val * lik;
+                         }
+                     }
+                 }
             }
 
-            let dj = *mat.get(j, j).unwrap() - s;
+            let dj = *mat.get(j, j).unwrap();
             d[j] = dj;
             *mat.get_mut(j, j).unwrap() = T::from_usize(1);
 
-            for i in j + 1..rows {
-                let mut s = T::from_usize(0);
-                for (k, dk) in d.iter().enumerate().take(j) {
-                    s += (*mat.get(i, k).unwrap()) * (*mat.get(j, k).unwrap()) * *dk;
+            if dj.abs() > T::epsilon() {
+                let inv_dj = T::from_usize(1) / dj;
+                for i in j + 1..rows {
+                    *mat.get_mut(i, j).unwrap() *= inv_dj;
                 }
-                if dj.abs() > T::epsilon() {
-                    *mat.get_mut(i, j).unwrap() = (*mat.get(i, j).unwrap() - s) / dj;
-                } else {
+            } else {
+                 for i in j + 1..rows {
                     *mat.get_mut(i, j).unwrap() = T::from_usize(0);
                 }
             }
+
+
         }
 
         // Clean up upper triangle
@@ -171,5 +206,80 @@ impl<T: Scalar + 'static, S: Storage<T> + 'static> LDLT<T, S> {
         }
 
         Ok(result)
+    }
+
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    #[target_feature(enable = "avx", enable = "fma")]
+    unsafe fn update_column_vectorized_f32(
+        mat_ptr: *mut f32,
+        rows: usize,
+        j: usize,
+        k: usize,
+        val: f32,
+    ) {
+        use std::arch::x86_64::*;
+        let col_j_ptr = mat_ptr.add(j * rows);
+        let col_k_ptr = mat_ptr.add(k * rows);
+        
+        // We update rows j..rows (actually we only need j..rows. But algorithm updates j for D[j])
+        // Let's stick to update j..rows.
+        let len = rows - j;
+        let mut r = 0;
+        
+        let val_vec = _mm256_set1_ps(val);
+        
+        while r + 8 <= len {
+            let row_idx = j + r;
+            // Load column j (destination)
+            let mut y_vec = _mm256_loadu_ps(col_j_ptr.add(row_idx));
+            // Load column k (source)
+            let x_vec = _mm256_loadu_ps(col_k_ptr.add(row_idx));
+            
+            // y = y - val * x
+            y_vec = _mm256_fnmadd_ps(val_vec, x_vec, y_vec);
+            
+            _mm256_storeu_ps(col_j_ptr.add(row_idx), y_vec);
+            r += 8;
+        }
+        
+        for rr in r..len {
+            let row_idx = j + rr;
+            *col_j_ptr.add(row_idx) -= val * *col_k_ptr.add(row_idx);
+        }
+    }
+
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    #[target_feature(enable = "avx", enable = "fma")]
+    unsafe fn update_column_vectorized_f64(
+        mat_ptr: *mut f64,
+        rows: usize,
+        j: usize,
+        k: usize,
+        val: f64,
+    ) {
+        use std::arch::x86_64::*;
+        let col_j_ptr = mat_ptr.add(j * rows);
+        let col_k_ptr = mat_ptr.add(k * rows);
+        
+        let len = rows - j;
+        let mut r = 0;
+        
+        let val_vec = _mm256_set1_pd(val);
+        
+        while r + 4 <= len {
+            let row_idx = j + r;
+            let mut y_vec = _mm256_loadu_pd(col_j_ptr.add(row_idx));
+            let x_vec = _mm256_loadu_pd(col_k_ptr.add(row_idx));
+            
+            y_vec = _mm256_fnmadd_pd(val_vec, x_vec, y_vec);
+            
+            _mm256_storeu_pd(col_j_ptr.add(row_idx), y_vec);
+            r += 4;
+        }
+        
+        for rr in r..len {
+            let row_idx = j + rr;
+            *col_j_ptr.add(row_idx) -= val * *col_k_ptr.add(row_idx);
+        }
     }
 }

@@ -29,7 +29,8 @@ impl<T: Scalar + num_traits::One, S: Storage<T>> PartialPivLU<T, S> {
         let mut det_p = T::from_usize(1);
 
         // Threshold for blocking
-        const BLOCK_SIZE: usize = 64;
+        // Reduced to 32 to improve L1 cache hit rate
+        const BLOCK_SIZE: usize = 32;
 
         if rows <= BLOCK_SIZE {
             Self::lu_unblocked(&mut lu, &mut p, 0, rows, &mut det_p);
@@ -85,6 +86,28 @@ impl<T: Scalar + num_traits::One, S: Storage<T>> PartialPivLU<T, S> {
             let pivot = *mat.get(k, k).unwrap();
             if pivot != T::from_usize(0) {
                 let inv_pivot = T::one() / pivot;
+                
+                // 2. Scale Column k (below diagonal)
+                #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+                {
+                    #[cfg(target_feature = "avx2")]
+                    if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>()
+                        || std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>()
+                    {
+                        unsafe {
+                            Self::scale_col_avx(mat, k, inv_pivot);
+                        }
+                    } else {
+                        for i in k + 1..rows {
+                            *mat.get_mut(i, k).unwrap() *= inv_pivot;
+                        }
+                    }
+                    #[cfg(not(target_feature = "avx2"))]
+                    for i in k + 1..rows {
+                        *mat.get_mut(i, k).unwrap() *= inv_pivot;
+                    }
+                }
+                #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
                 for i in k + 1..rows {
                     *mat.get_mut(i, k).unwrap() *= inv_pivot;
                 }
@@ -93,8 +116,13 @@ impl<T: Scalar + num_traits::One, S: Storage<T>> PartialPivLU<T, S> {
                 // Vectorized AXPY: col(j) -= col(k) * factor
                 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
                 {
-                    if is_x86_feature_detected!("fma") {
-                        Self::panel_update_avx(mat, k, end);
+                    #[cfg(target_feature = "avx2")]
+                    if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>()
+                        || std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>()
+                    {
+                        unsafe {
+                            Self::panel_update_avx(mat, k, end);
+                        }
                         continue;
                     }
                 }
@@ -112,7 +140,64 @@ impl<T: Scalar + num_traits::One, S: Storage<T>> PartialPivLU<T, S> {
     }
 
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-    fn panel_update_avx(mat: &mut Matrix<T, DynamicStorage<T>>, k: usize, end: usize) {
+    #[target_feature(enable = "avx2", enable = "fma")]
+    unsafe fn scale_col_avx(mat: &mut Matrix<T, DynamicStorage<T>>, k: usize, val: T) {
+        let rows = mat.rows();
+        use std::any::TypeId;
+        let tid = TypeId::of::<T>();
+
+        if tid == TypeId::of::<f32>() {
+            use std::arch::x86_64::*;
+            unsafe {
+                let mut_ptr = mat.storage_mut().data_mut().as_mut_ptr() as *mut f32;
+                let rows_stride = rows;
+                // col k starts at k * rows
+                let col_ptr = mut_ptr.add(k * rows_stride);
+                
+                // We want elements k+1..rows
+                // Access is contiguous: col_ptr[k+1], col_ptr[k+2] ...
+                
+                let val_f32 = *(&val as *const T as *const f32);
+                let val_vec = _mm256_set1_ps(val_f32);
+                
+                let mut i = k + 1;
+                while i + 7 < rows {
+                    let ptr = col_ptr.add(i);
+                    let v = _mm256_loadu_ps(ptr);
+                    _mm256_storeu_ps(ptr, _mm256_mul_ps(v, val_vec));
+                    i += 8;
+                }
+                for ii in i..rows {
+                    *col_ptr.add(ii) *= val_f32;
+                }
+            }
+        } else if tid == TypeId::of::<f64>() {
+             use std::arch::x86_64::*;
+            unsafe {
+                let mut_ptr = mat.storage_mut().data_mut().as_mut_ptr() as *mut f64;
+                let rows_stride = rows;
+                let col_ptr = mut_ptr.add(k * rows_stride);
+                
+                let val_f64 = *(&val as *const T as *const f64);
+                let val_vec = _mm256_set1_pd(val_f64);
+                
+                let mut i = k + 1;
+                while i + 3 < rows {
+                    let ptr = col_ptr.add(i);
+                    let v = _mm256_loadu_pd(ptr);
+                    _mm256_storeu_pd(ptr, _mm256_mul_pd(v, val_vec));
+                    i += 4;
+                }
+                for ii in i..rows {
+                    *col_ptr.add(ii) *= val_f64;
+                }
+            }
+        }
+    }
+
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    #[target_feature(enable = "avx2", enable = "fma")]
+    unsafe fn panel_update_avx(mat: &mut Matrix<T, DynamicStorage<T>>, k: usize, end: usize) {
         // println!("Panel update AVX k={} end={}", k, end);
         let rows = mat.rows();
         use std::any::TypeId;
@@ -208,8 +293,13 @@ impl<T: Scalar + num_traits::One, S: Storage<T>> PartialPivLU<T, S> {
         // Optimized AVX path
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
-            if is_x86_feature_detected!("fma") {
-                Self::trsm_unit_lower_avx(mat, k, kb, n);
+            #[cfg(target_feature = "avx2")]
+            if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>()
+                || std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>()
+            {
+                unsafe {
+                    Self::trsm_unit_lower_avx(mat, k, kb, n);
+                }
                 return;
             }
         }
@@ -230,7 +320,8 @@ impl<T: Scalar + num_traits::One, S: Storage<T>> PartialPivLU<T, S> {
     }
 
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-    fn trsm_unit_lower_avx(mat: &mut Matrix<T, DynamicStorage<T>>, k: usize, kb: usize, n: usize) {
+    #[target_feature(enable = "avx2", enable = "fma")]
+    unsafe fn trsm_unit_lower_avx(mat: &mut Matrix<T, DynamicStorage<T>>, k: usize, kb: usize, n: usize) {
         let rows = mat.rows();
         use std::any::TypeId;
         let tid = TypeId::of::<T>();
@@ -340,7 +431,8 @@ impl<T: Scalar + num_traits::One, S: Storage<T>> PartialPivLU<T, S> {
         {
             let tid = std::any::TypeId::of::<T>();
             // F32 Path
-            if tid == std::any::TypeId::of::<f32>() && is_x86_feature_detected!("fma") {
+            #[cfg(target_feature = "avx2")]
+            if tid == std::any::TypeId::of::<f32>() {
                 use crate::core::ops::gemm::arch::x86::asm_kernel::AsmFmaKernelF32;
                 let alpha_f32: f32 = -1.0;
                 unsafe {
@@ -363,7 +455,8 @@ impl<T: Scalar + num_traits::One, S: Storage<T>> PartialPivLU<T, S> {
                 return;
             }
             // F64 Path
-            if tid == std::any::TypeId::of::<f64>() && is_x86_feature_detected!("fma") {
+            #[cfg(target_feature = "avx2")]
+            if tid == std::any::TypeId::of::<f64>() {
                 use crate::core::ops::gemm::arch::x86::asm_kernel::AsmFmaKernelF64;
                 let alpha_f64: f64 = -1.0;
                 unsafe {
@@ -433,6 +526,7 @@ impl<T: Scalar + num_traits::One, S: Storage<T>> PartialPivLU<T, S> {
         // Check for AVX optimization
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
+            #[cfg(target_feature = "avx2")]
             if is_x86_feature_detected!("fma") {
                 unsafe {
                     Self::solve_avx(&self.lu, &mut x);

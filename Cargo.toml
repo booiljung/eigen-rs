@@ -60,3 +60,7 @@ default = ["std", "parallel"]
 lto = false
 codegen-units = 16
 
+[[bin]]
+name = "verify_large_regressions"
+path = "verification/verify_large_regressions.rs"
+

@@ -4,6 +4,8 @@
 use crate::core::matrix::Matrix;
 use crate::core::scalar::Scalar;
 use crate::core::storage::{DynamicStorage, Storage};
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+use std::arch::x86_64::*;
 
 /// Hessenberg decomposition of a square matrix.
 pub struct HessenbergDecomposition<T: Scalar, S: Storage<T>> {
@@ -68,38 +70,91 @@ impl<T: Scalar, S: Storage<T>> HessenbergDecomposition<T, S> {
                 let tau = v0_plus_sigma.conj() / sigma;
                 *h_coeff = tau;
 
-                // 2. Apply reflection from the left: A = (I - tau v v^T) A
-                // A[i+1:n, i+1:n] = (I - tau v v^T) A[i+1:n, i+1:n]
-                // Note: We also apply it to the i-th column's tail (below i+1) but carefully.
-                for j in i + 1..n {
-                    let mut dot = *mat_a.get(i + 1, j).unwrap();
-                    for k in i + 2..n {
-                        dot += (*mat_a.get(k, i).unwrap()).conj() * (*mat_a.get(k, j).unwrap());
-                    }
+                // Extract Householder vector v (implicit v[0] = 1.0)
+                let v_len = n - (i + 1);
+                // We likely need a buffer for v.
+                // Optimally we should reuse this buffer across iterations.
+                // For now, allocating here is safer and cleaner than passing it down.
+                let mut v_buf = vec![T::default(); v_len];
+                v_buf[0] = T::from_f64(1.0);
+                for k in 1..v_len {
+                    v_buf[k] = *mat_a.get(i + 1 + k, i).unwrap();
+                }
 
-                    let factor = tau * dot;
-                    *mat_a.get_mut(i + 1, j).unwrap() -= factor;
-                    for k in i + 2..n {
-                        let vk = *mat_a.get(k, i).unwrap();
-                        *mat_a.get_mut(k, j).unwrap() -= factor * vk;
+                let mut vectorized = false;
+
+                // Vectorized Dispatch
+                #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+                unsafe {
+                    if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>() && is_x86_feature_detected!("fma") {
+                        let mat_ptr: *mut Matrix<T, DynamicStorage<T>> = mat_a;
+                        let mat_f64: &mut Matrix<f64, DynamicStorage<f64>> = std::mem::transmute(mat_ptr);
+                        
+                        let v_ptr: *const [T] = v_buf.as_slice();
+                        let v_f64: &[f64] = std::mem::transmute(v_ptr);
+                        
+                        let tau_f64: f64 = std::mem::transmute_copy(&tau);
+
+                        crate::core::decompositions::hessenberg_utils::apply_householder_on_the_left_vectorized_f64(
+                            mat_f64, v_f64, tau_f64, i + 1, i + 1, n
+                        );
+                        crate::core::decompositions::hessenberg_utils::apply_householder_on_the_right_vectorized_f64(
+                            mat_f64, v_f64, tau_f64, i + 1, n
+                        );
+                        vectorized = true;
+                    } else if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() && is_x86_feature_detected!("fma") {
+                        let mat_ptr: *mut Matrix<T, DynamicStorage<T>> = mat_a;
+                        let mat_f32: &mut Matrix<f32, DynamicStorage<f32>> = std::mem::transmute(mat_ptr);
+                        
+                        let v_ptr: *const [T] = v_buf.as_slice();
+                        let v_f32: &[f32] = std::mem::transmute(v_ptr);
+                        
+                        let tau_f32: f32 = std::mem::transmute_copy(&tau);
+
+                        crate::core::decompositions::hessenberg_utils::apply_householder_on_the_left_vectorized_f32(
+                            mat_f32, v_f32, tau_f32, i + 1, i + 1, n
+                        );
+                        crate::core::decompositions::hessenberg_utils::apply_householder_on_the_right_vectorized_f32(
+                            mat_f32, v_f32, tau_f32, i + 1, n
+                        );
+                        vectorized = true;
                     }
                 }
 
-                // 3. Apply reflection from the right: A = A (I - tau v v^*)
-                // For similarity transform, we need A = H A H*
-                // Right reflection is A = A H_i* = A (I - tau.conj() v v*)
-                let tau_conj = tau.conj();
-                for j in 0..n {
-                    let mut dot = *mat_a.get(j, i + 1).unwrap();
-                    for k in i + 2..n {
-                        dot += (*mat_a.get(j, k).unwrap()) * (*mat_a.get(k, i).unwrap());
+                if !vectorized {
+                    // 2. Apply reflection from the left: A = (I - tau v v^T) A
+                    // A[i+1:n, i+1:n] = (I - tau v v^T) A[i+1:n, i+1:n]
+                    // Note: We also apply it to the i-th column's tail (below i+1) but carefully.
+                    for j in i + 1..n {
+                        let mut dot = *mat_a.get(i + 1, j).unwrap();
+                        for k in i + 2..n {
+                            dot += (*mat_a.get(k, i).unwrap()).conj() * (*mat_a.get(k, j).unwrap());
+                        }
+
+                        let factor = tau * dot;
+                        *mat_a.get_mut(i + 1, j).unwrap() -= factor;
+                        for k in i + 2..n {
+                            let vk = *mat_a.get(k, i).unwrap();
+                            *mat_a.get_mut(k, j).unwrap() -= factor * vk;
+                        }
                     }
 
-                    let factor = tau_conj * dot;
-                    *mat_a.get_mut(j, i + 1).unwrap() -= factor;
-                    for k in i + 2..n {
-                        let vk = *mat_a.get(k, i).unwrap();
-                        *mat_a.get_mut(j, k).unwrap() -= factor * vk.conj();
+                    // 3. Apply reflection from the right: A = A (I - tau v v^*)
+                    // For similarity transform, we need A = H A H*
+                    // Right reflection is A = A H_i* = A (I - tau.conj() v v*)
+                    let tau_conj = tau.conj();
+                    for j in 0..n {
+                        let mut dot = *mat_a.get(j, i + 1).unwrap();
+                        for k in i + 2..n {
+                            dot += (*mat_a.get(j, k).unwrap()) * (*mat_a.get(k, i).unwrap());
+                        }
+
+                        let factor = tau_conj * dot;
+                        *mat_a.get_mut(j, i + 1).unwrap() -= factor;
+                        for k in i + 2..n {
+                            let vk = *mat_a.get(k, i).unwrap();
+                            *mat_a.get_mut(j, k).unwrap() -= factor * vk.conj();
+                        }
                     }
                 }
 

@@ -69,46 +69,54 @@ impl<T: Scalar, S: Storage<T>> Tridiagonalization<T, S> {
                 // Compute p = (h A v) - (h/2 * v^T (h A v)) v
                 let remaining_size = n - i - 1;
                 let mut w = vec![T::default(); remaining_size];
-                for (row, val) in w.iter_mut().enumerate().take(remaining_size) {
-                    let mut dot = T::default();
-                    for col in 0..remaining_size {
-                        let r = row + i + 1;
-                        let c = col + i + 1;
-                        let val = if r >= c {
-                            *mat_a.get(r, c).unwrap()
-                        } else {
-                            *mat_a.get(c, r).unwrap()
-                        };
-
-                        // v[0] is 1
-                        let v_col = if col == 0 {
-                            T::from_f64(1.0)
-                        } else {
-                            *mat_a.get(c, i).unwrap()
-                        };
-                        dot += val * v_col;
-                    }
-                    *val = h * dot;
+                let mut v_buf = vec![T::default(); remaining_size];
+                // Fill v_buf
+                v_buf[0] = T::from_f64(1.0);
+                for k in 1..remaining_size {
+                     v_buf[k] = *mat_a.get(k + i + 1, i).unwrap();
                 }
 
+                unsafe {
+                    if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>() && is_x86_feature_detected!("fma") {
+                         Self::compute_p_symmv_f64(mat_a, &mut w, &v_buf, i, remaining_size, h);
+                    } else if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() && is_x86_feature_detected!("fma") {
+                         Self::compute_p_symmv_f32(mat_a, &mut w, &v_buf, i, remaining_size, h);
+                    } else {
+                         // Scalar Fallback
+                        for (row, val) in w.iter_mut().enumerate().take(remaining_size) {
+                            let mut dot = T::default();
+                            for col in 0..remaining_size {
+                                let r = row + i + 1;
+                                let c = col + i + 1;
+                                let val = if r >= c {
+                                    *mat_a.get(r, c).unwrap()
+                                } else {
+                                    *mat_a.get(c, r).unwrap()
+                                };
+                                dot += val * v_buf[col];
+                            }
+                            *val = h * dot;
+                        }
+                    }
+                }
+                
+                // update_w logic
                 let mut vt_w = T::default();
                 for (k, val) in w.iter().enumerate().take(remaining_size) {
-                    let v_k = if k == 0 {
-                        T::from_f64(1.0)
-                    } else {
-                        *mat_a.get(k + i + 1, i).unwrap()
-                    };
-                    vt_w += v_k * *val;
+                     vt_w += v_buf[k] * *val;
                 }
                 let scale = h * vt_w * T::from_f64(0.5);
 
-                for (k, val) in w.iter_mut().enumerate().take(remaining_size) {
-                    let v_k = if k == 0 {
-                        T::from_f64(1.0)
-                    } else {
-                        *mat_a.get(k + i + 1, i).unwrap()
-                    };
-                    *val -= scale * v_k;
+                unsafe {
+                     if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>() && is_x86_feature_detected!("fma") {
+                         Self::update_w_vectorized_f64(&mut w, &v_buf, scale);
+                     } else if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() && is_x86_feature_detected!("fma") {
+                         Self::update_w_vectorized_f32(&mut w, &v_buf, scale);
+                     } else {
+                        for (k, val) in w.iter_mut().enumerate().take(remaining_size) {
+                            *val -= scale * v_buf[k];
+                        }
+                     }
                 }
 
                 Self::rank2_update(mat_a, &w, i, remaining_size);
@@ -118,6 +126,219 @@ impl<T: Scalar, S: Storage<T>> Tridiagonalization<T, S> {
             } else {
                 *h_coeff = T::default();
             }
+        }
+    }
+
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    #[target_feature(enable = "avx", enable = "fma")]
+    unsafe fn compute_p_symmv_f32(
+        mat_a: &Matrix<T, DynamicStorage<T>>,
+        w: &mut [T],
+        v: &[T],
+        i: usize,
+        size: usize,
+        h: T,
+    ) {
+        use std::arch::x86_64::*;
+        let mat_ptr = mat_a.storage().data().as_ptr() as *const f32;
+        let w_ptr = w.as_mut_ptr() as *mut f32;
+        let v_ptr = v.as_ptr() as *const f32;
+        let rows = mat_a.rows();
+        let h_val = *(std::mem::transmute::<&T, &f32>(&h));
+
+        // w is assumed zero initialized
+        
+        for col in 0..size {
+            let v_val = *v_ptr.add(col);
+            let v_vec = _mm256_set1_ps(v_val);
+            
+            // Pointer to A(i+1, col+i+1) [actually start of column vector part]
+            // We want A(row+i+1, col+i+1). 
+            // In Col-Major, A(r_idx, c_idx) is at c_idx*rows + r_idx.
+            // c_idx = col + i + 1.
+            // Ptr to start of column c_idx: mat_ptr + c_idx * rows.
+            // element at r_idx = row + i + 1.
+            // So ptr = mat_ptr + c_idx*rows + (i+1).
+            // Then logic adds 'row' to it.
+            let col_ptr = mat_ptr.add((col + i + 1) * rows + (i + 1));
+
+            // Diagonal element A(col, col) * v[col]
+            // Indices is symmetric. A(col+i+1, col+i+1).
+            let val = *col_ptr.add(col);
+            *w_ptr.add(col) += val * v_val;
+
+            // Loop row > col
+            let mut dot_vec = _mm256_setzero_ps();
+            
+            let start_row = col + 1;
+            let mut r = start_row;
+            
+            while r + 8 <= size {
+                let a_vec = _mm256_loadu_ps(col_ptr.add(r));
+                let mut w_vec = _mm256_loadu_ps(w_ptr.add(r));
+                let vr_vec = _mm256_loadu_ps(v_ptr.add(r));
+
+                // w[row] += A * v[col]
+                w_vec = _mm256_fmadd_ps(a_vec, v_vec, w_vec);
+                _mm256_storeu_ps(w_ptr.add(r), w_vec);
+
+                // dot += A * v[row] (for w[col])
+                dot_vec = _mm256_fmadd_ps(a_vec, vr_vec, dot_vec);
+
+                r += 8;
+            }
+            
+            // Horizontal sum of dot_vec
+            // We can accumulate scalar tail into dot_vec? No, simple scalar sum.
+            let mut dot_scalar = 0.0;
+            // Reduce dot_vec
+            let mut temp = [0.0f32; 8];
+            _mm256_storeu_ps(temp.as_mut_ptr(), dot_vec);
+            dot_scalar += temp.iter().sum::<f32>();
+
+            for rr in r..size {
+                let val = *col_ptr.add(rr);
+                // w[rr] += val * v_val
+                *w_ptr.add(rr) += val * v_val;
+                // w[col] += val * v[rr]
+                dot_scalar += val * *v_ptr.add(rr);
+            }
+            
+            *w_ptr.add(col) += dot_scalar;
+        }
+
+        // Apply scale h
+        let h_vec = _mm256_set1_ps(h_val);
+        let mut r = 0;
+        while r + 8 <= size {
+            let mut w_vec = _mm256_loadu_ps(w_ptr.add(r));
+            w_vec = _mm256_mul_ps(w_vec, h_vec);
+            _mm256_storeu_ps(w_ptr.add(r), w_vec);
+            r += 8;
+        }
+        for rr in r..size {
+            *w_ptr.add(rr) *= h_val;
+        }
+    }
+
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    #[target_feature(enable = "avx", enable = "fma")]
+    unsafe fn update_w_vectorized_f32(w: &mut [T], v: &[T], scale: T) {
+        use std::arch::x86_64::*;
+        let w_ptr = w.as_mut_ptr() as *mut f32;
+        let v_ptr = v.as_ptr() as *const f32;
+        let scale_val = *(std::mem::transmute::<&T, &f32>(&scale));
+        let scale_vec = _mm256_set1_ps(scale_val);
+        let n = w.len();
+        
+        let mut r = 0;
+        while r + 8 <= n {
+            let mut w_vec = _mm256_loadu_ps(w_ptr.add(r));
+            let v_vec = _mm256_loadu_ps(v_ptr.add(r));
+            // w -= scale * v
+            // w = w - scale * v = -(scale*v - w) = nmadd? 
+            // standard: w - (scale * v)
+            // fnmsub: -(a*b) + c = c - a*b.
+            w_vec = _mm256_fnmadd_ps(scale_vec, v_vec, w_vec);
+            _mm256_storeu_ps(w_ptr.add(r), w_vec);
+            r += 8;
+        }
+        for rr in r..n {
+            *w_ptr.add(rr) -= scale_val * *v_ptr.add(rr);
+        }
+    }
+
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    #[target_feature(enable = "avx", enable = "fma")]
+    unsafe fn update_w_vectorized_f64(w: &mut [T], v: &[T], scale: T) {
+        use std::arch::x86_64::*;
+        let w_ptr = w.as_mut_ptr() as *mut f64;
+        let v_ptr = v.as_ptr() as *const f64;
+        let scale_val = *(std::mem::transmute::<&T, &f64>(&scale));
+        let scale_vec = _mm256_set1_pd(scale_val);
+        let n = w.len();
+        
+        let mut r = 0;
+        while r + 4 <= n {
+            let mut w_vec = _mm256_loadu_pd(w_ptr.add(r));
+            let v_vec = _mm256_loadu_pd(v_ptr.add(r));
+            w_vec = _mm256_fnmadd_pd(scale_vec, v_vec, w_vec);
+            _mm256_storeu_pd(w_ptr.add(r), w_vec);
+            r += 4;
+        }
+        for rr in r..n {
+            *w_ptr.add(rr) -= scale_val * *v_ptr.add(rr);
+        }
+    }
+
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    #[target_feature(enable = "avx", enable = "fma")]
+    unsafe fn compute_p_symmv_f64(
+        mat_a: &Matrix<T, DynamicStorage<T>>,
+        w: &mut [T],
+        v: &[T],
+        i: usize,
+        size: usize,
+        h: T,
+    ) {
+        use std::arch::x86_64::*;
+        let mat_ptr = mat_a.storage().data().as_ptr() as *const f64;
+        let w_ptr = w.as_mut_ptr() as *mut f64;
+        let v_ptr = v.as_ptr() as *const f64;
+        let rows = mat_a.rows();
+        let h_val = *(std::mem::transmute::<&T, &f64>(&h));
+
+        for col in 0..size {
+            let v_val = *v_ptr.add(col);
+            let v_vec = _mm256_set1_pd(v_val);
+            
+            let col_ptr = mat_ptr.add((col + i + 1) * rows + (i + 1));
+
+            let val = *col_ptr.add(col);
+            *w_ptr.add(col) += val * v_val;
+
+            let mut dot_vec = _mm256_setzero_pd();
+            
+            let start_row = col + 1;
+            let mut r = start_row;
+            
+            while r + 4 <= size {
+                let a_vec = _mm256_loadu_pd(col_ptr.add(r));
+                let mut w_vec = _mm256_loadu_pd(w_ptr.add(r));
+                let vr_vec = _mm256_loadu_pd(v_ptr.add(r));
+
+                w_vec = _mm256_fmadd_pd(a_vec, v_vec, w_vec);
+                _mm256_storeu_pd(w_ptr.add(r), w_vec);
+
+                dot_vec = _mm256_fmadd_pd(a_vec, vr_vec, dot_vec);
+
+                r += 4;
+            }
+            
+            let mut dot_scalar = 0.0;
+            let mut temp = [0.0f64; 4];
+            _mm256_storeu_pd(temp.as_mut_ptr(), dot_vec);
+            dot_scalar += temp.iter().sum::<f64>();
+
+            for rr in r..size {
+                let val = *col_ptr.add(rr);
+                *w_ptr.add(rr) += val * v_val;
+                dot_scalar += val * *v_ptr.add(rr);
+            }
+            
+            *w_ptr.add(col) += dot_scalar;
+        }
+
+        let h_vec = _mm256_set1_pd(h_val);
+        let mut r = 0;
+        while r + 4 <= size {
+            let mut w_vec = _mm256_loadu_pd(w_ptr.add(r));
+            w_vec = _mm256_mul_pd(w_vec, h_vec);
+            _mm256_storeu_pd(w_ptr.add(r), w_vec);
+            r += 4;
+        }
+        for rr in r..size {
+            *w_ptr.add(rr) *= h_val;
         }
     }
 
@@ -383,5 +604,72 @@ impl<T: Scalar, S: Storage<T>> Tridiagonalization<T, S> {
             }
         }
         q
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::matrix::Matrix;
+    use crate::core::storage::DynamicStorage;
+    use crate::core::decompositions::Tridiagonalization;
+
+    #[test]
+    fn test_tridiagonal_decomposition() {
+        let n: usize = 4;
+        let mut a = Matrix::<f64, DynamicStorage<f64>>::new_dynamic(n, n).unwrap();
+        // Symmetric matrix
+        let val = vec![
+            4.0, 1.0, -2.0, 2.0,
+            1.0, 2.0, 0.0, 1.0,
+            -2.0, 0.0, 3.0, -2.0,
+            2.0, 1.0, -2.0, -1.0
+        ];
+        
+        for i in 0..n {
+            for j in 0..n {
+                *a.get_mut(i, j).unwrap() = val[i * n + j];
+            }
+        }
+
+        let tridiag = Tridiagonalization::new(&a).unwrap();
+        let t = tridiag.matrix_t();
+        let q = tridiag.matrix_q();
+
+        // Check T is tridiagonal
+        for i in 0..n {
+            for j in 0..n {
+                if (i as isize - j as isize).abs() > 1 {
+                    assert!(t.get(i, j).unwrap().abs() < 1e-10, "T not tridiagonal at ({}, {}): {}", i, j, t.get(i, j).unwrap());
+                }
+            }
+        }
+
+        // Check Q is orthogonal: Q * Q^T = I
+        let qt = q.transpose();
+        
+        let mut q_qt_res = Matrix::<f64, DynamicStorage<f64>>::new_dynamic(n, n).unwrap();
+        q_qt_res.assign_product(&(&q * &qt)).unwrap();
+
+        for i in 0..n {
+            for j in 0..n {
+                let expected = if i == j { 1.0 } else { 0.0 };
+                assert!((q_qt_res.get(i, j).unwrap() - expected).abs() < 1e-10, "Q not orthogonal at ({}, {})", i, j);
+            }
+        }
+
+        // Check A = Q * T * Q^T
+        let mut t_qt_res = Matrix::<f64, DynamicStorage<f64>>::new_dynamic(n, n).unwrap();
+        t_qt_res.assign_product(&(&t * &qt)).unwrap();
+        
+        let mut recon = Matrix::<f64, DynamicStorage<f64>>::new_dynamic(n, n).unwrap();
+        recon.assign_product(&(&q * &t_qt_res)).unwrap();
+
+        for i in 0..n {
+            for j in 0..n {
+                let diff = (recon.get(i, j).unwrap() - a.get(i, j).unwrap()).abs();
+                assert!(diff < 1e-10, "Reconstruction failed at ({}, {}): expected {}, got {}, diff {}", i, j, a.get(i, j).unwrap(), recon.get(i, j).unwrap(), diff);
+            }
+        }
     }
 }

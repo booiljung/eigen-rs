@@ -34,9 +34,8 @@ pub trait MatrixXpr<T: Scalar>: crate::core::cuda::CudaDispatcher<T> + Sync {
         let mut data = [T::default(); 16]; // Max packet size for now (e.g. AVX512/AMX future proofing)
         let size = P::SIZE;
         for (i, val) in data.iter_mut().enumerate().take(size) {
-            // This is a naive fallback. For RowMajor, this assumes col-wise access.
-            // In a real implementation, we'd need to know the layout or assume a default.
-            *val = self.eval(row, col + i);
+            // Default fallback assumes ColMajor (standard for this crate)
+            *val = self.eval(row + i, col);
         }
         unsafe { P::load(data.as_ptr()) }
     }

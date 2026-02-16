@@ -26,10 +26,17 @@ impl<T: Scalar + num_traits::One + 'static, S: Storage<T> + 'static> LLT<T, S> {
         l.assign(matrix)?;
 
         // Threshold for blocking.
-        const BLOCK_SIZE: usize = 64;
+        // Reduced to 32 to improve L1 cache hit rate for TRSM/SYRK
+        const BLOCK_SIZE: usize = 32;
 
         if rows <= BLOCK_SIZE {
             Self::llt_unblocked(&mut l, 0, rows)?;
+            // Zero out upper triangle explicitly
+            for j in 0..rows {
+                for i in 0..j {
+                    *l.get_mut(i, j).unwrap() = T::default();
+                }
+            }
         } else {
             Self::llt_blocked(&mut l, BLOCK_SIZE)?;
         }
@@ -42,6 +49,8 @@ impl<T: Scalar + num_traits::One + 'static, S: Storage<T> + 'static> LLT<T, S> {
 
     /// Unblocked LLT (Right-Looking / Outer Product) with AVX2 optimization.
     /// Operates on the submatrix starting at (offset, offset) with size `size`.
+    /// Unblocked LLT (Right-Looking / Outer Product) with AVX2 optimization.
+    /// Operates on the submatrix starting at (offset, offset) with size `size`.
     fn llt_unblocked(
         mat: &mut Matrix<T, DynamicStorage<T>>,
         offset: usize,
@@ -50,9 +59,8 @@ impl<T: Scalar + num_traits::One + 'static, S: Storage<T> + 'static> LLT<T, S> {
         // Optimization for f32 AVX2
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
-            if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>()
-                && is_x86_feature_detected!("fma")
-            {
+            #[cfg(target_feature = "avx2")]
+            if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() {
                 unsafe {
                     Self::llt_unblocked_f32_avx(mat, offset, size)?;
                 }
@@ -225,9 +233,8 @@ impl<T: Scalar + num_traits::One + 'static, S: Storage<T> + 'static> LLT<T, S> {
         // Optimization for f32 AVX2
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
-            if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>()
-                && is_x86_feature_detected!("fma")
-            {
+            #[cfg(target_feature = "avx2")]
+            if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() {
                 unsafe {
                     Self::trsm_right_transpose_f32_avx(mat, k, kb, n);
                 }
@@ -322,12 +329,13 @@ impl<T: Scalar + num_traits::One + 'static, S: Storage<T> + 'static> LLT<T, S> {
                     x_vec1 = _mm256_fnmadd_ps(x_prev_vec1, ljl_vec, x_vec1);
                 }
 
-                // Divide by diagonal
+                // OPTIMIZATION: Multiply by inverse diagonal instead of division
                 let ljj_val = *ptr.add(global_j * rows + global_j);
-                let ljj_vec = _mm256_set1_ps(ljj_val);
+                let inv_ljj = 1.0 / ljj_val;
+                let inv_ljj_vec = _mm256_set1_ps(inv_ljj);
 
-                x_vec0 = _mm256_div_ps(x_vec0, ljj_vec);
-                x_vec1 = _mm256_div_ps(x_vec1, ljj_vec);
+                x_vec0 = _mm256_mul_ps(x_vec0, inv_ljj_vec);
+                x_vec1 = _mm256_mul_ps(x_vec1, inv_ljj_vec);
 
                 _mm256_storeu_ps(b_col_ptr0, x_vec0);
                 _mm256_storeu_ps(b_col_ptr1, x_vec1);
@@ -353,9 +361,12 @@ impl<T: Scalar + num_traits::One + 'static, S: Storage<T> + 'static> LLT<T, S> {
 
                     x_vec = _mm256_fnmadd_ps(x_prev_vec, ljl_vec, x_vec);
                 }
+                // OPTIMIZATION: Multiply by inverse diagonal
                 let ljj_val = *ptr.add(global_j * rows + global_j);
-                let ljj_vec = _mm256_set1_ps(ljj_val);
-                x_vec = _mm256_div_ps(x_vec, ljj_vec);
+                let inv_ljj = 1.0 / ljj_val;
+                let inv_ljj_vec = _mm256_set1_ps(inv_ljj);
+
+                x_vec = _mm256_mul_ps(x_vec, inv_ljj_vec);
                 _mm256_storeu_ps(b_col_ptr, x_vec);
             }
             i_blk += 8;
@@ -408,7 +419,8 @@ impl<T: Scalar + num_traits::One + 'static, S: Storage<T> + 'static> LLT<T, S> {
             let tid = std::any::TypeId::of::<T>();
 
             // F32 Path
-            if tid == std::any::TypeId::of::<f32>() && is_x86_feature_detected!("fma") {
+            #[cfg(target_feature = "avx2")]
+            if tid == std::any::TypeId::of::<f32>() {
                 use crate::core::ops::gemm::arch::x86::asm_kernel::AsmFmaKernelF32;
                 // Alpha = -1.0
                 // Transmutate -1.0f32 to T
@@ -437,7 +449,8 @@ impl<T: Scalar + num_traits::One + 'static, S: Storage<T> + 'static> LLT<T, S> {
             }
 
             // F64 Path
-            if tid == std::any::TypeId::of::<f64>() && is_x86_feature_detected!("fma") {
+            #[cfg(target_feature = "avx2")]
+            if tid == std::any::TypeId::of::<f64>() {
                 use crate::core::ops::gemm::arch::x86::asm_kernel::AsmFmaKernelF64;
                 let alpha_f64: f64 = -1.0;
 
@@ -522,5 +535,57 @@ impl<T: Scalar + num_traits::One + 'static, S: Storage<T> + 'static> LLT<T, S> {
         }
 
         Ok(x)
+    }
+
+    /// Solves L * X = B in-place, where B is stored in `mat`.
+    /// `mat` is overwritten with X.
+    /// L is lower triangular (from this decomposition).
+    pub fn solve_inplace_l(&self, mat: &mut Matrix<T, DynamicStorage<T>>) -> Result<(), String> {
+        let rows = self.l.rows();
+        if mat.rows() != rows {
+            return Err("Dimension mismatch in LLT solve_inplace_l".to_string());
+        }
+        let cols = mat.cols();
+        
+        // Forward substitution
+        for i in 0..rows {
+            let l_ii = *self.l.get(i, i).unwrap();
+            let inv_l_ii = T::one() / l_ii;
+            
+            for j in 0..cols {
+                let mut val = *mat.get(i, j).unwrap();
+                for k in 0..i {
+                    val -= (*self.l.get(i, k).unwrap()) * (*mat.get(k, j).unwrap());
+                }
+                *mat.get_mut(i, j).unwrap() = val * inv_l_ii;
+            }
+        }
+        Ok(())
+    }
+
+    /// Solves L^T * X = B in-place, where B is stored in `mat`.
+    /// `mat` is overwritten with X.
+    /// L^T is upper triangular.
+    pub fn solve_inplace_lt(&self, mat: &mut Matrix<T, DynamicStorage<T>>) -> Result<(), String> {
+        let rows = self.l.rows();
+        if mat.rows() != rows {
+            return Err("Dimension mismatch in LLT solve_inplace_lt".to_string());
+        }
+        let cols = mat.cols();
+        
+        // Backward substitution
+        for i in (0..rows).rev() {
+            let l_ii = *self.l.get(i, i).unwrap();
+            let inv_l_ii = T::one() / l_ii;
+            
+            for j in 0..cols {
+                let mut val = *mat.get(i, j).unwrap();
+                for k in i + 1..rows {
+                     val -= (*self.l.get(k, i).unwrap()) * (*mat.get(k, j).unwrap());
+                }
+                *mat.get_mut(i, j).unwrap() = val * inv_l_ii;
+            }
+        }
+        Ok(())
     }
 }
