@@ -12,13 +12,13 @@ pub struct Hybrid<T: Scalar> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-impl<T: Scalar + 'static> Default for Hybrid<T> {
+impl<T: Scalar + std::cmp::PartialOrd + 'static> Default for Hybrid<T> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<T: Scalar + 'static> Hybrid<T> {
+impl<T: Scalar + 'static + std::cmp::PartialOrd> Hybrid<T> {
     pub fn new() -> Self {
         Self {
             max_iter: 100,

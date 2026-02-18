@@ -8,7 +8,7 @@ pub struct AngleAxis<T: Scalar> {
     angle: T,
 }
 
-impl<T: Scalar> AngleAxis<T> {
+impl<T: Scalar<Real = T> + PartialOrd> AngleAxis<T> {
     /// Creates a new AngleAxis from an angle and a normalized axis.
     pub fn new(angle: T, axis: Vector3<T>) -> Self {
         Self { axis, angle }

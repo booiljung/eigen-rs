@@ -10,7 +10,7 @@ pub struct Translation<T: Scalar, const RANK: usize> {
     pub vector: Matrix<T, FixedStorage<T, RANK, 1, RANK>>,
 }
 
-impl<T: Scalar, const RANK: usize> Translation<T, RANK> {
+impl<T: Scalar<Real = T> + PartialOrd, const RANK: usize> Translation<T, RANK> {
     pub fn new(vector: Matrix<T, FixedStorage<T, RANK, 1, RANK>>) -> Self {
         Self { vector }
     }

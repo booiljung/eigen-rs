@@ -4,6 +4,7 @@ use crate::core::matrix::MatrixX;
 use crate::core::optimization::Functor;
 use crate::core::scalar::Scalar;
 use crate::core::xpr::MatrixXpr;
+use num_traits::Zero;
 use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 
 /// A dual number for forward-mode automatic differentiation.
@@ -114,7 +115,20 @@ impl<T: Scalar> DivAssign for Dual<T> {
     }
 }
 
-impl<T: Scalar> Scalar for Dual<T> {
+impl<T: Scalar + PartialOrd> Scalar for Dual<T> {
+    type Real = Dual<T>;
+
+    fn from_real(v: Self::Real) -> Self {
+        v
+    }
+    fn real(self) -> Self::Real {
+        self
+    }
+    fn imag(self) -> Self::Real {
+        Self::constant(T::zero())
+    }
+
+
     fn from_usize(v: usize) -> Self {
         Self::constant(T::from_usize(v))
     }
@@ -185,7 +199,7 @@ impl<T: Scalar> Scalar for Dual<T> {
     }
 
     fn epsilon() -> Self {
-        Self::constant(T::epsilon())
+        Self::constant(T::from_real(<T as Scalar>::epsilon()))
     }
     fn conj(self) -> Self {
         self
@@ -223,7 +237,7 @@ impl<F: AdResiduals<T>, T: Scalar> AutoDiff<F, T> {
     }
 }
 
-impl<F: AdResiduals<T>, T: Scalar + 'static> Functor<T> for AutoDiff<F, T> {
+impl<F: AdResiduals<T>, T: Scalar + PartialOrd + 'static> Functor<T> for AutoDiff<F, T> {
     fn inputs(&self) -> usize {
         self.func.inputs()
     }

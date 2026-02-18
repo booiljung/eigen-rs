@@ -10,7 +10,7 @@ pub struct AlignedBox<T: Scalar, const RANK: usize> {
     max: Matrix<T, FixedStorage<T, RANK, 1, RANK>>,
 }
 
-impl<T: Scalar, const RANK: usize> AlignedBox<T, RANK> {
+impl<T: Scalar<Real = T> + PartialOrd, const RANK: usize> AlignedBox<T, RANK> {
     /// Creates a new AABB with given min and max points.
     pub fn new(
         min: Matrix<T, FixedStorage<T, RANK, 1, RANK>>,

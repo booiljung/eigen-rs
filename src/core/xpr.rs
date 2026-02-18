@@ -114,7 +114,7 @@ pub trait MatrixXpr<T: Scalar>: crate::core::cuda::CudaDispatcher<T> + Sync {
     /// Returns the minimum element.
     fn min(&self) -> T
     where
-        T: crate::core::scalar::Scalar + Send + Sync,
+        T: crate::core::scalar::Scalar + Send + Sync + std::cmp::PartialOrd,
     {
         if self.size() == 0 {
             return T::default();
@@ -156,7 +156,7 @@ pub trait MatrixXpr<T: Scalar>: crate::core::cuda::CudaDispatcher<T> + Sync {
     /// Returns the maximum element.
     fn max(&self) -> T
     where
-        T: crate::core::scalar::Scalar + Send + Sync,
+        T: crate::core::scalar::Scalar + Send + Sync + std::cmp::PartialOrd,
     {
         if self.size() == 0 {
             return T::default();

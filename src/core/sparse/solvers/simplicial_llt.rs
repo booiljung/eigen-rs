@@ -1,52 +1,56 @@
-//! Simplicial Cholesky (LLT) factorization for sparse symmetric positive-definite matrices.
 
 use crate::core::matrix::Matrix;
 use crate::core::scalar::Scalar;
 use crate::core::sparse::iterators::InnerIterator;
 use crate::core::sparse::sparse_matrix::{SparseMatrix, StorageOrder};
 use crate::core::storage::{DynamicStorage, Storage};
+use crate::core::sparse::ordering::{Ordering, Permutation, COLAMD};
 
 /// Simplicial Cholesky (LLT) factorization of a sparse symmetric positive-definite matrix.
 pub struct SimplicialLLT<T: Scalar> {
     l: SparseMatrix<T>,
+    p: Option<Permutation>,
     is_factorized: bool,
 }
 
-impl<T: Scalar> Default for SimplicialLLT<T> {
+impl<T: Scalar + std::cmp::PartialOrd> Default for SimplicialLLT<T> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<T: Scalar> SimplicialLLT<T> {
+impl<T: Scalar + std::cmp::PartialOrd> SimplicialLLT<T> {
     /// Creates a new uninitialized solver.
     pub fn new() -> Self {
         Self {
             l: SparseMatrix::new(0, 0, StorageOrder::ColMajor),
+            p: None,
             is_factorized: false,
         }
     }
 
-    /// Computes the factorization of the given matrix.
+    /// Computes the factorization of the given matrix using COLAMD ordering.
     pub fn compute(&mut self, matrix: &SparseMatrix<T>) -> Result<(), String> {
         self.analyze_pattern(matrix)?;
         self.factorize(matrix)
     }
 
     /// Symbolic factorization: analyzes the sparsity pattern and prepares the L matrix.
-    /// Initially, we assume a natural ordering (no permutation).
     pub fn analyze_pattern(&mut self, matrix: &SparseMatrix<T>) -> Result<(), String> {
         if matrix.rows() != matrix.cols() {
             return Err("Matrix must be square for Cholesky factorization".to_string());
         }
-        let n = matrix.rows();
-
-        // In a simplicial LLT, we need to know the pattern of L.
-        // For symmetric A, L has the same pattern as the lower triangular part of A plus fill-ins.
-        // For simplicity in this initial version, we will compute the pattern during factorization
-        // or use a conservative estimate. Eigen's SimplicialLLT is more sophisticated.
-        // We'll prepare an empty L with the correct dimensions.
-        self.l = SparseMatrix::new(n, n, StorageOrder::ColMajor);
+        
+        // Compute ordering (COLAMD)
+        let ordering = COLAMD;
+        let p = ordering.compute(matrix);
+        
+        // Store inverse permutation for convenience if needed, 
+        // though our Permutation struct has inv_indices.
+        // We clone it for now to keep ownership simple.
+        // Actually Permutation struct holds both indices and inv_indices.
+        
+        self.p = Some(p);
         self.is_factorized = false;
         Ok(())
     }
@@ -54,15 +58,25 @@ impl<T: Scalar> SimplicialLLT<T> {
     /// Numerical factorization: computes the actual LLT decomposition.
     pub fn factorize(&mut self, matrix: &SparseMatrix<T>) -> Result<(), String> {
         let n = matrix.rows();
+        
+        // 1. Permute Matrix: A_prime = P * A * P^T
+        let a_prime = if let Some(ref p) = self.p {
+             p.permute_symmetric(matrix)
+        } else {
+             matrix.clone()
+        };
+        
         // We'll store columns of L as they are computed.
         let mut l_cols: Vec<Vec<(usize, T)>> = vec![Vec::new(); n];
         let mut l_dense = vec![T::default(); n]; // Temporary dense column
 
         for j in 0..n {
             // 1. Initialize dense column with A's j-th column (lower part)
-            let mut it = InnerIterator::new(matrix, j);
+            let mut it = InnerIterator::new(&a_prime, j);
             while it.is_valid() {
                 let r = it.row();
+                // We only care about lower triangular part
+                // Note: permute_symmetric creates a full matrix if input was full.
                 if r >= j {
                     l_dense[r] = it.value();
                 }
@@ -117,6 +131,7 @@ impl<T: Scalar> SimplicialLLT<T> {
             }
         }
 
+        self.l = SparseMatrix::new(n, n, StorageOrder::ColMajor);
         self.l.set_from_triplets(l_triplets);
         self.is_factorized = true;
         Ok(())
@@ -136,41 +151,70 @@ impl<T: Scalar> SimplicialLLT<T> {
         }
 
         let mut x = Matrix::<T, DynamicStorage<T>>::new_dynamic(n, b.cols())?;
+        
+        let p = self.p.as_ref().unwrap(); // Should exist if factorized
+        let p_indices = p.indices();      // new = old[p[i]]? Check Permutation def.
+        let p_inv = p.inverse_indices();  // new -> old map?
+        // Wait, Permutation::permute_symmetric used inv_indices to map A.
+        // P maps: new_vector[inv_indices[i]] = old_vector[i] (scatter)
+        // or new_vector[i] = old_vector[indices[i]] (gather)
+        
+        // Let's rely on logic:
+        // A x = b
+        // P A P^T (P x) = P b
+        // A' y = c
+        // where y = P x, c = P b.
+        
+        // 1. Compute c = P b
+        // c[i] = b[indices[i]] (Gather)
+        // Check `permute_symmetric` used `inv_indices`.
+        // If `permute_symmetric` maps A_{r,c} to A_{inv[r], inv[c]},
+        // then it effectively renames index k to inv[k].
+        // This corresponds to y[inv[k]] = x[k].
+        // So y[new_idx] = x[old_idx].
+        // Where new_idx = inv[old_idx].
+        // So c[inv[k]] = b[k]. (Scatter)
+        
+        // Let's verify `Permutation::new` again.
+        // indices[i] = p. inv_indices[p] = i.
+        // indices maps: new_pos -> old_pos.
+        // inv_indices maps: old_pos -> new_pos.
+        
+        // So `permute_symmetric` used `inv_indices` to map row/col (old) to new_row/new_col (new).
+        // Correct.
+        // So to compute c = P b, we want c to be the "new" vector.
+        // c[new_idx] = b[old_idx] => c[inv_indices[k]] = b[k].
+        
         for k in 0..b.cols() {
-            let mut sol = vec![T::default(); n];
-            for (i, val) in sol.iter_mut().enumerate().take(n) {
-                *val = *b.get(i, k).unwrap();
+            let mut c = vec![T::default(); n];
+            // 1. Permute b -> c
+            for i in 0..n {
+                let new_idx = p_inv[i];
+                c[new_idx] = *b.get(i, k).unwrap();
             }
 
-            // Forward substitution L * y = b
+            // 2. Solve L L^T y = c
+            // Forward substitution L * z = c
             for j in 0..n {
                 let mut it = InnerIterator::new(&self.l, j);
-                // First element should be L(j,j)
                 if it.is_valid() && it.row() == j {
                     let l_jj = it.value();
-                    sol[j] /= l_jj;
+                    c[j] /= l_jj;
                     it.next();
                 } else {
                     return Err("Missing diagonal element in L".to_string());
                 }
 
-                let s_j = sol[j];
+                let s_j = c[j];
                 while it.is_valid() {
                     let r = it.row();
-                    sol[r] -= s_j * it.value();
+                    c[r] -= s_j * it.value();
                     it.next();
                 }
             }
 
-            // Backward substitution L^T * x = y
-            // L^T is RowMajor if L is ColMajor.
-            // We need to solve L^T * x = y.
+            // Backward substitution L^T * y = z
             for j in (0..n).rev() {
-                // Since L is ColMajor, we need the j-th row of L^T, which is the j-th column of L.
-                // But wait, the j-th row of L^T is the j-th column of L.
-                // No, L^T * x = y means sum(L^T(j, i) * x_i) = y_j for i >= j.
-                // which is sum(L(i, j) * x_i) = y_j.
-
                 let mut it = InnerIterator::new(&self.l, j);
                 let mut l_jj = T::default();
                 if it.is_valid() && it.row() == j {
@@ -180,14 +224,20 @@ impl<T: Scalar> SimplicialLLT<T> {
 
                 let mut sum = T::default();
                 while it.is_valid() {
-                    sum += it.value() * sol[it.row()];
+                    sum += it.value() * c[it.row()];
                     it.next();
                 }
-                sol[j] = (sol[j] - sum) / l_jj;
+                c[j] = (c[j] - sum) / l_jj;
             }
-
-            for (i, val) in sol.iter().enumerate().take(n) {
-                *x.get_mut(i, k).unwrap() = *val;
+            
+            // 3. Permute y -> x
+            // y is "new" vector. x is "old".
+            // x = P^T y.
+            // x[old_idx] = y[new_idx] => x[i] = y[inv_indices[i]]
+            
+            for i in 0..n {
+                let new_idx = p_inv[i];
+                *x.get_mut(i, k).unwrap() = c[new_idx];
             }
         }
 
@@ -202,7 +252,7 @@ impl<T: Scalar> SimplicialLLT<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::sparse::Triplet;
+    use crate::core::sparse::sparse_matrix::Triplet;
 
     #[test]
     fn test_sparse_llt_basic() {

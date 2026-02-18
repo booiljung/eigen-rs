@@ -22,13 +22,13 @@ pub struct GMRES<T: Scalar, P: Preconditioner<T> + Default = IdentityPreconditio
     error: T,
 }
 
-impl<T: Scalar, P: Preconditioner<T> + Default> Default for GMRES<T, P> {
+impl<T: Scalar<Real = T> + PartialOrd, P: Preconditioner<T> + Default> Default for GMRES<T, P> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<T: Scalar, P: Preconditioner<T> + Default> GMRES<T, P> {
+impl<T: Scalar<Real = T> + PartialOrd, P: Preconditioner<T> + Default> GMRES<T, P> {
     /// Creates a new GMRES solver with default parameters.
     pub fn new() -> Self {
         Self {

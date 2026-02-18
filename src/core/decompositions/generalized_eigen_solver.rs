@@ -8,13 +8,14 @@ use crate::core::scalar::Scalar;
 use crate::core::storage::{DynamicStorage, Storage};
 
 /// Generalized Eigensolver for square complex matrices.
-pub struct GeneralizedEigenSolver<T: Scalar, S: Storage<Complex<T>>> {
+/// Generalized Eigensolver for square complex matrices.
+pub struct GeneralizedEigenSolver<T: Scalar<Real = T> + PartialOrd, S: Storage<Complex<T>>> {
     eigenvalues: Matrix<Complex<T>, DynamicStorage<Complex<T>>>,
     eigenvectors: Option<Matrix<Complex<T>, DynamicStorage<Complex<T>>>>,
     _phantom: std::marker::PhantomData<S>,
 }
 
-impl<T: Scalar, S: Storage<Complex<T>>> GeneralizedEigenSolver<T, S> {
+impl<T: Scalar<Real = T> + PartialOrd, S: Storage<Complex<T>>> GeneralizedEigenSolver<T, S> {
     /// Computes the generalized eigenvalues and (optionally) eigenvectors of (A, B).
     pub fn new(
         a: &Matrix<Complex<T>, S>,

@@ -1,6 +1,7 @@
 #include <iostream>
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
+#include <Eigen/IterativeLinearSolvers>
 #include <Eigen/Geometry>
 #include <chrono>
 #include <vector>
@@ -74,6 +75,25 @@ void bench_svd(int size) {
     
     auto duration = duration_cast<nanoseconds>(end - start).count();
     cout << "SVD," << size << "," << duration / iterations << endl;
+}
+
+void bench_bdc_svd(int size) {
+    Eigen::MatrixXf a = Eigen::MatrixXf::Random(size, size);
+    int iterations = (size < 64) ? 20 : 1;
+
+    // Warm up
+    for(int i=0; i<2; ++i) {
+        Eigen::BDCSVD<Eigen::MatrixXf> svd(a, Eigen::ComputeThinU | Eigen::ComputeThinV);
+    }
+
+    auto start = high_resolution_clock::now();
+    for(int i=0; i<iterations; ++i) {
+        Eigen::BDCSVD<Eigen::MatrixXf> svd(a, Eigen::ComputeThinU | Eigen::ComputeThinV);
+    }
+    auto end = high_resolution_clock::now();
+    
+    auto duration = duration_cast<nanoseconds>(end - start).count();
+    cout << "BDCSVD," << size << "," << duration / iterations << endl;
 }
 
 void bench_eigenvalues(int size) {
@@ -372,6 +392,122 @@ void bench_sparse_advanced(int size) {
     }
 }
 
+void bench_sparse_iterative(int size) {
+    // Generate sparse SPD matrix for CG
+    // A = B * B^T + I
+    // B is sparse
+    float density = 0.05;
+    int nnz = static_cast<int>(size * size * density);
+    
+    typedef Eigen::Triplet<float> T;
+    std::vector<T> tripletList;
+    tripletList.reserve(nnz);
+    for(int k=0; k<nnz; ++k) {
+        tripletList.push_back(T(rand()%size, rand()%size, 1.0f));
+    }
+    
+    Eigen::SparseMatrix<float> B(size, size);
+    B.setFromTriplets(tripletList.begin(), tripletList.end());
+    
+    Eigen::SparseMatrix<float> A = B * B.transpose();
+    
+    // Add Identity (diagonal)
+    for(int i=0; i<size; ++i) {
+        A.coeffRef(i, i) += 10.0f; // Ensure diagonal dominance / PD
+    }
+    A.makeCompressed();
+    
+    Eigen::VectorXf b = Eigen::VectorXf::Random(size);
+    Eigen::VectorXf x(size);
+    
+    int iterations = (size < 64) ? 20 : 5;
+    
+    // ConjugateGradient
+    {
+        Eigen::ConjugateGradient<Eigen::SparseMatrix<float>, Eigen::Lower|Eigen::Upper> cg;
+        cg.setMaxIterations(100); 
+        cg.setTolerance(1e-6);
+        
+        auto start = high_resolution_clock::now();
+        for(int i=0; i<iterations; ++i) {
+            cg.compute(A);
+            x = cg.solve(b);
+        }
+        auto end = high_resolution_clock::now();
+        cout << "SparseCG," << size << "," << duration_cast<nanoseconds>(end - start).count() / iterations << endl;
+    }
+    
+    // BiCGSTAB
+    // Use same matrix A for simplicity (it works for symmetric too)
+    {
+        Eigen::BiCGSTAB<Eigen::SparseMatrix<float>> bicg;
+        bicg.setMaxIterations(100);
+        bicg.setTolerance(1e-6);
+        
+        auto start = high_resolution_clock::now();
+        for(int i=0; i<iterations; ++i) {
+            bicg.compute(A);
+            x = bicg.solve(b);
+        }
+        auto end = high_resolution_clock::now();
+        cout << "SparseBiCGSTAB," << size << "," << duration_cast<nanoseconds>(end - start).count() / iterations << endl;
+    }
+}
+
+void bench_sparse_cholesky(int size) {
+    // Generate sparse SPD matrix
+    // A = B * B^T + I
+    float density = 0.05;
+    int nnz = static_cast<int>(size * size * density);
+    
+    typedef Eigen::Triplet<float> T;
+    std::vector<T> tripletList;
+    tripletList.reserve(nnz);
+    for(int k=0; k<nnz; ++k) {
+        tripletList.push_back(T(rand()%size, rand()%size, 1.0f));
+    }
+    
+    Eigen::SparseMatrix<float> B(size, size);
+    B.setFromTriplets(tripletList.begin(), tripletList.end());
+    
+    Eigen::SparseMatrix<float> A = B * B.transpose();
+    
+    // Add Identity for PD
+    for(int i=0; i<size; ++i) {
+        A.coeffRef(i, i) += 2.0f;
+    }
+    A.makeCompressed();
+    
+    Eigen::VectorXf b = Eigen::VectorXf::Random(size);
+    Eigen::VectorXf x(size);
+    
+    int iterations = (size < 64) ? 20 : 5;
+    
+    // SimplicialLLT
+    {
+        Eigen::SimplicialLLT<Eigen::SparseMatrix<float>, Eigen::Lower, Eigen::COLAMDOrdering<int>> llt;
+        auto start = high_resolution_clock::now();
+        for(int i=0; i<iterations; ++i) {
+            llt.compute(A);
+            x = llt.solve(b);
+        }
+        auto end = high_resolution_clock::now();
+        cout << "SimplicialLLT," << size << "," << duration_cast<nanoseconds>(end - start).count() / iterations << endl;
+    }
+    
+    // SimplicialLDLT
+    {
+        Eigen::SimplicialLDLT<Eigen::SparseMatrix<float>, Eigen::Lower, Eigen::COLAMDOrdering<int>> ldlt;
+        auto start = high_resolution_clock::now();
+        for(int i=0; i<iterations; ++i) {
+            ldlt.compute(A);
+            x = ldlt.solve(b);
+        }
+        auto end = high_resolution_clock::now();
+        cout << "SimplicialLDLT," << size << "," << duration_cast<nanoseconds>(end - start).count() / iterations << endl;
+    }
+}
+
 void bench_geometry_advanced() {
     int iterations = 1000000;
     
@@ -510,8 +646,11 @@ int main(int argc, char* argv[]) {
         bench_decompositions_advanced(s);
         bench_matrix_arithmetic(s);
         bench_vector_ops(s); // Standard vector size
+        bench_bdc_svd(s); // New BDCSVD
         bench_sparse(s);
         bench_sparse_advanced(s);
+        bench_sparse_iterative(s);
+        bench_sparse_cholesky(s);
     }
     
     // ...

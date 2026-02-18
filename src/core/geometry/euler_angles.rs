@@ -10,7 +10,7 @@ pub struct EulerAngles<T: Scalar> {
     pub gamma: T, // Around X (Roll)
 }
 
-impl<T: Scalar> EulerAngles<T> {
+impl<T: Scalar<Real = T> + PartialOrd> EulerAngles<T> {
     /// Creates a new EulerAngles (ZYX convention).
     /// alpha: angle around Z
     /// beta: angle around Y

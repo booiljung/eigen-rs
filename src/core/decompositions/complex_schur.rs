@@ -9,13 +9,14 @@ use crate::core::storage::{DynamicStorage, Storage};
 
 /// Schur decomposition of a square complex matrix.
 /// For complex matrices, the result T is always strictly upper triangular.
-pub struct ComplexSchur<T: Scalar, S: Storage<Complex<T>>> {
+/// T must be a Real Scalar (impl PartialOrd).
+pub struct ComplexSchur<T: Scalar<Real = T> + PartialOrd, S: Storage<Complex<T>>> {
     t: Matrix<Complex<T>, DynamicStorage<Complex<T>>>,
     u: Matrix<Complex<T>, DynamicStorage<Complex<T>>>,
     _phantom: std::marker::PhantomData<S>,
 }
 
-impl<T: Scalar, S: Storage<Complex<T>>> ComplexSchur<T, S> {
+impl<T: Scalar<Real = T> + PartialOrd, S: Storage<Complex<T>>> ComplexSchur<T, S> {
     /// Computes the Schur decomposition of the given square complex matrix.
     pub fn new(matrix: &Matrix<Complex<T>, S>) -> Result<Self, String> {
         let n = matrix.rows();
@@ -61,7 +62,7 @@ impl<T: Scalar, S: Storage<Complex<T>>> ComplexSchur<T, S> {
                 let h_i_im1 = h.get(i, i - 1).unwrap().norm_sq();
                 let h_im1_im1 = h.get(i - 1, i - 1).unwrap().norm_sq();
                 let h_i_i = h.get(i, i).unwrap().norm_sq();
-                if h_i_im1 <= eps.re * (h_im1_im1 + h_i_i) {
+                if h_i_im1 <= eps * (h_im1_im1 + h_i_i) {
                     *h.get_mut(i, i - 1).unwrap() = Complex::default();
                     break;
                 }

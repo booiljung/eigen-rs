@@ -132,26 +132,32 @@ impl<T: Scalar> PartialEq for Complex<T> {
     }
 }
 
-// Complex numbers are not naturally ordered, but we implement PartialOrd
-// lexicographically to satisfy the Scalar trait requirements.
-impl<T: Scalar> PartialOrd for Complex<T> {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        match self.re.partial_cmp(&other.re) {
-            Some(std::cmp::Ordering::Equal) => self.im.partial_cmp(&other.im),
-            ord => ord,
-        }
-    }
-}
+// Complex numbers are not naturally ordered.
+// We remove PartialOrd to avoid confusion with Scalar requirements.
+// impl<T: Scalar> PartialOrd for Complex<T> was removed.
 
-impl<T: Scalar> Scalar for Complex<T> {
+// Scalar implementation for Complex<T>
+// Note: T must be PartialOrd because Real must be PartialOrd
+impl<T: Scalar<Real = T> + PartialOrd> Scalar for Complex<T> {
+    type Real = T;
+
     fn from_usize(v: usize) -> Self {
         Self::new(T::from_usize(v), T::default())
     }
     fn from_f64(v: f64) -> Self {
         Self::new(T::from_f64(v), T::default())
     }
-    fn abs(self) -> Self {
-        Self::new(self.norm(), T::default())
+    fn from_real(v: Self::Real) -> Self {
+        Self::new(v, T::default())
+    }
+    fn real(self) -> Self::Real {
+        self.re
+    }
+    fn imag(self) -> Self::Real {
+        self.im
+    }
+    fn abs(self) -> Self::Real {
+        self.norm()
     }
     fn sqrt(self) -> Self {
         let r = self.norm();
@@ -193,14 +199,14 @@ impl<T: Scalar> Scalar for Complex<T> {
     fn ln(self) -> Self {
         Self::new(self.norm().ln(), self.im.atan2(self.re))
     }
-    fn epsilon() -> Self {
-        Self::new(T::epsilon(), T::default())
+    fn epsilon() -> Self::Real {
+        T::epsilon()
     }
     fn conj(self) -> Self {
         self.conj()
     }
-    fn norm_sq(self) -> Self {
-        Self::new(self.norm_sq(), T::default())
+    fn norm_sq(self) -> Self::Real {
+        self.norm_sq()
     }
     fn to_f64(self) -> f64 {
         self.norm().to_f64()

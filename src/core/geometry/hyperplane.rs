@@ -10,7 +10,7 @@ pub struct Hyperplane<T: Scalar, const RANK: usize> {
     offset: T,
 }
 
-impl<T: Scalar, const RANK: usize> Hyperplane<T, RANK> {
+impl<T: Scalar<Real = T> + PartialOrd, const RANK: usize> Hyperplane<T, RANK> {
     pub fn new(normal: Matrix<T, FixedStorage<T, RANK, 1, RANK>>, offset: T) -> Self {
         // Normal should theoretically be normalized for distance calculations to be metric.
         // But Eigen allows non-normalized. We assume user provides what they want or we normalize?

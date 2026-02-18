@@ -8,13 +8,13 @@ pub struct JenkinsTraubSolver<T: Scalar> {
     roots: Vec<Complex<T>>,
 }
 
-impl<T: Scalar> Default for JenkinsTraubSolver<T> {
+impl<T: Scalar<Real = T> + PartialOrd> Default for JenkinsTraubSolver<T> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<T: Scalar> JenkinsTraubSolver<T> {
+impl<T: Scalar<Real = T> + PartialOrd> JenkinsTraubSolver<T> {
     pub fn new() -> Self {
         Self { roots: Vec::new() }
     }

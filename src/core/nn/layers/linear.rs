@@ -55,7 +55,7 @@ impl<T: Scalar + 'static> Layer<T> for Linear<T> {
         y_mat.assign(&prod)?;
 
         // Add bias (broadcasting across batch)
-        let bias_data = self.bias.data();
+        let bias_data = self.bias.data().unwrap();
         for i in 0..m {
             for (j, val) in bias_data.iter().enumerate().take(n) {
                 if let Some(res) = y_mat.get_mut(i, j) {
@@ -64,6 +64,6 @@ impl<T: Scalar + 'static> Layer<T> for Linear<T> {
             }
         }
 
-        Ok(Tensor::from_matrix(y_mat))
+        Ok(Tensor::from_matrix_reshaped(y_mat, crate::core::tensor::device::CpuDevice, [m, n])?)
     }
 }

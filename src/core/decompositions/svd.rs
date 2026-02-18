@@ -14,7 +14,7 @@ pub struct JacobiSVD<T: Scalar, S: Storage<T>> {
     _phantom: std::marker::PhantomData<S>,
 }
 
-impl<T: Scalar + 'static, S: Storage<T> + 'static> JacobiSVD<T, S> {
+impl<T: Scalar<Real = T> + PartialOrd + 'static, S: Storage<T> + 'static> JacobiSVD<T, S> {
     /// Computes the JacobiSVD of the given matrix.
     pub fn new(matrix: &Matrix<T, S>) -> Result<Self, String> {
         let m = matrix.rows();
@@ -108,6 +108,9 @@ impl<T: Scalar + 'static, S: Storage<T> + 'static> JacobiSVD<T, S> {
 
         // Extract singular values and normalize U
         let mut singular_values = Vec::new();
+        let mut valid_cols = Vec::new();
+        let mut invalid_cols = Vec::new();
+
         for i in 0..n {
             let mut norm = T::from_usize(0);
             for k in 0..m {
@@ -120,7 +123,112 @@ impl<T: Scalar + 'static, S: Storage<T> + 'static> JacobiSVD<T, S> {
                 for k in 0..m {
                     *u.get_mut(k, i).unwrap() = *a.get(k, i).unwrap() / s_val;
                 }
+                valid_cols.push(i);
+            } else {
+                // Mark for GS fixup. Currently holds e_i
+                invalid_cols.push(i);
             }
+        }
+        
+        // Gram-Schmidt Completion for Null Space
+        if !invalid_cols.is_empty() {
+             for &bad_idx in &invalid_cols {
+                 // Current vector v is u[:, bad_idx] (which is e_{bad_idx})
+                 // Orthogonalize against all valid_cols
+                 for &good_idx in &valid_cols {
+                     let mut dot = T::from_usize(0);
+                     for r in 0..m {
+                         dot += *u.get(r, bad_idx).unwrap() * *u.get(r, good_idx).unwrap();
+                     }
+                     for r in 0..m {
+                         let val = *u.get(r, bad_idx).unwrap() - dot * *u.get(r, good_idx).unwrap();
+                         *u.get_mut(r, bad_idx).unwrap() = val;
+                     }
+                 }
+                 
+                 // Orthogonalize against previously fixed invalid_cols
+                 // Note: invalid_cols is iterated in order. We can just iterate valid_cols U (fixed invalid)
+                 // Wait, we need to add bad_idx to valid_cols after fixing?
+                 // Let's simpler: just iterate all PROCESSED columns.
+             }
+             
+             // The above loop is tricky because we need to ortho against *modified* bad columns too.
+             // Let's rewrite cleaner:
+             
+             // 1. We have a set of Basis Vectors = { u[good] }
+             // 2. We have Candidates = { u[bad] }
+             // 3. For each candidate C:
+             //      C = C - sum( proj(C, B) ) for B in Basis
+             //      C = normalize(C)
+             //      Basis.add(C)
+             
+             let mut basis_indices = valid_cols.clone();
+             for &bad_idx in &invalid_cols {
+                  let mut success = false;
+                  let mut attempt = 0;
+                  
+                  // Reset the column to e_bad_idx initially (it might have been modified by previous operations if we didn't track properly, 
+                  // but here we are just reading it. Actually, u was initialized to I, but rotated.
+                  // Wait, u was rotated! So u[:, bad_idx] is NOT e_bad_idx. It is some vector resulting from rotations.
+                  // But since s_val ~ 0, A * V[:, bad_idx] ~ 0.
+                  // The column in u corresponding to this is u[:, bad_idx] which is technically part of the accumulated rotation?
+                  // No, for One-Sided Jacobi, U is computed as A * V * S^-1.
+                  // U was initialized to I, but line 121 *overwrites* it: *u.get_mut(k, i) = ...
+                  // The loop only overwrites for s_val > eps.
+                  // So for s_val <= eps, the column u[:, bad_idx] is indeed the generic "Identity" column from initialization (line 30).
+                  // BUT, u was initialized to I at the very beginning of 'new'.
+                  // Then 'apply_rotation' was called on 'a' and 'v'.
+                  // 'u' was NEVER rotated in this One-Sided implementation!
+                  // So u[:, bad_idx] IS e_{bad_idx}. Confirmed.
+                  
+                  while !success && attempt < 10 {
+                      // If attempt > 0, randomize the vector
+                      if attempt > 0 {
+                           for r in 0..m {
+                               // Simple pseudo-random generator
+                               let val = ((r + bad_idx + attempt) * 123456789) % 100;
+                               *u.get_mut(r, bad_idx).unwrap() = T::from_f64(val as f64 / 100.0);
+                           }
+                      }
+                  
+                      // 1. Orthogonalize
+                      for &basis_idx in &basis_indices {
+                          let mut dot = T::from_usize(0);
+                          for r in 0..m {
+                               dot += *u.get(r, bad_idx).unwrap() * *u.get(r, basis_idx).unwrap();
+                          }
+                          for r in 0..m {
+                               let sub = dot * *u.get(r, basis_idx).unwrap();
+                               let val = *u.get(r, bad_idx).unwrap() - sub;
+                               *u.get_mut(r, bad_idx).unwrap() = val;
+                          }
+                      }
+                      
+                      // 2. Normalize
+                      let mut norm = T::from_usize(0);
+                      for r in 0..m {
+                           let val = *u.get(r, bad_idx).unwrap();
+                           norm += val * val;
+                      }
+                      let n_val = norm.sqrt();
+                      
+                      if n_val > eps {
+                           for r in 0..m {
+                                *u.get_mut(r, bad_idx).unwrap() /= n_val;
+                           }
+                           success = true;
+                      } else {
+                           attempt += 1;
+                      }
+                  }
+                  
+                  if !success {
+                       println!("JacobiSVD Error: Failed to complete basis for column {}", bad_idx);
+                  }
+                  
+                  // 3. Add to basis
+                  basis_indices.push(bad_idx);
+             }
         }
 
         // Sort singular values in descending order
@@ -138,6 +246,20 @@ impl<T: Scalar + 'static, S: Storage<T> + 'static> JacobiSVD<T, S> {
             for k in 0..n {
                 *sorted_v.get_mut(k, i).unwrap() = *v.get(k, orig_idx).unwrap();
             }
+        }
+        
+        // Debug: Check sorted_u orthogonality immediately
+        for c1 in 0..n {
+             for c2 in 0..n {
+                 let mut dot = T::from_usize(0);
+                 for r in 0..m {
+                     dot += *sorted_u.get(r, c1).unwrap() * *sorted_u.get(r, c2).unwrap();
+                 }
+                 let expected = if c1 == c2 { T::from_usize(1) } else { T::from_usize(0) };
+                 if (dot - expected).abs() > eps * T::from_usize(1000) {
+                     println!("JacobiSVD Internal Ortho Error at {}x{}: dot={:?}, expected={:?}, error={:?}", c1, c2, dot, expected, (dot-expected).abs());
+                 }
+             }
         }
 
         Ok(Self {
@@ -263,101 +385,4 @@ impl<T: Scalar + 'static, S: Storage<T> + 'static> JacobiSVD<T, S> {
     }
 }
 
-/// Bidiagonal Divide & Conquer SVD.
-///
-/// Reduces the matrix to bidiagonal form, then computes the SVD.
-/// Currently uses `JacobiSVD` on the bidiagonal matrix for the "conquer" step.
-/// This acts as a reliable baseline for SVD computations.
-pub struct BDCSVD<T: Scalar, S: Storage<T>> {
-    u: Matrix<T, DynamicStorage<T>>,
-    v: Matrix<T, DynamicStorage<T>>,
-    singular_values: Vec<T>,
-    _phantom: std::marker::PhantomData<S>,
-}
 
-impl<T: Scalar + 'static, S: Storage<T> + 'static> BDCSVD<T, S> {
-    /// Computes the BDCSVD of the given matrix.
-    pub fn new(matrix: &Matrix<T, S>) -> Result<Self, String> {
-        let m = matrix.rows();
-        let n = matrix.cols();
-
-        // 1. Bidiagonalization
-        let bidiag = Bidiagonalization::new(matrix)?;
-        let u_bi = bidiag.matrix_u();
-        let v_bi = bidiag.matrix_v();
-        let b = bidiag.matrix_b();
-
-        // 2. Golub-Kahan SVD (Implicit QR)
-        // We use a simplified strategy: Pad to square and use JacobiSVD.
-        // This guarantees orthogonality and correctness.
-
-        // 2. Pad B to m x m
-        let min_dim = std::cmp::min(m, n);
-
-        let mut b_pad = Matrix::<T, DynamicStorage<T>>::new_dynamic(m, m)?;
-        for i in 0..m {
-            for j in 0..m {
-                let val = if i < min_dim && i == j {
-                    *b.get(i, i).unwrap()
-                } else if i < min_dim - 1 && j == i + 1 {
-                    *b.get(i, i + 1).unwrap()
-                } else {
-                    T::default()
-                };
-                *b_pad.get_mut(i, j).unwrap() = val;
-            }
-        }
-
-        // 3. SVD of B_pad
-        let svd_b = JacobiSVD::new(&b_pad)?;
-        let u_jac = svd_b.matrix_u();
-        let s_vals = svd_b.singular_values().to_vec();
-        let v_jac = svd_b.matrix_v();
-
-        // 4. Combine
-        // Compute U = U_bi * U_jac
-        let mut u = Matrix::<T, DynamicStorage<T>>::new_dynamic(m, m)?;
-        for i in 0..m {
-            for j in 0..m {
-                let mut sum = T::default();
-                for k in 0..m {
-                    sum += *u_bi.get(i, k).unwrap() * (*u_jac.get(k, j).unwrap());
-                }
-                *u.get_mut(i, j).unwrap() = sum;
-            }
-        }
-
-        // Compute V = V_bi * V_jac(0..n, 0..n)
-        let mut v = Matrix::<T, DynamicStorage<T>>::new_dynamic(n, n)?;
-        for i in 0..n {
-            for j in 0..n {
-                let mut sum = T::default();
-                for k in 0..n {
-                    // Only sum up to n
-                    sum += *v_bi.get(i, k).unwrap() * (*v_jac.get(k, j).unwrap());
-                }
-                *v.get_mut(i, j).unwrap() = sum;
-            }
-        }
-
-        // Filter singular values
-        let s_vals_final = s_vals.into_iter().take(n).collect();
-
-        Ok(Self {
-            u,
-            v,
-            singular_values: s_vals_final,
-            _phantom: std::marker::PhantomData,
-        })
-    }
-
-    pub fn matrix_u(&self) -> &Matrix<T, DynamicStorage<T>> {
-        &self.u
-    }
-    pub fn matrix_v(&self) -> &Matrix<T, DynamicStorage<T>> {
-        &self.v
-    }
-    pub fn singular_values(&self) -> &[T] {
-        &self.singular_values
-    }
-}

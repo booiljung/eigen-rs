@@ -13,13 +13,13 @@ pub struct LevenbergMarquardt<T: Scalar> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-impl<T: Scalar + 'static> Default for LevenbergMarquardt<T> {
+impl<T: Scalar + std::cmp::PartialOrd + 'static> Default for LevenbergMarquardt<T> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<T: Scalar + 'static> LevenbergMarquardt<T> {
+impl<T: Scalar + 'static + std::cmp::PartialOrd> LevenbergMarquardt<T> {
     pub fn new() -> Self {
         Self {
             max_iter: 1000,

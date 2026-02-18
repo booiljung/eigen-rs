@@ -3,7 +3,8 @@ use crate::core::ops::{CwiseAddOp, CwiseScalarMulOp, CwiseSubOp, Product};
 use crate::core::scalar::Scalar;
 pub use crate::core::storage::{DynamicStorage, FixedStorage, Storage};
 use crate::core::xpr::MatrixXpr;
-use std::ops::{Add, Mul, Sub};
+use num_traits::Zero;
+use std::ops::{Add, AddAssign, Div, DivAssign, Index, IndexMut, Mul, MulAssign, Sub, SubAssign};
 
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
@@ -178,14 +179,7 @@ impl<T: Scalar, S: Storage<T>> Matrix<T, S> {
         crate::core::decompositions::LDLT::new(self)
     }
 
-    /// Computes the Jacobi SVD decomposition of the matrix.
-    pub fn jacobi_svd(&self) -> Result<crate::core::decompositions::JacobiSVD<T, S>, String>
-    where
-        T: Scalar + 'static,
-        S: Storage<T> + 'static,
-    {
-        crate::core::decompositions::JacobiSVD::new(self)
-    }
+
 
     /// Computes the inverse of the matrix.
     pub fn inverse(&self) -> Result<Matrix<T, DynamicStorage<T>>, String>
@@ -520,25 +514,9 @@ impl<T: Scalar, S: Storage<T>> Matrix<T, S> {
         crate::core::ops::gemm::gemm_cm_unoptimized_xpr(product.lhs(), product.rhs(), self)
     }
 
-    /// Computes the eigenvalues and eigenvectors of a self-adjoint matrix.
-    pub fn self_adjoint_eigen_solver(
-        &self,
-        compute_eigenvectors: bool,
-    ) -> Result<crate::core::decompositions::SelfAdjointEigenSolver<T, S>, String>
-    where
-        Self: Sized + 'static,
-    {
-        crate::core::decompositions::SelfAdjointEigenSolver::new(self, compute_eigenvectors)
-    }
 
-    /// Returns the eigenvalues of a self-adjoint matrix.
-    pub fn eigenvalues(&self) -> Result<Matrix<T, DynamicStorage<T>>, String>
-    where
-        Self: Sized + 'static,
-    {
-        let solver = crate::core::decompositions::SelfAdjointEigenSolver::new(self, false)?;
-        Ok(solver.eigenvalues().clone())
-    }
+
+
 
     /// LU decomposition using LAPACK.
     #[cfg(feature = "lapack")]
@@ -584,24 +562,31 @@ impl<T: Scalar, S: Storage<T>> Matrix<T, S> {
     }
 
     /// Computes the squared norm of the vector.
-    pub fn squared_norm(&self) -> T {
+    /// Computes the squared norm of the vector.
+    pub fn squared_norm(&self) -> T::Real {
         // Try vectorized path
         if let Some(res) = T::squared_norm_vectorized(self) {
             return res;
         }
-        self.dot(self)
+        
+        // Sum of squared moduli for complex support
+        let mut sum = T::Real::zero();
+        for i in 0..self.size() {
+            sum += self.storage.data()[i].norm_sq();
+        }
+        sum
     }
 
     /// Computes the norm of the vector.
-    pub fn norm(&self) -> T {
+    pub fn norm(&self) -> T::Real {
         self.squared_norm().sqrt()
     }
 
     /// Normalizes the vector in-place.
     pub fn normalize(&mut self) {
         let n = self.norm();
-        if n != T::default() {
-            let inv_n = T::from_usize(1) / n;
+        if n != T::Real::zero() {
+            let inv_n = T::from_real(n.recip());
             for i in 0..self.size() {
                 self.storage.data_mut()[i] *= inv_n;
             }
@@ -950,5 +935,26 @@ mod tests {
         assert_eq!(*m.get(2, 2).unwrap(), 5.0);
         assert_eq!(m.rows(), 3);
         assert_eq!(m.cols(), 3);
+    }
+}
+
+impl<T: Scalar<Real = T> + PartialOrd + 'static, S: Storage<T> + 'static> Matrix<T, S> {
+    /// Computes the Jacobi SVD decomposition of the matrix.
+    pub fn jacobi_svd(&self) -> Result<crate::core::decompositions::JacobiSVD<T, S>, String> {
+        crate::core::decompositions::JacobiSVD::new(self)
+    }
+
+    /// Computes the eigenvalues and eigenvectors of a self-adjoint matrix.
+    pub fn self_adjoint_eigen_solver(
+        &self,
+        compute_eigenvectors: bool,
+    ) -> Result<crate::core::decompositions::SelfAdjointEigenSolver<T, S>, String> {
+        crate::core::decompositions::SelfAdjointEigenSolver::new(self, compute_eigenvectors)
+    }
+
+    /// Returns the eigenvalues of a self-adjoint matrix.
+    pub fn eigenvalues(&self) -> Result<Matrix<T, DynamicStorage<T>>, String> {
+        let solver = crate::core::decompositions::SelfAdjointEigenSolver::new(self, false)?;
+        Ok(solver.eigenvalues().clone())
     }
 }

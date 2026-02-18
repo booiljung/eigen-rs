@@ -7,6 +7,7 @@ pub mod geometry;
 pub mod matrix;
 pub mod nn;
 pub mod ops;
+pub mod iterative_solvers;
 pub mod optimization;
 pub mod scalar;
 pub mod sparse;

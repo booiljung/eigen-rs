@@ -7,14 +7,15 @@ use crate::core::matrix::Matrix;
 use crate::core::scalar::Scalar;
 use crate::core::storage::{DynamicStorage, Storage};
 
-/// Eigensolver for general complex matrices.
-pub struct ComplexEigenSolver<T: Scalar, S: Storage<Complex<T>>> {
+/// Eigensolver for generic complex matrices (Complex<T>).
+/// T must be a Real Scalar (impl PartialOrd).
+pub struct ComplexEigenSolver<T: Scalar<Real = T> + PartialOrd, S: Storage<Complex<T>>> {
     eigenvalues: Matrix<Complex<T>, DynamicStorage<Complex<T>>>,
     eigenvectors: Option<Matrix<Complex<T>, DynamicStorage<Complex<T>>>>,
     _phantom: std::marker::PhantomData<S>,
 }
 
-impl<T: Scalar, S: Storage<Complex<T>>> ComplexEigenSolver<T, S> {
+impl<T: Scalar<Real = T> + PartialOrd, S: Storage<Complex<T>>> ComplexEigenSolver<T, S> {
     /// Computes the eigenvalues and (optionally) eigenvectors of a square complex matrix.
     pub fn new(matrix: &Matrix<Complex<T>, S>, compute_eigenvectors: bool) -> Result<Self, String> {
         let n = matrix.rows();

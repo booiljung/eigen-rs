@@ -36,7 +36,7 @@ impl<T: Scalar> SparseQR<T, NaturalOrdering> {
     }
 }
 
-impl<T: Scalar, O: Ordering> SparseQR<T, O> {
+impl<T: Scalar + std::cmp::PartialOrd, O: Ordering> SparseQR<T, O> {
     pub fn with_ordering(ordering: O) -> Self {
         Self {
             ordering,

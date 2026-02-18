@@ -21,7 +21,7 @@ pub enum ComputationInfo {
     InvalidInput,
 }
 
-impl<T: Scalar, S: Storage<T>> SelfAdjointEigenSolver<T, S> {
+impl<T: Scalar<Real = T> + PartialOrd, S: Storage<T>> SelfAdjointEigenSolver<T, S> {
     /// Computes the eigendecomposition of the given selfadjoint matrix.
     pub fn new(matrix: &Matrix<T, S>, compute_eigenvectors: bool) -> Result<Self, String> {
         let n = matrix.rows();

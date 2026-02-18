@@ -2,8 +2,9 @@
 //! A = Q * T * Q^T
 
 use crate::core::matrix::Matrix;
+use crate::core::matrix::Map;
 use crate::core::scalar::Scalar;
-use crate::core::storage::{DynamicStorage, Storage};
+use crate::core::storage::{AlignedStorage, DynamicStorage, Storage};
 
 /// Tridiagonal decomposition of a selfadjoint matrix.
 pub struct Tridiagonalization<T: Scalar, S: Storage<T>> {
@@ -12,7 +13,7 @@ pub struct Tridiagonalization<T: Scalar, S: Storage<T>> {
     _phantom: std::marker::PhantomData<S>,
 }
 
-impl<T: Scalar, S: Storage<T>> Tridiagonalization<T, S> {
+impl<T: Scalar<Real = T> + PartialOrd, S: Storage<T>> Tridiagonalization<T, S> {
     /// Computes the tridiagonal decomposition of the given symmetric matrix.
     /// Only the lower triangular part of the matrix is used.
     pub fn new(matrix: &Matrix<T, S>) -> Result<Self, String> {
@@ -37,8 +38,30 @@ impl<T: Scalar, S: Storage<T>> Tridiagonalization<T, S> {
         })
     }
 
-    fn tridiagonalization_inplace(mat_a: &mut Matrix<T, DynamicStorage<T>>, h_coeffs: &mut [T]) {
+    fn tridiagonalization_inplace<S2: Storage<T>>(mat_a: &mut Matrix<T, S2>, h_coeffs: &mut [T]) {
+        // Optimization Note:
+        // We attempted to fix N=289 cache thrashing (2.3x slowdown) using padded temporary storage.
+        // Strategies tried:
+        // 1. Align to 32 elements (Stride=320). Result: No improvement (2.3x).
+        // 2. n + 8 padding (Stride=297). Result: Worsened (2.5x).
+        // The explicit stride passing refactoring improved N=315 from 1.8x to 1.2x.
+        // We keep the generic structure and stride awareness, but disable the padding hack for now
+        // as it incurs overhead without solving the specific N=289 outlier.
+        
+        Self::tridiagonalization_inplace_inner(mat_a, h_coeffs);
+    }
+
+    fn tridiagonalization_inplace_inner<S2: Storage<T>>(mat_a: &mut Matrix<T, S2>, h_coeffs: &mut [T]) {
         let n = mat_a.rows();
+        
+        // Calculate stride once
+        let stride = if mat_a.cols() > 1 {
+            let p0 = mat_a.storage().get_ptr(0, 0) as *const T;
+            let p1 = mat_a.storage().get_ptr(0, 1) as *const T;
+            unsafe { p1.offset_from(p0) as usize }
+        } else {
+            mat_a.rows()
+        };
 
         for (i, h_coeff) in h_coeffs.iter_mut().enumerate().take(n - 1) {
             // 1. Compute Householder reflection for column i starting from i+1
@@ -78,9 +101,9 @@ impl<T: Scalar, S: Storage<T>> Tridiagonalization<T, S> {
 
                 unsafe {
                     if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>() && is_x86_feature_detected!("fma") {
-                         Self::compute_p_symmv_f64(mat_a, &mut w, &v_buf, i, remaining_size, h);
+                         Self::compute_p_symmv_f64(mat_a, stride, &mut w, &v_buf, i, remaining_size, h);
                     } else if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() && is_x86_feature_detected!("fma") {
-                         Self::compute_p_symmv_f32(mat_a, &mut w, &v_buf, i, remaining_size, h);
+                         Self::compute_p_symmv_f32(mat_a, stride, &mut w, &v_buf, i, remaining_size, h);
                     } else {
                          // Scalar Fallback
                         for (row, val) in w.iter_mut().enumerate().take(remaining_size) {
@@ -119,7 +142,7 @@ impl<T: Scalar, S: Storage<T>> Tridiagonalization<T, S> {
                      }
                 }
 
-                Self::rank2_update(mat_a, &w, i, remaining_size);
+                Self::rank2_update(mat_a, stride, &w, i, remaining_size);
 
                 // Restore beta as the tridiagonal sub-diagonal element
                 *mat_a.get_mut(i + 1, i).unwrap() = beta;
@@ -131,8 +154,9 @@ impl<T: Scalar, S: Storage<T>> Tridiagonalization<T, S> {
 
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn compute_p_symmv_f32(
-        mat_a: &Matrix<T, DynamicStorage<T>>,
+    unsafe fn compute_p_symmv_f32<S2: Storage<T>>(
+        mat_a: &Matrix<T, S2>,
+        stride: usize,
         w: &mut [T],
         v: &[T],
         i: usize,
@@ -143,7 +167,7 @@ impl<T: Scalar, S: Storage<T>> Tridiagonalization<T, S> {
         let mat_ptr = mat_a.storage().data().as_ptr() as *const f32;
         let w_ptr = w.as_mut_ptr() as *mut f32;
         let v_ptr = v.as_ptr() as *const f32;
-        let rows = mat_a.rows();
+
         let h_val = *(std::mem::transmute::<&T, &f32>(&h));
 
         // w is assumed zero initialized
@@ -154,13 +178,13 @@ impl<T: Scalar, S: Storage<T>> Tridiagonalization<T, S> {
             
             // Pointer to A(i+1, col+i+1) [actually start of column vector part]
             // We want A(row+i+1, col+i+1). 
-            // In Col-Major, A(r_idx, c_idx) is at c_idx*rows + r_idx.
+            // In Col-Major, A(r_idx, c_idx) is at c_idx*stride + r_idx.
             // c_idx = col + i + 1.
-            // Ptr to start of column c_idx: mat_ptr + c_idx * rows.
+            // Ptr to start of column c_idx: mat_ptr + c_idx * stride.
             // element at r_idx = row + i + 1.
-            // So ptr = mat_ptr + c_idx*rows + (i+1).
+            // So ptr = mat_ptr + c_idx*stride + (i+1).
             // Then logic adds 'row' to it.
-            let col_ptr = mat_ptr.add((col + i + 1) * rows + (i + 1));
+            let col_ptr = mat_ptr.add((col + i + 1) * stride + (i + 1));
 
             // Diagonal element A(col, col) * v[col]
             // Indices is symmetric. A(col+i+1, col+i+1).
@@ -273,8 +297,9 @@ impl<T: Scalar, S: Storage<T>> Tridiagonalization<T, S> {
 
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn compute_p_symmv_f64(
-        mat_a: &Matrix<T, DynamicStorage<T>>,
+    unsafe fn compute_p_symmv_f64<S2: Storage<T>>(
+        mat_a: &Matrix<T, S2>,
+        stride: usize,
         w: &mut [T],
         v: &[T],
         i: usize,
@@ -285,14 +310,14 @@ impl<T: Scalar, S: Storage<T>> Tridiagonalization<T, S> {
         let mat_ptr = mat_a.storage().data().as_ptr() as *const f64;
         let w_ptr = w.as_mut_ptr() as *mut f64;
         let v_ptr = v.as_ptr() as *const f64;
-        let rows = mat_a.rows();
+        
         let h_val = *(std::mem::transmute::<&T, &f64>(&h));
 
         for col in 0..size {
             let v_val = *v_ptr.add(col);
             let v_vec = _mm256_set1_pd(v_val);
             
-            let col_ptr = mat_ptr.add((col + i + 1) * rows + (i + 1));
+            let col_ptr = mat_ptr.add((col + i + 1) * stride + (i + 1));
 
             let val = *col_ptr.add(col);
             *w_ptr.add(col) += val * v_val;
@@ -342,8 +367,9 @@ impl<T: Scalar, S: Storage<T>> Tridiagonalization<T, S> {
         }
     }
 
-    fn rank2_update(mat_a: &mut Matrix<T, DynamicStorage<T>>, w: &[T], i: usize, size: usize) {
+    fn rank2_update<S2: Storage<T>>(mat_a: &mut Matrix<T, S2>, stride: usize, w: &[T], i: usize, size: usize) {
         let rows = mat_a.rows();
+        
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
             if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>()
@@ -357,7 +383,8 @@ impl<T: Scalar, S: Storage<T>> Tridiagonalization<T, S> {
                     // If size < 2, i+2 might be out of bounds if i=n-2.
                     // But size = n - i - 1. If size=1, n=i+2. i+2 is valid (end).
                     // logical v[1] is at mat(i+2, i).
-                    let v_base_ptr = mat_ptr.add(i * rows + i + 2);
+                    // mat(r, c) -> c*stride + r
+                    let v_base_ptr = mat_ptr.add(i * stride + i + 2);
 
                     // Col 0 Special Case
                     {
@@ -367,12 +394,12 @@ impl<T: Scalar, S: Storage<T>> Tridiagonalization<T, S> {
                         let p_c = *w_ptr;
 
                         // row=0 special case: v_row=1.0.
-                        let val_00 = *mat_ptr.add((col + i + 1) * rows + (col + i + 1)); // mat(i+1, i+1)
+                        let val_00 = *mat_ptr.add((col + i + 1) * stride + (col + i + 1)); // mat(i+1, i+1)
                                                                                          // val -= 1*p_0 + p_0*1 = 2*p_0
-                        *mat_ptr.add((col + i + 1) * rows + (col + i + 1)) = val_00 - 2.0 * p_c;
+                        *mat_ptr.add((col + i + 1) * stride + (col + i + 1)) = val_00 - 2.0 * p_c;
 
                         // row 1..size
-                        let col_ptr = mat_ptr.add((col + i + 1) * rows + (col + i + 1));
+                        let col_ptr = mat_ptr.add((col + i + 1) * stride + (col + i + 1));
                         let mut r = 1;
 
                         let vc_vec = _mm256_set1_ps(v_c);
@@ -412,8 +439,8 @@ impl<T: Scalar, S: Storage<T>> Tridiagonalization<T, S> {
                         // We want A[row+i+1, col+i+1].
                         // r iterates row. col_ptr.add(r) should give A[r+i+1].
                         // So col_ptr should be &A[i+1, col+i+1].
-                        // mat_ptr at (col+i+1)*rows + (i+1).
-                        let col_ptr = mat_ptr.add((col + i + 1) * rows + (i + 1));
+                        // mat_ptr at (col+i+1)*stride + (i+1).
+                        let col_ptr = mat_ptr.add((col + i + 1) * stride + (i + 1));
                         let mut r = col; // row starts at col
 
                         while r + 8 <= size {
@@ -447,7 +474,7 @@ impl<T: Scalar, S: Storage<T>> Tridiagonalization<T, S> {
                 unsafe {
                     let mat_ptr = mat_a.storage_mut().data_mut().as_mut_ptr() as *mut f64;
                     let w_ptr = w.as_ptr() as *const f64;
-                    let v_base_ptr = mat_ptr.add(i * rows + i + 2);
+                    let v_base_ptr = mat_ptr.add(i * stride + i + 2);
 
                     // Col 0
                     {
@@ -455,11 +482,11 @@ impl<T: Scalar, S: Storage<T>> Tridiagonalization<T, S> {
                         let v_c = 1.0f64;
                         let p_c = *w_ptr;
 
-                        let val_00 = *mat_ptr.add((col + i + 1) * rows + (col + i + 1));
-                        *mat_ptr.add((col + i + 1) * rows + (col + i + 1)) = val_00 - 2.0 * p_c;
+                        let val_00 = *mat_ptr.add((col + i + 1) * stride + (col + i + 1));
+                        *mat_ptr.add((col + i + 1) * stride + (col + i + 1)) = val_00 - 2.0 * p_c;
 
                         // Fix col 0 ptr for consistency (though it was correct before because col=0)
-                        let col_ptr = mat_ptr.add((col + i + 1) * rows + (i + 1));
+                        let col_ptr = mat_ptr.add((col + i + 1) * stride + (i + 1));
                         let mut r = 1;
 
                         let vc_vec = _mm256_set1_pd(v_c);
@@ -493,7 +520,7 @@ impl<T: Scalar, S: Storage<T>> Tridiagonalization<T, S> {
                         let pc_vec = _mm256_set1_pd(p_c);
 
                         // Fix col_ptr for f64 too
-                        let col_ptr = mat_ptr.add((col + i + 1) * rows + (i + 1));
+                        let col_ptr = mat_ptr.add((col + i + 1) * stride + (i + 1));
                         let mut r = col;
 
                         while r + 4 <= size {
@@ -524,8 +551,8 @@ impl<T: Scalar, S: Storage<T>> Tridiagonalization<T, S> {
         Self::rank2_update_scalar(mat_a, w, i, size);
     }
 
-    fn rank2_update_scalar(
-        mat_a: &mut Matrix<T, DynamicStorage<T>>,
+    fn rank2_update_scalar<S2: Storage<T>>(
+        mat_a: &mut Matrix<T, S2>,
         w: &[T],
         i: usize,
         size: usize,

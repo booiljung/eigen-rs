@@ -1,9 +1,11 @@
 use crate::core::scalar::Scalar;
-use crate::core::tensor::xpr::{
-    CwiseTensorAddOp, CwiseTensorScalarAddOp, CwiseTensorScalarMulOp, CwiseTensorScalarSubOp,
-    CwiseTensorSubOp, TensorXpr,
+use super::{
+    Tensor,
+    xpr::{
+        CwiseTensorAddOp, CwiseTensorScalarAddOp, CwiseTensorScalarMulOp, CwiseTensorScalarSubOp,
+        CwiseTensorSubOp, TensorXpr,
+    },
 };
-use crate::core::tensor::Tensor;
 use std::ops::{Add, Mul, Sub};
 
 // --- Add ---

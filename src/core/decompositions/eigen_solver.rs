@@ -7,13 +7,14 @@ use crate::core::scalar::Scalar;
 use crate::core::storage::{DynamicStorage, Storage};
 
 /// Eigenvalue and eigenvector solver for general square real matrices.
-pub struct EigenSolver<T: Scalar, S: Storage<T>> {
+/// Eigenvalue and eigenvector solver for general square real matrices.
+pub struct EigenSolver<T: Scalar<Real = T> + PartialOrd, S: Storage<T>> {
     eigenvalues: Vec<Complex<T>>,
     eigenvectors: Option<Matrix<Complex<T>, DynamicStorage<Complex<T>>>>,
     _phantom: std::marker::PhantomData<S>,
 }
 
-impl<T: Scalar, S: Storage<T>> EigenSolver<T, S> {
+impl<T: Scalar<Real = T> + PartialOrd, S: Storage<T>> EigenSolver<T, S> {
     /// Computes the eigenvalues and (optionally) eigenvectors of the given square real matrix.
     pub fn new(matrix: &Matrix<T, S>, compute_eigenvectors: bool) -> Result<Self, String> {
         let n = matrix.rows();

@@ -10,7 +10,7 @@ pub struct Ray<T: Scalar, const RANK: usize> {
     direction: Matrix<T, FixedStorage<T, RANK, 1, RANK>>,
 }
 
-impl<T: Scalar, const RANK: usize> Ray<T, RANK> {
+impl<T: Scalar<Real = T> + PartialOrd, const RANK: usize> Ray<T, RANK> {
     pub fn new(
         origin: Matrix<T, FixedStorage<T, RANK, 1, RANK>>,
         direction: Matrix<T, FixedStorage<T, RANK, 1, RANK>>,

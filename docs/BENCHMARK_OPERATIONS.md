@@ -28,6 +28,12 @@ This document explains the mathematical operations and scenarios covered in the 
 | **Inverse** | Matrix inversion (typically using LU or Partial Pivoting). | $A^{-1}$ |
 | **EigenValues** | Eigenvalue decomposition for self-adjoint (symmetric) matrices. | $A = V D V^{-1}$ |
 | **SVD** | Singular Value Decomposition. | $A = U \Sigma V^T$ |
+| **LDLT** | Robust Cholesky Decomposition with pivoting. | $A = P^T L D L^T P$ |
+| **Hessenberg** | Hessenberg Decomposition. Reduces general matrix to Hessenberg form. | $A = Q H Q^T$ |
+| **Tridiagonal** | Tridiagonalization of self-adjoint matrices. | $A = Q T Q^T$ |
+| **GeneralizedEigen** | Generalized Self-Adjoint Eigen Solver. | $Ax = \lambda Bx$ |
+| **RealSchur** | Real Schur Decomposition. | $A = U T U^T$ |
+| **Determinant** | Matrix Determinant calculation (typically via LU). | $\det(A)$ |
 
 ## Sparse Matrix Operations
 
@@ -35,12 +41,20 @@ This document explains the mathematical operations and scenarios covered in the 
 | :--- | :--- | :--- |
 | **SpMV** | Sparse Matrix-Vector multiplication. $A$ is sparse (CSR/CSC), $x$ is dense. | $y = A x$ |
 | **SpMM_Dense** | Sparse Matrix-Dense Matrix multiplication. | $C = A_{sparse} \times B_{dense}$ |
+| **SparseLU** | Sparse LU Solver. | $Ax = b$ using sparse LU |
+| **SparseQR** | Sparse QR Solver. | $Ax = b$ using sparse QR |
+| **SparseView** | Conversion from Dense Matrix to Sparse Matrix (Compressed Base). | `Dense -> Sparse` |
 
 ## Geometry
 
 | Operation | Description | Formula / Logic |
 | :--- | :--- | :--- |
 | **QuatMul** | Quaternion multiplication. | $q_1 \otimes q_2$ |
+| **Transform** | Affine Transformation multiplication. | $T \times v$ |
+| **Translation** | Translation application. | $Tr \times v$ |
+| **Scaling** | Uniform Scaling application. | $S \times v$ |
+| **AngleAxis** | Angle-Axis rotation to Rotation Matrix conversion. | `AngleAxis -> Mat3` |
+| **EulerAngles** | Rotation Matrix to Euler Angles conversion. | `Mat3 -> Euler` |
 
 ## Benchmark Config Note
 - **Size**: Represents the dimension $N$. For Matrix operations, matrices are often $N \times N$.

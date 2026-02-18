@@ -3,6 +3,7 @@
 
 use crate::core::xpr::MatrixXpr;
 use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
+use num_traits::Float;
 
 /// Marker trait for scalar types supported by eigen-rs.
 pub trait Scalar:
@@ -18,7 +19,9 @@ pub trait Scalar:
     + DivAssign
     + Neg<Output = Self>
     + PartialEq
-    + PartialOrd
+    + Neg<Output = Self>
+    + PartialEq
+    // + PartialOrd // Removed to support Complex
     + std::fmt::Debug
     + std::fmt::Display
     + Send
@@ -26,9 +29,17 @@ pub trait Scalar:
     + 'static
     + num_traits::Zero
 {
+    /// The Real part type (e.g., f32 for Complex<f32>).
+    /// Must be PartialOrd to allow pivoting/comparisons.
+    type Real: Scalar + PartialOrd;
+
     fn from_usize(v: usize) -> Self;
     fn from_f64(v: f64) -> Self;
-    fn abs(self) -> Self;
+    fn from_real(v: Self::Real) -> Self;
+    fn real(self) -> Self::Real;
+    fn imag(self) -> Self::Real;
+    
+    fn abs(self) -> Self::Real;
     fn sqrt(self) -> Self;
     fn recip(self) -> Self;
     fn sin(self) -> Self;
@@ -39,9 +50,9 @@ pub trait Scalar:
     fn powf(self, n: Self) -> Self;
     fn exp(self) -> Self;
     fn ln(self) -> Self;
-    fn epsilon() -> Self;
+    fn epsilon() -> Self::Real;
     fn conj(self) -> Self;
-    fn norm_sq(self) -> Self;
+    fn norm_sq(self) -> Self::Real;
     fn to_f64(self) -> f64;
 
     /// Vectorized assignment helper.
@@ -75,7 +86,8 @@ pub trait Scalar:
     }
 
     /// Vectorized squared norm helper.
-    fn squared_norm_vectorized<S>(_mat: &crate::core::matrix::Matrix<Self, S>) -> Option<Self>
+    /// Vectorized squared norm helper.
+    fn squared_norm_vectorized<S>(_mat: &crate::core::matrix::Matrix<Self, S>) -> Option<Self::Real>
     where
         S: crate::core::storage::Storage<Self>,
     {
@@ -84,13 +96,24 @@ pub trait Scalar:
 }
 
 impl Scalar for f32 {
+    type Real = f32;
+
     fn from_usize(v: usize) -> Self {
         v as f32
     }
     fn from_f64(v: f64) -> Self {
         v as f32
     }
-    fn abs(self) -> Self {
+    fn from_real(v: Self::Real) -> Self {
+        v
+    }
+    fn real(self) -> Self::Real {
+        self
+    }
+    fn imag(self) -> Self::Real {
+        0.0
+    }
+    fn abs(self) -> Self::Real {
         self.abs()
     }
     fn sqrt(self) -> Self {
@@ -123,13 +146,13 @@ impl Scalar for f32 {
     fn ln(self) -> Self {
         self.ln()
     }
-    fn epsilon() -> Self {
+    fn epsilon() -> Self::Real {
         f32::EPSILON
     }
     fn conj(self) -> Self {
         self
     }
-    fn norm_sq(self) -> Self {
+    fn norm_sq(self) -> Self::Real {
         self * self
     }
     fn to_f64(self) -> f64 {
@@ -251,7 +274,7 @@ impl Scalar for f32 {
         None
     }
 
-    fn squared_norm_vectorized<S>(mat: &crate::core::matrix::Matrix<Self, S>) -> Option<Self>
+    fn squared_norm_vectorized<S>(mat: &crate::core::matrix::Matrix<Self, S>) -> Option<Self::Real>
     where
         S: crate::core::storage::Storage<Self>,
     {
@@ -381,13 +404,24 @@ impl Scalar for f32 {
 }
 
 impl Scalar for f64 {
+    type Real = f64;
+    
     fn from_usize(v: usize) -> Self {
         v as f64
     }
     fn from_f64(v: f64) -> Self {
         v
     }
-    fn abs(self) -> Self {
+    fn from_real(v: Self::Real) -> Self {
+        v
+    }
+    fn real(self) -> Self::Real {
+        self
+    }
+    fn imag(self) -> Self::Real {
+        0.0
+    }
+    fn abs(self) -> Self::Real {
         self.abs()
     }
     fn sqrt(self) -> Self {
@@ -420,13 +454,13 @@ impl Scalar for f64 {
     fn ln(self) -> Self {
         self.ln()
     }
-    fn epsilon() -> Self {
+    fn epsilon() -> Self::Real {
         f64::EPSILON
     }
     fn conj(self) -> Self {
         self
     }
-    fn norm_sq(self) -> Self {
+    fn norm_sq(self) -> Self::Real {
         self * self
     }
     fn to_f64(self) -> f64 {
@@ -569,7 +603,7 @@ impl Scalar for f64 {
         None
     }
 
-    fn squared_norm_vectorized<S>(mat: &crate::core::matrix::Matrix<Self, S>) -> Option<Self>
+    fn squared_norm_vectorized<S>(mat: &crate::core::matrix::Matrix<Self, S>) -> Option<Self::Real>
     where
         S: crate::core::storage::Storage<Self>,
     {
@@ -758,4 +792,75 @@ where
         return Some(sum);
     }
     None
+}
+
+// Implementation for num_complex::Complex
+// We implement Scalar for num_complex::Complex<T> where T is a real-valued Scalar (f32/f64).
+
+impl<T: Scalar<Real = T> + Float + num_traits::NumAssign + num_traits::Num + num_traits::NumCast + num_traits::One + num_traits::ToPrimitive + num_traits::Zero> Scalar for num_complex::Complex<T> {
+    type Real = T;
+
+    fn from_usize(v: usize) -> Self {
+        Self::new(T::from_usize(v), T::zero())
+    }
+    fn from_f64(v: f64) -> Self {
+        Self::new(T::from_f64(v), T::zero())
+    }
+    fn from_real(v: Self::Real) -> Self {
+        Self::new(v, T::zero())
+    }
+    fn real(self) -> Self::Real {
+        self.re
+    }
+    fn imag(self) -> Self::Real {
+        self.im
+    }
+    fn abs(self) -> Self::Real {
+        self.norm()
+    }
+    fn sqrt(self) -> Self {
+        self.sqrt()
+    }
+    fn recip(self) -> Self {
+        self.inv()
+    }
+    fn sin(self) -> Self {
+         self.sin()
+    }
+    fn cos(self) -> Self {
+         self.cos()
+    }
+    fn asin(self) -> Self {
+         self.asin()
+    }
+    fn acos(self) -> Self {
+         self.acos()
+    }
+    fn atan2(self, _other: Self) -> Self {
+         unimplemented!("atan2 not supported for Complex")
+    }
+    fn powf(self, n: Self) -> Self {
+         self.powc(n)
+    }
+    fn exp(self) -> Self {
+         self.exp()
+    }
+    fn ln(self) -> Self {
+         self.ln()
+    }
+    fn epsilon() -> Self::Real {
+        <T as Float>::epsilon()
+    }
+    fn conj(self) -> Self {
+        Self {
+            re: self.re,
+            im: -self.im,
+        }
+    }
+    fn norm_sq(self) -> Self::Real {
+        self.norm_sqr()
+    }
+    fn to_f64(self) -> f64 {
+        self.norm().to_f64()
+    }
 }

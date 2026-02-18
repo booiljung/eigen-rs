@@ -53,9 +53,10 @@ def compile_cpp():
         return False
     return True
 
-def run_cpp():
-    print("Running C++ Benchmark...")
-    res = subprocess.run([f"./{CPP_BENCH_BIN}"], capture_output=True, text=True)
+def run_cpp(args=[]):
+    print(f"Running C++ Benchmark with args {args}...")
+    cmd = [f"./{CPP_BENCH_BIN}"] + args
+    res = subprocess.run(cmd, capture_output=True, text=True)
     if res.returncode != 0:
         print("❌ C++ Benchmark Failed:")
         print(res.stderr)
@@ -99,7 +100,7 @@ def parse_output(output):
                 pass
     return data
 
-def generate_report(cpp_data, rust_data):
+def generate_report(cpp_data, rust_data, is_partial=False):
     sys_info = get_system_info()
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")
     report_filename = f"performance_{timestamp}.md"
@@ -201,19 +202,32 @@ def generate_report(cpp_data, rust_data):
     with open(report_path, 'w') as f:
         f.write("\n".join(lines))
     
-    with open(LATEST_REPORT_LINK, 'w') as f:
-        f.write("\n".join(lines))
-        
     print(f"Report generated: {report_path}")
-    print(f"Latest report updated: {LATEST_REPORT_LINK}")
-    return all_passed
+
+    if not is_partial:
+        with open(LATEST_REPORT_LINK, 'w') as f:
+            f.write("\n".join(lines))
+        print(f"Latest report updated: {LATEST_REPORT_LINK}")
+    else:
+        print(f"Partial run detected. NOT updating {LATEST_REPORT_LINK}")
 
 def main():
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--random-sweep", action="store_true", help="Run randomized size sweep")
     parser.add_argument("--update-benchmark", action="store_true", help="Append results to BENCHMARK.md")
+    parser.add_argument("--filter", type=str, help="Filter benchmarks by name", default="")
+    parser.add_argument("--sizes", type=str, help="Comma-separated sizes (e.g. 10,20,30)", default="")
+    parser.add_argument("--small-sizes", type=str, help="Comma-separated small sizes", default="")
     args = parser.parse_args()
+
+    # Pass filter to Rust command if present
+    extra_args = []
+    if args.filter:
+        extra_args = ["--filter", args.filter]
+
+    # Determine if this is a partial run
+    is_partial = bool(args.filter or args.sizes or args.small_sizes or args.random_sweep)
 
     if args.random_sweep:
         import random
@@ -249,7 +263,7 @@ def main():
         print("Running Rust Benchmark with Random Sizes...")
         env = os.environ.copy()
         env["RUSTFLAGS"] = "-C target-cpu=native"
-        rust_cmd = RUST_BENCH_CMD + ["--", "--sizes", sizes_str, "--small-sizes", small_sizes_str]
+        rust_cmd = RUST_BENCH_CMD + ["--", "--sizes", sizes_str, "--small-sizes", small_sizes_str] + extra_args
         res = subprocess.run(rust_cmd, capture_output=True, text=True, env=env)
         if res.returncode != 0:
             print("❌ Rust Benchmark Failed:")
@@ -257,7 +271,7 @@ def main():
             sys.exit(1)
         rust_data = parse_output(res.stdout)
 
-        success = generate_report(cpp_data, rust_data)
+        success = generate_report(cpp_data, rust_data, is_partial=True) # Random sweep is always partial
         if success:
             print("✅ Performance Verification PASSED (Randomized)")
             sys.exit(0)
@@ -268,13 +282,29 @@ def main():
     if not compile_cpp():
         sys.exit(1)
         
-    cpp_data = run_cpp()
+    # Construct size args for C++ and Rust
+    size_args = []
+    if args.sizes:
+        size_args.extend(["--sizes", args.sizes])
+    if args.small_sizes:
+        size_args.extend(["--small-sizes", args.small_sizes])
+
+    cpp_data = run_cpp(size_args)
     if cpp_data is None: sys.exit(1)
         
-    rust_data = run_rust()
+    # Modified to pass filter
+    print("Running Rust Benchmark (Release Mode)...")
+    env = os.environ.copy()
+    env["RUSTFLAGS"] = "-C target-cpu=native"
+    # Note: run_rust function in this script hardcodes the call. 
+    # I should update run_rust to accept args or modify it here.
+    # Actually simpler to inline logic or update run_rust signature.
+    # Let's update run_rust function instead.
+    
+    rust_data = run_rust_with_args(extra_args + size_args)
     if rust_data is None: sys.exit(1)
     
-    success = generate_report(cpp_data, rust_data)
+    success = generate_report(cpp_data, rust_data, is_partial=is_partial)
     
     if success:
         print("✅ Performance Verification PASSED")
@@ -282,6 +312,23 @@ def main():
     else:
         print("❌ Performance Verification FAILED (Some deviations too high)")
         sys.exit(1)
+
+def run_rust_with_args(extra_args):
+    print(f"Running Rust Benchmark (Release Mode) with args {extra_args}...")
+    env = os.environ.copy()
+    env["RUSTFLAGS"] = "-C target-cpu=native"
+    cmd = RUST_BENCH_CMD + ["--"] + extra_args
+    res = subprocess.run(cmd, capture_output=True, text=True, env=env)
+    if "DEBUG" in res.stderr:
+        print("--- STDERR DEBUG ---")
+        print(res.stderr)
+        print("--------------------")
+    
+    if res.returncode != 0:
+        print("❌ Rust Benchmark Failed:")
+        print(res.stderr)
+        return None
+    return parse_output(res.stdout)
 
 if __name__ == "__main__":
     main()

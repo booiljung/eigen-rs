@@ -41,127 +41,150 @@ impl<T: Scalar, S: Storage<T>> HessenbergDecomposition<T, S> {
     fn hessenberg_inplace(mat_a: &mut Matrix<T, DynamicStorage<T>>, h_coeffs: &mut [T]) {
         let n = mat_a.rows();
 
+        // Workspace buffers
+        // v_buf: max length n.
+        // w_buf: max length n (used for right update).
+        let mut v_buf_alloc = vec![T::default(); n];
+        let mut w_buf_alloc = vec![T::default(); n];
+
         for (i, h_coeff) in h_coeffs.iter_mut().enumerate().take(n - 2) {
+            let v_len = n - (i + 1);
+            
             // 1. Compute Householder reflection for column i starting from i+1
-            let mut norm_sq = T::default();
-            for k in i + 1..n {
-                let val = *mat_a.get(k, i).unwrap();
-                norm_sq += val.norm_sq();
-            }
-            let norm = norm_sq.sqrt();
+            // Try vectorized first
+            let mut computed_vectorized = false;
+            
+            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+            unsafe {
+                 if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>() && is_x86_feature_detected!("fma") {
+                    let mat_ptr: *mut Matrix<T, DynamicStorage<T>> = mat_a;
+                    let mat_f64: &mut Matrix<f64, DynamicStorage<f64>> = std::mem::transmute(mat_ptr);
+                    
+                    let v_slice_f64: &mut [f64] = std::mem::transmute(&mut v_buf_alloc[0..v_len]);
+                    
+                    // Compute Householder vector
+                    let (tau_val, beta_val) = crate::core::decompositions::hessenberg_utils::compute_householder_vectorized_f64(
+                        mat_f64, i, v_slice_f64
+                    );
+                    
+                    let tau: T = std::mem::transmute_copy(&tau_val);
+                    *h_coeff = tau;
+                    
+                    // Restore beta (sub-diagonal element)
+                    *mat_a.get_mut(i + 1, i).unwrap() = std::mem::transmute_copy(&beta_val);
 
-            if norm != T::default() {
-                let v0 = *mat_a.get(i + 1, i).unwrap();
-                let sigma = if v0 >= T::default() {
-                    norm
-                } else {
-                    T::default() - norm
-                };
+                    if tau_val != 0.0 {
+                         let inputs_f64: &[f64] = v_slice_f64;
+                         let w_slice_f64: &mut [f64] = std::mem::transmute(&mut w_buf_alloc[0..n]); // w needs up to n size? Apply right uses rows_end=n
 
-                let v0_plus_sigma = v0 + sigma;
-                let inv_v0_plus_sigma = v0_plus_sigma.recip();
-
-                // Scale Householder vector: v[0] becomes 1, rest stored in mat_a
-                for k in i + 2..n {
-                    *mat_a.get_mut(k, i).unwrap() *= inv_v0_plus_sigma;
-                }
-
-                // Householder coefficient tau
-                let tau = v0_plus_sigma.conj() / sigma;
-                *h_coeff = tau;
-
-                // Extract Householder vector v (implicit v[0] = 1.0)
-                let v_len = n - (i + 1);
-                // We likely need a buffer for v.
-                // Optimally we should reuse this buffer across iterations.
-                // For now, allocating here is safer and cleaner than passing it down.
-                let mut v_buf = vec![T::default(); v_len];
-                v_buf[0] = T::from_f64(1.0);
-                for k in 1..v_len {
-                    v_buf[k] = *mat_a.get(i + 1 + k, i).unwrap();
-                }
-
-                let mut vectorized = false;
-
-                // Vectorized Dispatch
-                #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-                unsafe {
-                    if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>() && is_x86_feature_detected!("fma") {
-                        let mat_ptr: *mut Matrix<T, DynamicStorage<T>> = mat_a;
-                        let mat_f64: &mut Matrix<f64, DynamicStorage<f64>> = std::mem::transmute(mat_ptr);
-                        
-                        let v_ptr: *const [T] = v_buf.as_slice();
-                        let v_f64: &[f64] = std::mem::transmute(v_ptr);
-                        
-                        let tau_f64: f64 = std::mem::transmute_copy(&tau);
-
-                        crate::core::decompositions::hessenberg_utils::apply_householder_on_the_left_vectorized_f64(
-                            mat_f64, v_f64, tau_f64, i + 1, i + 1, n
+                         crate::core::decompositions::hessenberg_utils::apply_householder_on_the_left_vectorized_f64(
+                            mat_f64, inputs_f64, tau_val, i + 1, i + 1, n
                         );
+                        // Right update: affects columns i+1..n? No, right update affects all rows, columns i+1..n?
+                        // A = A (I - tau v v^T). v is size n-(i+1).
+                        // It mixes columns i+1..n.
+                        // Rows updated? All rows 0..n.
                         crate::core::decompositions::hessenberg_utils::apply_householder_on_the_right_vectorized_f64(
-                            mat_f64, v_f64, tau_f64, i + 1, n
+                            mat_f64, inputs_f64, tau_val, i + 1, n, w_slice_f64
                         );
-                        vectorized = true;
-                    } else if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() && is_x86_feature_detected!("fma") {
-                        let mat_ptr: *mut Matrix<T, DynamicStorage<T>> = mat_a;
-                        let mat_f32: &mut Matrix<f32, DynamicStorage<f32>> = std::mem::transmute(mat_ptr);
-                        
-                        let v_ptr: *const [T] = v_buf.as_slice();
-                        let v_f32: &[f32] = std::mem::transmute(v_ptr);
-                        
-                        let tau_f32: f32 = std::mem::transmute_copy(&tau);
+                    }
+                    computed_vectorized = true;
+                 } else if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() && is_x86_feature_detected!("fma") {
+                    let mat_ptr: *mut Matrix<T, DynamicStorage<T>> = mat_a;
+                    let mat_f32: &mut Matrix<f32, DynamicStorage<f32>> = std::mem::transmute(mat_ptr);
+                    
+                    let v_slice_f32: &mut [f32] = std::mem::transmute(&mut v_buf_alloc[0..v_len]);
+                    
+                    let (tau_val, beta_val) = crate::core::decompositions::hessenberg_utils::compute_householder_vectorized_f32(
+                        mat_f32, i, v_slice_f32
+                    );
+                    
+                    let tau: T = std::mem::transmute_copy(&tau_val);
+                    *h_coeff = tau;
+                    *mat_a.get_mut(i + 1, i).unwrap() = std::mem::transmute_copy(&beta_val);
 
-                        crate::core::decompositions::hessenberg_utils::apply_householder_on_the_left_vectorized_f32(
-                            mat_f32, v_f32, tau_f32, i + 1, i + 1, n
+                    if tau_val != 0.0 {
+                         let inputs_f32: &[f32] = v_slice_f32;
+                         let w_slice_f32: &mut [f32] = std::mem::transmute(&mut w_buf_alloc[0..n]);
+
+                         crate::core::decompositions::hessenberg_utils::apply_householder_on_the_left_vectorized_f32(
+                            mat_f32, inputs_f32, tau_val, i + 1, i + 1, n
                         );
                         crate::core::decompositions::hessenberg_utils::apply_householder_on_the_right_vectorized_f32(
-                            mat_f32, v_f32, tau_f32, i + 1, n
+                            mat_f32, inputs_f32, tau_val, i + 1, n, w_slice_f32
                         );
-                        vectorized = true;
                     }
-                }
+                    computed_vectorized = true;
+                 }
+            }
 
-                if !vectorized {
-                    // 2. Apply reflection from the left: A = (I - tau v v^T) A
-                    // A[i+1:n, i+1:n] = (I - tau v v^T) A[i+1:n, i+1:n]
-                    // Note: We also apply it to the i-th column's tail (below i+1) but carefully.
+            if !computed_vectorized {
+                let mut norm_sq = T::default();
+                for k in i + 1..n {
+                    let val = *mat_a.get(k, i).unwrap();
+                    norm_sq += T::from_real(val.norm_sq());
+                }
+                let norm = norm_sq.sqrt();
+
+                if norm != T::default() {
+                    let v0 = *mat_a.get(i + 1, i).unwrap();
+                    let sigma = if v0.real() >= <T::Real as num_traits::Zero>::zero() {
+                        norm
+                    } else {
+                        T::default() - norm
+                    };
+
+                    let v0_plus_sigma = v0 + sigma;
+                    let inv_v0_plus_sigma = v0_plus_sigma.recip();
+
+                    // Scale Householder vector: v[0] becomes 1, rest stored in mat_a
+                    for k in i + 2..n {
+                        *mat_a.get_mut(k, i).unwrap() *= inv_v0_plus_sigma;
+                    }
+
+                    // Householder coefficient tau
+                    let tau = v0_plus_sigma.conj() / sigma;
+                    *h_coeff = tau;
+
+                    // Copy v to buffer for scalar application
+                    v_buf_alloc[0] = T::from_f64(1.0);
+                    for k in 1..v_len {
+                        v_buf_alloc[k] = *mat_a.get(i + 1 + k, i).unwrap();
+                    }
+                    let v_slice = &v_buf_alloc[0..v_len];
+
+                   // 2. Apply reflection from the left: A = (I - tau v v^T) A
                     for j in i + 1..n {
-                        let mut dot = *mat_a.get(i + 1, j).unwrap();
-                        for k in i + 2..n {
-                            dot += (*mat_a.get(k, i).unwrap()).conj() * (*mat_a.get(k, j).unwrap());
+                        let mut dot = T::default();
+                        for k in 0..v_len {
+                             dot += v_slice[k].conj() * *mat_a.get(i + 1 + k, j).unwrap();
                         }
 
                         let factor = tau * dot;
-                        *mat_a.get_mut(i + 1, j).unwrap() -= factor;
-                        for k in i + 2..n {
-                            let vk = *mat_a.get(k, i).unwrap();
-                            *mat_a.get_mut(k, j).unwrap() -= factor * vk;
+                        for k in 0..v_len {
+                            *mat_a.get_mut(i + 1 + k, j).unwrap() -= factor * v_slice[k];
                         }
                     }
 
                     // 3. Apply reflection from the right: A = A (I - tau v v^*)
-                    // For similarity transform, we need A = H A H*
-                    // Right reflection is A = A H_i* = A (I - tau.conj() v v*)
                     let tau_conj = tau.conj();
                     for j in 0..n {
-                        let mut dot = *mat_a.get(j, i + 1).unwrap();
-                        for k in i + 2..n {
-                            dot += (*mat_a.get(j, k).unwrap()) * (*mat_a.get(k, i).unwrap());
+                        let mut dot = T::default();
+                        for k in 0..v_len {
+                            dot += *mat_a.get(j, i + 1 + k).unwrap() * v_slice[k];
                         }
 
                         let factor = tau_conj * dot;
-                        *mat_a.get_mut(j, i + 1).unwrap() -= factor;
-                        for k in i + 2..n {
-                            let vk = *mat_a.get(k, i).unwrap();
-                            *mat_a.get_mut(j, k).unwrap() -= factor * vk.conj();
+                        for k in 0..v_len {
+                            *mat_a.get_mut(j, i + 1 + k).unwrap() -= factor * v_slice[k].conj();
                         }
                     }
-                }
 
-                // Restore sub-diagonal element
-                *mat_a.get_mut(i + 1, i).unwrap() = T::default() - sigma;
-            } else {
-                *h_coeff = T::default();
+                    // Restore sub-diagonal element
+                    *mat_a.get_mut(i + 1, i).unwrap() = T::default() - sigma;
+                } else {
+                    *h_coeff = T::default();
+                }
             }
         }
     }

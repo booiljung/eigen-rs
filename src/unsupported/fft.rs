@@ -75,7 +75,7 @@ use crate::core::matrix::Matrix;
 use crate::core::storage::{DynamicStorage, Storage};
 
 /// Extension trait to add FFT capabilities to Matrix/Vector.
-pub trait FftExtension<T: Scalar + rustfft::FftNum> {
+pub trait FftExtension<T: Scalar<Real = T> + PartialOrd + rustfft::FftNum> {
     /// Computes the forward FFT of the vector/matrix (flattened).
     fn fft(&self) -> Vec<Complex<T>>;
 
@@ -91,7 +91,7 @@ pub trait FftExtension<T: Scalar + rustfft::FftNum> {
     fn ifft2(&self) -> Matrix<Complex<T>, DynamicStorage<Complex<T>>>;
 }
 
-impl<T: Scalar + rustfft::FftNum, S: Storage<Complex<T>>> FftExtension<T>
+impl<T: Scalar<Real = T> + PartialOrd + rustfft::FftNum, S: Storage<Complex<T>>> FftExtension<T>
     for Matrix<Complex<T>, S>
 {
     fn fft(&self) -> Vec<Complex<T>> {

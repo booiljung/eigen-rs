@@ -1,27 +1,30 @@
 //! Storage and indexing for Tensors.
 
 use crate::core::scalar::Scalar;
-use crate::core::storage::AlignedStorage;
+use crate::core::tensor::device::{CpuDevice, Device, DeviceStorage};
 
 /// Storage for a Tensor, managing its dimensions and flat memory.
-pub struct TensorStorage<T: Scalar, const RANK: usize> {
-    data: AlignedStorage<T>,
+pub struct TensorStorage<T: Scalar, const RANK: usize, D: Device = CpuDevice> {
+    data: D::Storage<T>,
     dims: [usize; RANK],
     strides: [usize; RANK],
+    pub device: D,
 }
 
-impl<T: Scalar, const RANK: usize> TensorStorage<T, RANK> {
+impl<T: Scalar, const RANK: usize> TensorStorage<T, RANK, CpuDevice> {
     pub fn new(dims: [usize; RANK]) -> Result<Self, String> {
+        Self::new_with_device(dims, CpuDevice)
+    }
+}
+
+impl<T: Scalar, const RANK: usize, D: Device> TensorStorage<T, RANK, D> {
+    pub fn new_with_device(dims: [usize; RANK], device: D) -> Result<Self, String> {
         let mut size = 1;
         for &d in &dims {
             size *= d;
         }
 
-        let mut storage = AlignedStorage::new(size, 32)?;
-        // Initialize with default values
-        for x in storage.as_mut_slice() {
-            *x = T::default();
-        }
+        let storage = D::Storage::<T>::new(size)?;
 
         // Calculate strides (Col-Major by default, to match Eigen's Matrix)
         let mut strides = [0; RANK];
@@ -35,6 +38,7 @@ impl<T: Scalar, const RANK: usize> TensorStorage<T, RANK> {
             data: storage,
             dims,
             strides,
+            device,
         })
     }
 
@@ -43,25 +47,36 @@ impl<T: Scalar, const RANK: usize> TensorStorage<T, RANK> {
     }
 
     pub fn size(&self) -> usize {
-        self.data.as_slice().len()
+        self.dims.iter().product()
     }
 
     pub fn get(&self, indices: [usize; RANK]) -> Option<&T> {
         let index = self.flat_index(indices)?;
-        Some(&self.data.as_slice()[index])
-    }
-
-    pub fn get_mut(&mut self, indices: [usize; RANK]) -> Option<&mut T> {
-        let index = self.flat_index(indices)?;
-        Some(&mut self.data.as_mut_slice()[index])
+        self.data.as_slice().and_then(|s| s.get(index))
     }
 
     pub fn data(&self) -> &[T] {
-        self.data.as_slice()
+        self.data.as_slice().expect("Storage is not CPU-accessible")
     }
 
     pub fn data_mut(&mut self) -> &mut [T] {
+        self.data.as_mut_slice().expect("Storage is not CPU-accessible")
+    }
+
+    pub fn data_opt(&self) -> Option<&[T]> {
+        self.data.as_slice()
+    }
+
+    pub fn data_mut_opt(&mut self) -> Option<&mut [T]> {
         self.data.as_mut_slice()
+    }
+
+    pub fn inner_storage(&self) -> &D::Storage<T> {
+        &self.data
+    }
+    
+    pub fn inner_storage_mut(&mut self) -> &mut D::Storage<T> {
+        &mut self.data
     }
 
     fn flat_index(&self, indices: [usize; RANK]) -> Option<usize> {

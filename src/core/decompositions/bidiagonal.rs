@@ -69,20 +69,20 @@ impl<T: Scalar, S: Storage<T>> Bidiagonalization<T, S> {
             for i in k + 1..rows {
                 // Safe because i > k in column k
                 let val = *mat.get(i, k).unwrap();
-                norm_sq += val.norm_sq();
+                norm_sq += T::from_real(val.norm_sq());
             }
 
             // Should verify if we need to include A[k,k] in norm calculation?
             // Yes, standard Householder works on vector x = A[k..rows, k].
             let val_k = *mat.get(k, k).unwrap();
-            norm_sq += val_k.norm_sq();
+            norm_sq += T::from_real(val_k.norm_sq());
 
             let norm = norm_sq.sqrt();
 
             // Only perform if norm is not effectively zero
             if norm.abs() > T::epsilon() {
                 let v0 = val_k;
-                let sigma = if v0 >= T::default() { -norm } else { norm };
+                let sigma = if v0.real() >= <T::Real as num_traits::Zero>::zero() { -norm } else { norm };
                 let v0_minus_sigma = v0 - sigma;
 
                 // We handle the singularity case where v0_minus_sigma is close to zero
@@ -109,7 +109,7 @@ impl<T: Scalar, S: Storage<T>> Bidiagonalization<T, S> {
                 // Revert to stable implementation:
                 let mut v_norm_sq = T::from_f64(1.0);
                 for i in k + 1..rows {
-                    v_norm_sq += mat.get(i, k).unwrap().norm_sq();
+                    v_norm_sq += T::from_real(mat.get(i, k).unwrap().norm_sq());
                 }
                 // tau = 2 / v_norm_sq.
                 let tau_val = T::from_f64(2.0) / v_norm_sq;
@@ -143,16 +143,16 @@ impl<T: Scalar, S: Storage<T>> Bidiagonalization<T, S> {
                 let mut row_norm_sq = T::default();
                 // Include A[k, k+1]
                 let val_k1 = *mat.get(k, k + 1).unwrap();
-                row_norm_sq += val_k1.norm_sq();
+                row_norm_sq += T::from_real(val_k1.norm_sq());
 
                 for j in k + 2..cols {
-                    row_norm_sq += mat.get(k, j).unwrap().norm_sq();
+                    row_norm_sq += T::from_real(mat.get(k, j).unwrap().norm_sq());
                 }
                 let row_norm = row_norm_sq.sqrt();
 
                 if row_norm.abs() > T::epsilon() {
                     let v0 = val_k1;
-                    let sigma = if v0 >= T::default() {
+                    let sigma = if v0.real() >= <T::Real as num_traits::Zero>::zero() {
                         -row_norm
                     } else {
                         row_norm
@@ -168,7 +168,7 @@ impl<T: Scalar, S: Storage<T>> Bidiagonalization<T, S> {
 
                     let mut v_norm_sq = T::from_f64(1.0);
                     for j in k + 2..cols {
-                        v_norm_sq += mat.get(k, j).unwrap().norm_sq();
+                        v_norm_sq += T::from_real(mat.get(k, j).unwrap().norm_sq());
                     }
                     let tau_val = T::from_f64(2.0) / v_norm_sq;
                     h_right[k] = tau_val;

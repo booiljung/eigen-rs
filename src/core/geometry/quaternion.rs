@@ -1,5 +1,6 @@
 use crate::core::matrix::Vector4;
 use crate::core::scalar::Scalar;
+use crate::core::storage::Storage;
 
 /// Represents a rotation in 3D space as a Quaternion (x, y, z, w).
 #[derive(Debug)]
@@ -15,7 +16,7 @@ impl<T: Scalar> Clone for Quaternion<T> {
 
 impl<T: Scalar> Copy for Quaternion<T> {}
 
-impl<T: Scalar> Quaternion<T> {
+impl<T: Scalar<Real = T> + PartialOrd> Quaternion<T> {
     /// Creates a new Quaternion from components.
     pub fn new(x: T, y: T, z: T, w: T) -> Self {
         let mut coeffs = Vector4::<T>::new_fixed();
@@ -225,28 +226,211 @@ impl<T: Scalar> Quaternion<T> {
     }
 }
 
-impl<T: Scalar> std::ops::Mul for Quaternion<T> {
+// SIMD Implementation for f32
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+impl Quaternion<f32> {
+    /// Vectorized Hamilton Product for f32 using AVX.
+    #[target_feature(enable = "avx,fma")]
+    pub unsafe fn hamilton_product_simd(&self, other: &Self) -> Self {
+        #[cfg(target_arch = "x86")]
+        use std::arch::x86::*;
+        #[cfg(target_arch = "x86_64")]
+        use std::arch::x86_64::*;
+
+        // Load q1 and q2 into registers
+        // q1 = [x1, y1, z1, w1]
+        // q2 = [x2, y2, z2, w2]
+        // Storage is Column Major in Vector4, so data is contiguous in memory locally
+        let q1_ptr = self.coeffs.storage().data().as_ptr() as *const f32;
+        let q2_ptr = other.coeffs.storage().data().as_ptr() as *const f32;
+
+        let q1 = _mm_loadu_ps(q1_ptr);
+        let q2 = _mm_loadu_ps(q2_ptr);
+
+        // Reference Algorithm:
+        // result.x = w1*x2 + x1*w2 + y1*z2 - z1*y2
+        // result.y = w1*y2 - x1*z2 + y1*w2 + z1*x2
+        // result.z = w1*z2 + x1*y2 - y1*x2 + z1*w2
+        // result.w = w1*w2 - x1*x2 - y1*y2 - z1*z2
+
+        // Optimized SSE/AVX shuffle method:
+        // t1 = q1.ymzw * q2.zwyx = [y1*z2, z1*w2, w1*y2, x1*x2] ?? check shuffle masks
+        // Need careful permutation.
+        // Let's use a simpler permute approach suitable for SSE.
+
+        // q1_x = [x1, x1, x1, x1]
+        let q1_x = _mm_permute_ps(q1, 0x00);
+        // q1_y = [y1, y1, y1, y1]
+        let q1_y = _mm_permute_ps(q1, 0x55);
+        // q1_z = [z1, z1, z1, z1]
+        let q1_z = _mm_permute_ps(q1, 0xAA);
+        // q1_w = [w1, w1, w1, w1]
+        let q1_w = _mm_permute_ps(q1, 0xFF);
+
+        // q2 = [x2, y2, z2, w2]
+
+        // Term 1: w1 * q2 = [w1x2, w1y2, w1z2, w1w2]
+        let t1 = _mm_mul_ps(q1_w, q2);
+
+        // Term 2: x1 * q2_perm1
+        // For x: + x1*w2. For y: - x1*z2. For z: + x1*y2. For w: - x1*x2.
+        // Target: .w .z .y .x -> 3 2 1 0 => [w2, z2, y2, x2]
+        // Swizzle q2 for term 2: [w2, z2, y2, x2] (0x1B: 00 01 10 11 = 0 1 2 3 reversed? No. 3,2,1,0)
+        let q2_swz1 = _mm_permute_ps(q2, 0x1B); // [w2, z2, y2, x2]
+        let mut t2 = _mm_mul_ps(q1_x, q2_swz1);
+        // Correct signs for t2: [+ + - -] -> mul by [1, -1, 1, -1]? No wait.
+        // Formula:
+        // x: + x1*w2 (Correct, index 0 of swz1 is w2)
+        // y: - x1*z2 (Correct, index 1 of swz1 is z2, need neg)
+        // z: + x1*y2 (Correct, index 2 of swz1 is y2)
+        // w: - x1*x2 (Correct, index 3 of swz1 is x2, need neg)
+        // Sign Mask: [1.0, -1.0, 1.0, -1.0]
+        let sign_mask1 = _mm_set_ps(-1.0, 1.0, -1.0, 1.0); // Little Endian: w, z, y, x
+        t2 = _mm_mul_ps(t2, sign_mask1);
+
+        // Term 3: y1 * q2_perm2
+        // For x: + y1*z2. For y: + y1*w2. For z: - y1*x2. For w: - y1*y2.
+        // Target q2 elements: [z2, w2, x2, y2]
+        // Permute q2: [x2, y2, z2, w2] -> [z2, w2, x2, y2] (Mask: 3 0 1 2 ? No. 2,3,0,1 => 10 11 00 01 = 0xB1? Wait. _MM_SHUFFLE(z,y,x,w) selects indices.
+        // We want indices 2, 3, 0, 1. _MM_SHUFFLE(1, 0, 3, 2) = 01 00 11 10 = 0x4E.
+        let q2_swz2 = _mm_permute_ps(q2, 0x4E); 
+        let mut t3 = _mm_mul_ps(q1_y, q2_swz2);
+        // Signs: [+ + - -] => x(+), y(+), z(-), w(-)
+        // Mask: [-1.0, -1.0, 1.0, 1.0]
+        let sign_mask2 = _mm_set_ps(-1.0, -1.0, 1.0, 1.0);
+        t3 = _mm_mul_ps(t3, sign_mask2);
+
+        // Term 4: z1 * q2_perm3
+        // For x: - z1*y2. For y: + z1*x2. For z: + z1*w2. For w: - z1*z2.
+        // Target q2 elements: [y2, x2, w2, z2]
+        // Permute q2: [x2, y2, z2, w2] -> [y2, x2, w2, z2].
+        // Indices: 1, 0, 3, 2. _MM_SHUFFLE(2, 3, 0, 1) = 10 11 00 01 = 0xB1.
+        let q2_swz3 = _mm_permute_ps(q2, 0xB1);
+        let mut t4 = _mm_mul_ps(q1_z, q2_swz3);
+        // Signs: [- + + -] => x(-), y(+), z(+), w(-)
+        // Mask: [-1.0, 1.0, 1.0, -1.0]
+        let sign_mask3 = _mm_set_ps(-1.0, 1.0, 1.0, -1.0);
+        t4 = _mm_mul_ps(t4, sign_mask3);
+
+        // Sum everything
+        let sum = _mm_add_ps(_mm_add_ps(t1, t2), _mm_add_ps(t3, t4));
+
+        let mut res = Self::new(0.0, 0.0, 0.0, 0.0);
+        let res_ptr = res.coeffs.storage_mut().data_mut().as_mut_ptr() as *mut f32;
+        _mm_storeu_ps(res_ptr, sum);
+        res
+    }
+
+    /// Vectorized Rotate Vector for f32 using AVX.
+    #[target_feature(enable = "avx,fma")]
+    pub unsafe fn rotate_vector_simd(&self, v: &crate::core::matrix::Vector3<f32>) -> crate::core::matrix::Vector3<f32> {
+        #[cfg(target_arch = "x86")]
+        use std::arch::x86::*;
+        #[cfg(target_arch = "x86_64")]
+        use std::arch::x86_64::*;
+
+        // Formula: v' = v + 2 * cross(q_xyz, cross(q_xyz, v) + q_w * v)
+        
+        let q_ptr = self.coeffs.storage().data().as_ptr() as *const f32;
+        let v_ptr = v.storage().data().as_ptr() as *const f32;
+
+        let q = _mm_loadu_ps(q_ptr); // [x, y, z, w]
+        let v_vec = _mm_maskload_ps(v_ptr, _mm_set_epi32(0, -1, -1, -1)); // [vx, vy, vz, 0] safely? Or simplified load.
+        // Use a safe load or just loadu if we verify buffer size (Vector3 has padding? DynamicStorage might not).
+        // For Vector3 FixedStorage, it has size 3. Reading 4th float is unsafe if it's the end of page.
+        // Assuming user provides valid vector, usually safe to read 4 bytes if aligned, but let's be careful.
+        // To be safe without maskload (which is slow), we can construct manually or assume padding. 
+        // Let's use `_mm_set_ps` for safety since Vector3 is small.
+        let v_vec_safe = _mm_set_ps(0.0, *v.get(2,0).unwrap(), *v.get(1,0).unwrap(), *v.get(0,0).unwrap()); 
+
+        let w = _mm_permute_ps(q, 0xFF); // [w, w, w, w]
+        let two = _mm_set1_ps(2.0);
+
+        // Cross Product Helper: a x b = [ay*bz - az*by, az*bx - ax*bz, ax*by - ay*bx]
+        // Utilizing shuffles.
+        let cross = |a: __m128, b: __m128| {
+             let a_yzx = _mm_permute_ps(a, 0xC9); // 3 0 2 1 => 11 00 10 01 (w, z, y, x)? No.
+             // _MM_SHUFFLE(3, 0, 2, 1) = 11 00 10 01. Indices: 1, 2, 0, 3 (w remains at 3).
+             // Desired: [y, z, x, _]
+             
+             // Reference Macro: _MM_SHUFFLE(3, 0, 2, 1) -> Indices 1, 2, 0, 3
+             // _MM_SHUFFLE(3, 0, 2, 1) = (3<<6)|(0<<4)|(2<<2)|1 = 0xC9
+             let a_shuf1 = _mm_permute_ps(a, 0xC9); 
+             // _MM_SHUFFLE(3, 1, 0, 2) = (3<<6)|(1<<4)|(0<<2)|2 = 0xD2
+             let b_shuf1 = _mm_permute_ps(b, 0xD2); // 2, 0, 1, 3
+             
+             let mul1 = _mm_mul_ps(a_shuf1, b_shuf1);
+
+             let a_shuf2 = _mm_permute_ps(a, 0xD2);
+             let b_shuf2 = _mm_permute_ps(b, 0xC9);
+             
+             let mul2 = _mm_mul_ps(a_shuf2, b_shuf2);
+             
+             _mm_sub_ps(mul1, mul2)
+        };
+        
+        // q_w * v
+        let wv = _mm_mul_ps(w, v_vec_safe);
+        
+        // cross(q_xyz, v)
+        let cx = cross(q, v_vec_safe);
+        
+        // cross(q_xyz, v) + q_w * v
+        let sum = _mm_add_ps(cx, wv);
+        
+        // cross(q_xyz, sum)
+        let cx2 = cross(q, sum);
+        
+        // 2 * cx2
+        let scaled = _mm_mul_ps(two, cx2);
+        
+        // v + scaled
+        let res_vec = _mm_add_ps(v_vec_safe, scaled);
+        
+        let mut res = crate::core::matrix::Vector3::<f32>::new_fixed();
+        // Store only 3 floats
+        let res_arr: [f32; 4] = std::mem::transmute(res_vec);
+        *res.get_mut(0, 0).unwrap() = res_arr[0];
+        *res.get_mut(1, 0).unwrap() = res_arr[1];
+        *res.get_mut(2, 0).unwrap() = res_arr[2];
+        res
+    }
+}
+
+impl<T: Scalar<Real = T> + PartialOrd> std::ops::Mul for Quaternion<T> {
     type Output = Self;
     fn mul(self, rhs: Self) -> Self::Output {
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        {
+            if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() &&
+               is_x86_feature_detected!("avx") && is_x86_feature_detected!("fma") {
+                unsafe {
+                    let lhs_f32: &Quaternion<f32> = &*(&self as *const Quaternion<T> as *const Quaternion<f32>);
+                    let rhs_f32: &Quaternion<f32> = &*(&rhs as *const Quaternion<T> as *const Quaternion<f32>);
+                    let res = lhs_f32.hamilton_product_simd(rhs_f32);
+                    return *( &res as *const Quaternion<f32> as *const Quaternion<T> );
+                }
+            }
+        }
         self.hamilton_product(&rhs)
     }
 }
 
-impl<T: Scalar> std::ops::Mul<&Quaternion<T>> for Quaternion<T> {
+impl<T: Scalar<Real = T> + PartialOrd> std::ops::Mul<&Quaternion<T>> for Quaternion<T> {
     type Output = Quaternion<T>;
     fn mul(self, rhs: &Quaternion<T>) -> Self::Output {
         self.hamilton_product(rhs)
     }
 }
 
-impl<T: Scalar> std::ops::Mul<Quaternion<T>> for &Quaternion<T> {
+impl<T: Scalar<Real = T> + PartialOrd> std::ops::Mul<Quaternion<T>> for &Quaternion<T> {
     type Output = Quaternion<T>;
     fn mul(self, rhs: Quaternion<T>) -> Self::Output {
         self.hamilton_product(&rhs)
     }
 }
 
-impl<T: Scalar> std::ops::Mul<&Quaternion<T>> for &Quaternion<T> {
+impl<T: Scalar<Real = T> + PartialOrd> std::ops::Mul<&Quaternion<T>> for &Quaternion<T> {
     type Output = Quaternion<T>;
     fn mul(self, rhs: &Quaternion<T>) -> Self::Output {
         self.hamilton_product(rhs)
@@ -254,28 +438,40 @@ impl<T: Scalar> std::ops::Mul<&Quaternion<T>> for &Quaternion<T> {
 }
 
 // Q * Vector3
-impl<T: Scalar> std::ops::Mul<crate::core::matrix::Vector3<T>> for Quaternion<T> {
+impl<T: Scalar<Real = T> + PartialOrd> std::ops::Mul<crate::core::matrix::Vector3<T>> for Quaternion<T> {
     type Output = crate::core::matrix::Vector3<T>;
     fn mul(self, rhs: crate::core::matrix::Vector3<T>) -> Self::Output {
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        {
+            if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() &&
+               is_x86_feature_detected!("avx") && is_x86_feature_detected!("fma") {
+                unsafe {
+                    let lhs_f32: &Quaternion<f32> = &*(&self as *const Quaternion<T> as *const Quaternion<f32>);
+                    let rhs_f32: &crate::core::matrix::Vector3<f32> = &*(&rhs as *const crate::core::matrix::Vector3<T> as *const crate::core::matrix::Vector3<f32>);
+                    let res = lhs_f32.rotate_vector_simd(rhs_f32);
+                    return *( &res as *const crate::core::matrix::Vector3<f32> as *const crate::core::matrix::Vector3<T> );
+                }
+            }
+        }
         self.rotate_vector(&rhs)
     }
 }
 
-impl<T: Scalar> std::ops::Mul<&crate::core::matrix::Vector3<T>> for Quaternion<T> {
+impl<T: Scalar<Real = T> + PartialOrd> std::ops::Mul<&crate::core::matrix::Vector3<T>> for Quaternion<T> {
     type Output = crate::core::matrix::Vector3<T>;
     fn mul(self, rhs: &crate::core::matrix::Vector3<T>) -> Self::Output {
         self.rotate_vector(rhs)
     }
 }
 
-impl<T: Scalar> std::ops::Mul<crate::core::matrix::Vector3<T>> for &Quaternion<T> {
+impl<T: Scalar<Real = T> + PartialOrd> std::ops::Mul<crate::core::matrix::Vector3<T>> for &Quaternion<T> {
     type Output = crate::core::matrix::Vector3<T>;
     fn mul(self, rhs: crate::core::matrix::Vector3<T>) -> Self::Output {
         self.rotate_vector(&rhs)
     }
 }
 
-impl<T: Scalar> std::ops::Mul<&crate::core::matrix::Vector3<T>> for &Quaternion<T> {
+impl<T: Scalar<Real = T> + PartialOrd> std::ops::Mul<&crate::core::matrix::Vector3<T>> for &Quaternion<T> {
     type Output = crate::core::matrix::Vector3<T>;
     fn mul(self, rhs: &crate::core::matrix::Vector3<T>) -> Self::Output {
         self.rotate_vector(rhs)

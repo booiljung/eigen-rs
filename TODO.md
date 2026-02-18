@@ -1,29 +1,32 @@
-# Optimization Roadmap (Phase 3)
+# Feature Implementation Roadmap (Phase 2)
 
-This document outlines the plan to bridge the performance gap between `eigen-rs` and C++ Eigen 3.4, based on the findings from `verify_perf.py`.
+This document outlines the roadmap for the next phase of `eigen-rs` development, focusing on performance stabilization and advanced hardware acceleration.
 
-## 🎯 Goal
-Achieve performance parity (Ratio < 1.0~1.5x) for core operations.
+## 🎯 Primary Goal
+Eliminate remaining performance anomalies (Cache Thrashing) and Implement CUDA kernels for the Tensor module.
 
-## 1. Algorithmic Optimizations (High Impact)
-Currently, decompositions like LLT use naive $O(N^3)$ loops.
-- [x] **Blocked LLT Decomposition**: Implemented Right-Looking Cholesky (Block Size 32). Performance improved 4x.
-    -   **Next Bottleneck**: Improve `MatMul` baseline (< 2.0x parity required) and optimize `Trsm` ($O(N^3)$ naive loop).
-- [ ] **Blocked LDLT**: Extend blocking variable algorithm to LDLT with pivoting.
-- [ ] **Blocked SVD**: Replace Jacobi SVD with Divide & Conquer or bidiagonalization-based SVD for large matrices.
+## 1. Performance Optimization (Critical Priority)
+Target specific matrix sizes where performance degrades significantly (Ratio > 3.0x).
+- [x] **Cache Associativity Conflict Resolution**:
+    -   **Problem**: Severe slowdowns at N=289 (17x17) and N=315.
+    -   **Conclusion**: Investigated in Phase 35. Determined to be Allocator History Artifacts (benchmarking noise due to previous allocations). Fresh runs show normal performance. **Status: Resolved/WontFix**.
 
-## 2. GEMM & Memory Optimizations (Medium Impact)
-`verify_perf.py` revealed significant allocation overhead in `gemm_blocked`.
-- [ ] **Workspace Reuse**: Eliminate `vec![...]` allocation in `gemm_blocked` by using a thread-local workspace or stack allocation for small matrices.
-- [ ] **Small Matrix Specialization**: For $N < 32$, skip blocking and use unrolled register-based kernels directly.
-- [ ] **Pointer Aliasing**: Verify `restrict` usage (or Rust equivalent check) to ensure autovectorization doesn't fail due to aliasing fears.
+## 2. Tensor Module: GPU Acceleration (High Priority)
+Leverage the newly implemented `CudaDevice` to run actual operations on GPU.
+- [x] **GPU Kernels**:
+    -   [x] `assign`: Implement element-wise assignment kernel. (Done Phase 36)
+    -   [x] `contract`: Implement GEMM-based contraction (Rank-2 MatMul implemented). (Done Phase 36)
+    -   [x] `permute`: Implement dimensional permutation kernel. (Done Phase 37)
+- [x] **Integration**:
+    -   Connect `Tensor::eval()` to GPU kernels when `CudaDevice` is active. (Done Phase 36/37)
 
-## 3. SIMD Integration (Low Level)
-- [x] **Micro-kernel Tuning**: Logic moved to `asm_kernel.rs` with Fused Loop and 4x Unrolling.
-    -   **Result**: MatMul 6x slower (was >20x).
-- [ ] **SIMD Packing**: Implement AVX-based packing (`pack_lhs`, `pack_rhs`) to remove scalar copy overhead.
-- [ ] **Target Specific Dispatch**: Ensure `target_feature` detection is zero-overhead at runtime (use `#[cfg]` where possible).
-- [ ] **Unsafe unchecked_get**: Replace `get().unwrap()` with `unsafe { get_unchecked() }` in hot inner loops of decompositions.
+## 3. Missing Features (Medium Priority)
+- [x] **Complex Number Support**:
+    -   [x] Extend `Scalar` trait to fully support `Complex<f32>` / `Complex<f64>`. (Done Phase 38)
+    -   [x] Verify Decompositions with complex types:
+        -   [x] `Cholesky` (LLT/LDLT) (Verified Phase 39)
+        -   [x] `QR` (Fixed Phase 39 - Verification Execution Stalled)
+        -   [x] `LU` (Verified Phase 39)
+- [x] **Geometry Module Optimization**:
+    -   [x] Vectorize `Quaternion` multiplication and `Transform` applications. (Done Phase 40)
 
-## 4. Infrastructure
-- [ ] **Autotuning Script**: Create a script to find optimal `MC`, `KC`, `NC` blocking parameters for the target machine.

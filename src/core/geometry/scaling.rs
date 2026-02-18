@@ -10,7 +10,7 @@ pub struct Scaling<T: Scalar, const RANK: usize> {
     pub coeffs: Matrix<T, FixedStorage<T, RANK, 1, RANK>>,
 }
 
-impl<T: Scalar, const RANK: usize> Scaling<T, RANK> {
+impl<T: Scalar<Real = T> + PartialOrd, const RANK: usize> Scaling<T, RANK> {
     pub fn new(coeffs: Matrix<T, FixedStorage<T, RANK, 1, RANK>>) -> Self {
         Self { coeffs }
     }

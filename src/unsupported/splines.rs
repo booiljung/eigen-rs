@@ -21,7 +21,17 @@ pub struct Spline<T: Scalar> {
     degree: usize,
 }
 
-impl<T: Scalar + 'static> Spline<T> {
+impl<T: Scalar + 'static + std::cmp::PartialOrd> Default for Spline<T> {
+    fn default() -> Self {
+        Self {
+            knots: Vec::new(),
+            ctrl_points: MatrixX::new_dynamic(0, 0).unwrap(),
+            degree: 0,
+        }
+    }
+}
+
+impl<T: Scalar + 'static + std::cmp::PartialOrd> Spline<T> {
     /// Creates a new B-Spline.
     ///
     /// # Arguments

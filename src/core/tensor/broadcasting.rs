@@ -1,17 +1,19 @@
 //! Tensor broadcasting implementation.
 
 use crate::core::scalar::Scalar;
-use crate::core::tensor::Tensor;
+use super::Tensor;
+
+use crate::core::tensor::device::{CpuDevice, Device};
 
 /// Represents a broadcasted tensor.
 /// This is a virtual view that repeats dimensions of size 1 to match a target shape.
-pub struct BroadcastedTensor<'a, T: Scalar, const RANK: usize> {
-    tensor: &'a Tensor<T, RANK>,
+pub struct BroadcastedTensor<'a, T: Scalar, const RANK: usize, D: Device = CpuDevice> {
+    tensor: &'a Tensor<T, RANK, D>,
     target_dims: [usize; RANK],
 }
 
-impl<'a, T: Scalar, const RANK: usize> BroadcastedTensor<'a, T, RANK> {
-    pub fn new(tensor: &'a Tensor<T, RANK>, target_dims: [usize; RANK]) -> Result<Self, String> {
+impl<'a, T: Scalar, const RANK: usize, D: Device> BroadcastedTensor<'a, T, RANK, D> {
+    pub fn new(tensor: &'a Tensor<T, RANK, D>, target_dims: [usize; RANK]) -> Result<Self, String> {
         let src_dims = tensor.dims();
         for i in 0..RANK {
             if src_dims[i] != target_dims[i] && src_dims[i] != 1 {

@@ -24,13 +24,13 @@ pub struct PolynomialSolver<T: Scalar> {
     roots: Vec<Complex<T>>,
 }
 
-impl<T: Scalar> Default for PolynomialSolver<T> {
+impl<T: Scalar<Real = T> + PartialOrd> Default for PolynomialSolver<T> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<T: Scalar> PolynomialSolver<T> {
+impl<T: Scalar<Real = T> + PartialOrd> PolynomialSolver<T> {
     /// Creates a new solver instance.
     pub fn new() -> Self {
         Self { roots: Vec::new() }

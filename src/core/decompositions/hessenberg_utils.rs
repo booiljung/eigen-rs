@@ -77,14 +77,6 @@ pub unsafe fn apply_householder_on_the_left_vectorized_f64<S: Storage<f64>>(
 
 // Vectorized helper to apply Householder reflection from the right: A = A (I - tau v v^T)
 // A -= tau * (A v) * v^T
-// Logic:
-// 1. Compute workspace w = A * v. (w is a column vector).
-//    w = sum(A_j * v_j). Accumulate weighted columns.
-//    A_j is contiguous. v_j is scalar.
-//    w += v[j] * A_j. (AXPY accumulation).
-// 2. Update A: A -= tau * w * v^T.
-//    Column j of A: A_j -= (tau * v_j) * w.
-//    A_j -= factor * w. (AXPY again).
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[target_feature(enable = "avx2", enable = "fma")]
 pub unsafe fn apply_householder_on_the_right_vectorized_f64<S: Storage<f64>>(
@@ -92,25 +84,16 @@ pub unsafe fn apply_householder_on_the_right_vectorized_f64<S: Storage<f64>>(
     v_buf: &[f64],
     tau: f64,
     start_col: usize,
-    rows_end: usize, // We effectively update A[0..rows_end, start_col..(start_col + v_len)]
+    rows_end: usize, 
+    w: &mut [f64], // Pre-allocated workspace
 ) {
     let rows = mat_a.rows();
     let v_len = v_buf.len();
     
-    // Workspace w to store A * v. Size = rows_end.
-    // We allocation is expensive? Maybe pass workspace?
-    // For now, let's stack allocate or use Vec. Vec is safer.
-    // Since rows_end is at most N, this is acceptable for now.
-    // Ideally we should reuse one workspace buffer in the main loop.
-    let mut w = vec![0.0; rows_end]; 
+    // Initialize w to zero
+    std::ptr::write_bytes(w.as_mut_ptr(), 0, rows_end);
 
     // 1. Compute w = A * v = sum(A_j * v_j)
-    // We iterate over the columns involved (start_col .. start_col + v_len)
-    // Actually v corresponds to columns start_col + 1 .. n usually?
-    // In Hessenberg right update:
-    // We update columns i+1..n. So v has length n-(i+1).
-    // The columns of A involved are start_col .. start_col + v_len.
-    
     for j in 0..v_len {
         let v_val = *v_buf.get_unchecked(j); // Scalar
         let col_idx = start_col + j;
@@ -174,7 +157,6 @@ pub unsafe fn apply_householder_on_the_left_vectorized_f32<S: Storage<f32>>(
     for j in cols_start..cols_end {
         let col_ptr = mat_a.storage_mut().data_mut().as_mut_ptr().add(j * rows + start_row);
         
-        // 1. Compute dot product
         let mut dot = 0.0;
         let mut r = 0;
         
@@ -185,11 +167,9 @@ pub unsafe fn apply_householder_on_the_left_vectorized_f32<S: Storage<f32>>(
             sum_vec = _mm256_fmadd_ps(v_val, col_val, sum_vec);
             r += 8;
         }
-        // Horizontal sum for f32 (8 elements)
-        // [0 1 2 3 4 5 6 7]
-        let temp = _mm256_add_ps(sum_vec, _mm256_permute2f128_ps(sum_vec, sum_vec, 1)); // [0+4 1+5 2+6 3+7 ...]
-        let temp = _mm256_hadd_ps(temp, temp); // [0+1 2+3 ...]
-        let temp = _mm256_hadd_ps(temp, temp); // [0+1+2+3 ...]
+        let temp = _mm256_add_ps(sum_vec, _mm256_permute2f128_ps(sum_vec, sum_vec, 1));
+        let temp = _mm256_hadd_ps(temp, temp); 
+        let temp = _mm256_hadd_ps(temp, temp); 
         dot += _mm_cvtss_f32(_mm256_castps256_ps128(temp));
 
         while r < v_len {
@@ -197,7 +177,6 @@ pub unsafe fn apply_householder_on_the_left_vectorized_f32<S: Storage<f32>>(
             r += 1;
         }
 
-        // 2. Update column
         let factor = tau * dot;
         let factor_vec = _mm256_set1_ps(factor);
         
@@ -225,14 +204,13 @@ pub unsafe fn apply_householder_on_the_right_vectorized_f32<S: Storage<f32>>(
     tau: f32,
     start_col: usize,
     rows_end: usize,
+    w: &mut [f32],
 ) {
     let rows = mat_a.rows();
     let v_len = v_buf.len();
     
-    // Allocate workspace
-    let mut w = vec![0.0; rows_end];
+    std::ptr::write_bytes(w.as_mut_ptr(), 0, rows_end);
 
-    // 1. Compute w = A * v
     for j in 0..v_len {
         let v_val = *v_buf.get_unchecked(j);
         let col_idx = start_col + j;
@@ -255,7 +233,6 @@ pub unsafe fn apply_householder_on_the_right_vectorized_f32<S: Storage<f32>>(
         }
     }
 
-    // 2. Update A: A -= tau * w * v^T
     for j in 0..v_len {
         let v_val = *v_buf.get_unchecked(j);
         let factor = tau * v_val;
@@ -278,4 +255,174 @@ pub unsafe fn apply_householder_on_the_right_vectorized_f32<S: Storage<f32>>(
             }
         }
     }
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[target_feature(enable = "avx2", enable = "fma")]
+pub unsafe fn compute_householder_vectorized_f64<S: Storage<f64>>(
+    mat_a: &mut Matrix<f64, S>,
+    i: usize,
+    v_buf: &mut [f64],
+) -> (f64, f64) {
+    let n = mat_a.rows();
+    let col_ptr = mat_a.storage_mut().data_mut().as_mut_ptr().add(i * n); // Start of column i
+    
+    let tail_ptr = col_ptr.add(i + 2);
+    let tail_len = if n > i + 2 { n - (i + 2) } else { 0 };
+    
+    let mut norm_sq = 0.0;
+    
+    if tail_len > 0 {
+        let mut sum_vec = _mm256_setzero_pd();
+        let mut r = 0;
+        while r + 4 <= tail_len {
+            let val = _mm256_loadu_pd(tail_ptr.add(r));
+            sum_vec = _mm256_fmadd_pd(val, val, sum_vec);
+            r += 4;
+        }
+        let temp = _mm256_add_pd(sum_vec, _mm256_permute2f128_pd(sum_vec, sum_vec, 1));
+        let temp = _mm256_add_pd(temp, _mm256_permute_pd(temp, 5));
+        norm_sq += _mm256_cvtsd_f64(temp);
+
+        while r < tail_len {
+            let val = *tail_ptr.add(r);
+            norm_sq += val * val;
+            r += 1;
+        }
+    }
+    
+    let v0 = *col_ptr.add(i + 1);
+    norm_sq += v0 * v0;
+    let norm = norm_sq.sqrt();
+    
+    if norm == 0.0 {
+        return (0.0, 0.0);
+    }
+    
+    // In hessenberg.rs logic:
+    // let sigma = if v0 >= T::default() { norm } else { T::default() - norm }; NOTE: hessenberg.rs uses beta=if >=0 {-norm} else {norm} and sigma=beta? No.
+    // hessenberg.rs:
+    // sigma = if v0 >= 0 { norm } else { -norm }; ??
+    // v0_plus_sigma = v0 + sigma;
+    // tau = v0_plus_sigma.conj() / sigma;
+    // Let's stick to hessenberg.rs exactly.
+    let sigma = if v0 >= 0.0 { norm } else { -norm };
+    let v0_plus_sigma = v0 + sigma;
+    let inv_v0_plus_sigma = 1.0 / v0_plus_sigma;
+    let tau = v0_plus_sigma / sigma; // For Real, conj() is identity.
+    
+    // Scale tail
+    let scale_vec = _mm256_set1_pd(inv_v0_plus_sigma);
+    if tail_len > 0 {
+        let mut r = 0;
+        while r + 4 <= tail_len {
+            let mut val = _mm256_loadu_pd(tail_ptr.add(r));
+            val = _mm256_mul_pd(val, scale_vec);
+            _mm256_storeu_pd(tail_ptr.add(r), val);
+            r += 4;
+        }
+        while r < tail_len {
+            *tail_ptr.add(r) *= inv_v0_plus_sigma;
+            r += 1;
+        }
+    }
+    
+    v_buf[0] = 1.0;
+    if tail_len > 0 {
+        let mut r = 0;
+        while r + 4 <= tail_len {
+             let val = _mm256_loadu_pd(tail_ptr.add(r));
+             _mm256_storeu_pd(v_buf.as_mut_ptr().add(1 + r), val);
+             r += 4;
+        }
+        while r < tail_len {
+            v_buf[1 + r] = *tail_ptr.add(r);
+            r += 1;
+        }
+    }
+    
+    // Return (tau, restoration_value)
+    // hessenberg.rs: *mat_a.get_mut(i + 1, i) = T::default() - sigma;
+    (tau, -sigma)
+}
+
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[target_feature(enable = "avx2", enable = "fma")]
+pub unsafe fn compute_householder_vectorized_f32<S: Storage<f32>>(
+    mat_a: &mut Matrix<f32, S>,
+    i: usize,
+    v_buf: &mut [f32],
+) -> (f32, f32) {
+    let n = mat_a.rows();
+    let col_ptr = mat_a.storage_mut().data_mut().as_mut_ptr().add(i * n);
+    
+    let tail_ptr = col_ptr.add(i + 2);
+    let tail_len = if n > i + 2 { n - (i + 2) } else { 0 };
+    
+    let mut norm_sq = 0.0;
+    
+    if tail_len > 0 {
+        let mut sum_vec = _mm256_setzero_ps();
+        let mut r = 0;
+        while r + 8 <= tail_len {
+            let val = _mm256_loadu_ps(tail_ptr.add(r));
+            sum_vec = _mm256_fmadd_ps(val, val, sum_vec);
+            r += 8;
+        }
+        let temp = _mm256_add_ps(sum_vec, _mm256_permute2f128_ps(sum_vec, sum_vec, 1));
+        let temp = _mm256_hadd_ps(temp, temp);
+        let temp = _mm256_hadd_ps(temp, temp);
+        norm_sq += _mm_cvtss_f32(_mm256_castps256_ps128(temp));
+
+        while r < tail_len {
+            let val = *tail_ptr.add(r);
+            norm_sq += val * val;
+            r += 1;
+        }
+    }
+    
+    let v0 = *col_ptr.add(i + 1);
+    norm_sq += v0 * v0;
+    let norm = norm_sq.sqrt();
+    
+    if norm == 0.0 {
+        return (0.0, 0.0);
+    }
+    
+    let sigma = if v0 >= 0.0 { norm } else { -norm };
+    let v0_plus_sigma = v0 + sigma;
+    let inv_v0_plus_sigma = 1.0 / v0_plus_sigma;
+    let tau = v0_plus_sigma / sigma; 
+    
+    let scale_vec = _mm256_set1_ps(inv_v0_plus_sigma);
+    if tail_len > 0 {
+        let mut r = 0;
+        while r + 8 <= tail_len {
+            let mut val = _mm256_loadu_ps(tail_ptr.add(r));
+            val = _mm256_mul_ps(val, scale_vec);
+            _mm256_storeu_ps(tail_ptr.add(r), val);
+            r += 8;
+        }
+        while r < tail_len {
+            *tail_ptr.add(r) *= inv_v0_plus_sigma;
+            r += 1;
+        }
+    }
+    
+    v_buf[0] = 1.0;
+    if tail_len > 0 {
+        let mut r = 0;
+        while r + 8 <= tail_len {
+             let val = _mm256_loadu_ps(tail_ptr.add(r));
+             _mm256_storeu_ps(v_buf.as_mut_ptr().add(1 + r), val);
+             r += 8;
+        }
+        while r < tail_len {
+            v_buf[1 + r] = *tail_ptr.add(r);
+            r += 1;
+        }
+    }
+    
+    (tau, -sigma)
 }

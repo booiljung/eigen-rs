@@ -29,12 +29,20 @@ impl<T: Scalar + 'static, S: Storage<T> + 'static> LDLT<T, S> {
         let mut d = vec![T::from_usize(0); rows];
         let mut p = (0..rows).collect::<Vec<_>>();
 
+        // Epsilon for singularity check
+        let eps = T::epsilon();
+
+        // Safe pointer for hot loops
+        let mat_ptr = mat.storage_mut().data_mut().as_mut_ptr();
+
         for j in 0..rows {
             // 1. Diagonal Pivoting: Find max diagonal in the remaining submatrix
+            // Optimization: Only scan the diagonal, avoid excessive memory moves if no swap needed.
             let mut max_idx = j;
-            let mut max_val = mat.get(j, j).unwrap().abs();
+            let mut max_val = unsafe { *mat_ptr.add(j * rows + j) }.abs(); // Returns T::Real
+
             for k in j + 1..rows {
-                let v = mat.get(k, k).unwrap().abs();
+                let v = unsafe { *mat_ptr.add(k * rows + k) }.abs(); // mat(k,k)
                 if v > max_val {
                     max_val = v;
                     max_idx = k;
@@ -42,86 +50,102 @@ impl<T: Scalar + 'static, S: Storage<T> + 'static> LDLT<T, S> {
             }
 
             if max_idx != j {
-                // Swap rows and columns max_idx and j
+                // Swap pivot indices
                 p.swap(j, max_idx);
 
-                // Swap rows
+                // Symmetric Swap: Swap row/col j and max_idx
+                // This is O(N) but indispensable for pivot stability.
+                // We utilize the fact that we only need to swap up to 'rows' and the structure is symmetric 
+                // in the lower triangle, but we store full matrix.
+
+                // Swap rows (j, max_idx)
                 for k in 0..rows {
-                    let tmp = *mat.get(j, k).unwrap();
-                    *mat.get_mut(j, k).unwrap() = *mat.get(max_idx, k).unwrap();
-                    *mat.get_mut(max_idx, k).unwrap() = tmp;
+                    unsafe {
+                        let ptr_j = mat_ptr.add(k * rows + j);
+                        let ptr_max = mat_ptr.add(k * rows + max_idx);
+                        std::ptr::swap(ptr_j, ptr_max);
+                    }
                 }
-                // Swap columns
+                // Swap cols (j, max_idx)
                 for k in 0..rows {
-                    let tmp = *mat.get(k, j).unwrap();
-                    *mat.get_mut(k, j).unwrap() = *mat.get(k, max_idx).unwrap();
-                    *mat.get_mut(k, max_idx).unwrap() = tmp;
+                    unsafe {
+                        let ptr_j = mat_ptr.add(j * rows + k);
+                        let ptr_max = mat_ptr.add(max_idx * rows + k);
+                        std::ptr::swap(ptr_j, ptr_max);
+                    }
                 }
             }
 
-            // 2. Standard LDLT step on the pivoted matrix (Vectorized Left-Looking)
-            let mut ptr_mut = mat.storage_mut().data_mut().as_mut_ptr(); // Safe? We need raw pointer.
-            // Actually proper way:
-            
+            // 2. Blocked / Vectorized Update
+            // L(j:N, j) -= sum_{k=0..j-1} L(j:N, k) * (L(j, k) * D(k))
+            // Current Approach: Rank-1 update (right looking) or Dot product (left looking).
+            // Eigen uses "Left Looking": For current column j, gather contributions from k < j.
+
             unsafe {
-                 // Check if we can use AVX2
-                 // Assuming f64 mostly, but handle f32
-                 if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>() && is_x86_feature_detected!("fma") {
-                    let ptr = mat.storage_mut().data_mut().as_mut_ptr() as *mut f64;
+                if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>() && is_x86_feature_detected!("fma") {
+                    let ptr = mat_ptr as *mut f64;
+                    // Gather contributions from previous columns
+                    // Col j = Col j - L(:, 0..j) * (D(0..j) * L(j, 0..j))^T
+                    // This inner loop is the bottleneck.
+                    // Improving locality: Process in blocks of K columns?
+                    // For now, let's just ensure inner loop is tight and vectorized.
+                    
                     for k in 0..j {
-                        let l_jk_val = *mat.get(j, k).unwrap();
-                        let d_k_val = d[k];
-                        let val_kj = l_jk_val * d_k_val; // Value to propagate
-                        
-                        let val_f64 = *(std::mem::transmute::<&T, &f64>(&val_kj));
-                        
-                        // Apply update to column j using column k
-                        // L(j:N, j) -= val * L(j:N, k)
-                        Self::update_column_vectorized_f64(ptr, rows, j, k, val_f64);
-                    }
-                 } else if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() && is_x86_feature_detected!("fma") {
-                    let ptr = mat.storage_mut().data_mut().as_mut_ptr() as *mut f32;
-                    for k in 0..j {
-                        let l_jk_val = *mat.get(j, k).unwrap();
-                        let d_k_val = d[k];
+                        let l_jk_val = *ptr.add(k * rows + j); // mat(j, k)
+                        let d_k_val = *(d.as_ptr() as *const f64).add(k);
                         let val_kj = l_jk_val * d_k_val;
-                        let val_f32 = *(std::mem::transmute::<&T, &f32>(&val_kj));
-                        Self::update_column_vectorized_f32(ptr, rows, j, k, val_f32);
+
+                        // Vectorized Update: Col(j) -= val * Col(k)
+                        Self::update_column_vectorized_f64(ptr, rows, j, k, val_kj);
                     }
-                 } else {
-                     // Scalar Fallback (Column-Oriented)
+                } else if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() && is_x86_feature_detected!("fma") {
+                     let ptr = mat_ptr as *mut f32;
                      for k in 0..j {
-                         let val = *mat.get(j, k).unwrap() * d[k];
+                        let l_jk_val = *ptr.add(k * rows + j);
+                        let d_k_val = *(d.as_ptr() as *const f32).add(k);
+                        let val_kj = l_jk_val * d_k_val;
+                        Self::update_column_vectorized_f32(ptr, rows, j, k, val_kj);
+                     }
+                } else {
+                     // Scalar Fallback
+                     for k in 0..j {
+                         let val = unsafe { *mat_ptr.add(k * rows + j) }.conj() * d[k];
+                         // Update column j starting from row j
                          for i in j..rows {
-                             let lik = *mat.get(i, k).unwrap();
-                             *mat.get_mut(i, j).unwrap() -= val * lik;
+                             unsafe {
+                                *mat_ptr.add(j * rows + i) -= val * *mat_ptr.add(k * rows + i);
+                             }
                          }
                      }
-                 }
+                }
             }
 
-            let dj = *mat.get(j, j).unwrap();
+            // 3. Diagonal update and scaling
+            let dj = unsafe { *mat_ptr.add(j * rows + j) };
             d[j] = dj;
-            *mat.get_mut(j, j).unwrap() = T::from_usize(1);
+            unsafe { *mat_ptr.add(j * rows + j) = T::from_usize(1) }; // L diagonal is 1
 
-            if dj.abs() > T::epsilon() {
+            if dj.abs() > eps {
                 let inv_dj = T::from_usize(1) / dj;
-                for i in j + 1..rows {
-                    *mat.get_mut(i, j).unwrap() *= inv_dj;
+                // Scale the column below diagonal
+                unsafe {
+                    for i in j + 1..rows {
+                        *mat_ptr.add(j * rows + i) *= inv_dj;
+                    }
                 }
             } else {
-                 for i in j + 1..rows {
-                    *mat.get_mut(i, j).unwrap() = T::from_usize(0);
-                }
+                 unsafe {
+                    for i in j + 1..rows {
+                        *mat_ptr.add(j * rows + i) = T::from_usize(0);
+                    }
+                 }
             }
-
-
         }
 
         // Clean up upper triangle
         for i in 0..rows {
             for j in i + 1..rows {
-                *mat.get_mut(i, j).unwrap() = T::from_usize(0);
+                unsafe { *mat_ptr.add(j * rows + i) = T::from_usize(0) };
             }
         }
 
@@ -190,7 +214,7 @@ impl<T: Scalar + 'static, S: Storage<T> + 'static> LDLT<T, S> {
             for j in 0..b_cols {
                 let mut val = *x.get(i, j).unwrap();
                 for k in i + 1..rows {
-                    val -= (*self.l.get(k, i).unwrap()) * (*x.get(k, j).unwrap());
+                    val -= (*self.l.get(k, i).unwrap()).conj() * (*x.get(k, j).unwrap());
                 }
                 *x.get_mut(i, j).unwrap() = val;
             }
@@ -201,7 +225,7 @@ impl<T: Scalar + 'static, S: Storage<T> + 'static> LDLT<T, S> {
         for i in 0..rows {
             let dest_idx = self.p[i];
             for j in 0..b_cols {
-                *result.get_mut(dest_idx, j).unwrap() = *x.get(i, j).unwrap();
+               *result.get_mut(dest_idx, j).unwrap() = *x.get(i, j).unwrap();
             }
         }
 
@@ -218,33 +242,30 @@ impl<T: Scalar + 'static, S: Storage<T> + 'static> LDLT<T, S> {
         val: f32,
     ) {
         use std::arch::x86_64::*;
+        // Col pointers. Matrix is Column-Major. 
+        // Col j (Target) starts at j * rows.
+        // Col k (Source) starts at k * rows.
         let col_j_ptr = mat_ptr.add(j * rows);
         let col_k_ptr = mat_ptr.add(k * rows);
         
-        // We update rows j..rows (actually we only need j..rows. But algorithm updates j for D[j])
-        // Let's stick to update j..rows.
+        // Update range: rows [j..rows]
         let len = rows - j;
         let mut r = 0;
         
         let val_vec = _mm256_set1_ps(val);
         
         while r + 8 <= len {
-            let row_idx = j + r;
-            // Load column j (destination)
-            let mut y_vec = _mm256_loadu_ps(col_j_ptr.add(row_idx));
-            // Load column k (source)
-            let x_vec = _mm256_loadu_ps(col_k_ptr.add(row_idx));
-            
-            // y = y - val * x
+            let idx = j + r; // Row index
+            let mut y_vec = _mm256_loadu_ps(col_j_ptr.add(idx));
+            let x_vec = _mm256_loadu_ps(col_k_ptr.add(idx));
             y_vec = _mm256_fnmadd_ps(val_vec, x_vec, y_vec);
-            
-            _mm256_storeu_ps(col_j_ptr.add(row_idx), y_vec);
+            _mm256_storeu_ps(col_j_ptr.add(idx), y_vec);
             r += 8;
         }
         
         for rr in r..len {
-            let row_idx = j + rr;
-            *col_j_ptr.add(row_idx) -= val * *col_k_ptr.add(row_idx);
+            let idx = j + rr;
+            *col_j_ptr.add(idx) -= val * *col_k_ptr.add(idx);
         }
     }
 
@@ -267,19 +288,17 @@ impl<T: Scalar + 'static, S: Storage<T> + 'static> LDLT<T, S> {
         let val_vec = _mm256_set1_pd(val);
         
         while r + 4 <= len {
-            let row_idx = j + r;
-            let mut y_vec = _mm256_loadu_pd(col_j_ptr.add(row_idx));
-            let x_vec = _mm256_loadu_pd(col_k_ptr.add(row_idx));
-            
+            let idx = j + r;
+            let mut y_vec = _mm256_loadu_pd(col_j_ptr.add(idx));
+            let x_vec = _mm256_loadu_pd(col_k_ptr.add(idx));
             y_vec = _mm256_fnmadd_pd(val_vec, x_vec, y_vec);
-            
-            _mm256_storeu_pd(col_j_ptr.add(row_idx), y_vec);
+            _mm256_storeu_pd(col_j_ptr.add(idx), y_vec);
             r += 4;
         }
         
         for rr in r..len {
-            let row_idx = j + rr;
-            *col_j_ptr.add(row_idx) -= val * *col_k_ptr.add(row_idx);
+            let idx = j + rr;
+            *col_j_ptr.add(idx) -= val * *col_k_ptr.add(idx);
         }
     }
 }

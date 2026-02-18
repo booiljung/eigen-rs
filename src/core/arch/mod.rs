@@ -137,7 +137,7 @@ impl<T: Scalar> Packet<T> for ScalarPacket<T> {
         Self(T::from_f64(1.0) / self.0.sqrt())
     }
     fn pabs(self) -> Self {
-        Self(self.0.abs())
+        Self(T::from_real(self.0.abs()))
     }
 
     fn sum(self) -> T {
@@ -243,7 +243,6 @@ pub mod x86 {
     impl Add for AvxPacketF32 {
         type Output = Self;
         #[inline(always)]
-        #[inline(always)]
         fn add(self, rhs: Self) -> Self {
             unsafe { Self(_mm256_add_ps(self.0, rhs.0)) }
         }
@@ -251,14 +250,12 @@ pub mod x86 {
     impl Sub for AvxPacketF32 {
         type Output = Self;
         #[inline(always)]
-        #[inline(always)]
         fn sub(self, rhs: Self) -> Self {
             unsafe { Self(_mm256_sub_ps(self.0, rhs.0)) }
         }
     }
     impl Mul for AvxPacketF32 {
         type Output = Self;
-        #[inline(always)]
         #[inline(always)]
         fn mul(self, rhs: Self) -> Self {
             unsafe { Self(_mm256_mul_ps(self.0, rhs.0)) }
@@ -293,7 +290,6 @@ pub mod x86 {
         fn set1(val: f32) -> Self {
             unsafe { Self(_mm256_set1_ps(val)) }
         }
-        #[inline(always)]
         #[inline(always)]
         fn fused_add_mul(&mut self, a: Self, b: Self) {
             unsafe {
@@ -668,7 +664,6 @@ pub mod x86 {
         unsafe fn load(ptr: *const f64) -> Self {
             unsafe { Self(_mm256_loadu_pd(ptr)) }
         }
-        #[inline(always)]
         #[inline(always)]
         unsafe fn store(self, ptr: *mut f64) {
             unsafe {

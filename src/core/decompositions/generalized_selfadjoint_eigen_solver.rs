@@ -18,7 +18,8 @@ pub struct GeneralizedSelfAdjointEigenSolver<T: Scalar, S: Storage<T>> {
     _phantom: std::marker::PhantomData<S>,
 }
 
-impl<T: Scalar + num_traits::One + 'static, S: Storage<T> + 'static> GeneralizedSelfAdjointEigenSolver<T, S> {
+impl<T: Scalar<Real = T> + num_traits::One + 'static + PartialOrd, S: Storage<T> + 'static>
+    GeneralizedSelfAdjointEigenSolver<T, S> {
     /// Computes the generalized eigenvalues and (optionally) eigenvectors of (A, B).
     /// A must be self-adjoint, B must be positive definite.
     pub fn new(
