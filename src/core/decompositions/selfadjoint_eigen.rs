@@ -239,7 +239,21 @@ impl<T: Scalar<Real = T> + PartialOrd, S: Storage<T>> SelfAdjointEigenSolver<T, 
         let r2 = T::from_f64(2.0) * rho * cos_theta;
 
         let mut roots = [r0, r1, r2];
-        roots.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        roots.sort_by(|a, b| {
+            if let Some(ord) = a.partial_cmp(b) {
+                ord
+            } else {
+                let a_nan = *a != *a;
+                let b_nan = *b != *b;
+                if a_nan && b_nan {
+                    std::cmp::Ordering::Equal
+                } else if a_nan {
+                    std::cmp::Ordering::Greater
+                } else {
+                    std::cmp::Ordering::Less
+                }
+            }
+        });
 
         for (i, root) in roots.iter().enumerate() {
             *self.eigenvalues.get_mut(i, 0).unwrap() = *root * scale + shift;

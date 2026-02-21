@@ -232,7 +232,21 @@ impl<T: Scalar<Real = T> + PartialOrd + 'static, S: Storage<T> + 'static> Jacobi
         }
 
         // Sort singular values in descending order
-        singular_values.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+        singular_values.sort_by(|a, b| {
+            if let Some(ord) = b.0.partial_cmp(&a.0) {
+                ord
+            } else {
+                let a_nan = a.0 != a.0;
+                let b_nan = b.0 != b.0;
+                if a_nan && b_nan {
+                    std::cmp::Ordering::Equal
+                } else if a_nan {
+                    std::cmp::Ordering::Greater
+                } else {
+                    std::cmp::Ordering::Less
+                }
+            }
+        });
 
         let mut sorted_s = vec![T::from_usize(0); n];
         let mut sorted_u = Matrix::<T, DynamicStorage<T>>::new_dynamic(m, m)?;

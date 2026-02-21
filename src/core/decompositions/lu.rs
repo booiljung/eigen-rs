@@ -31,7 +31,8 @@ impl<T: Scalar + num_traits::One, S: Storage<T>> PartialPivLU<T, S> {
 
         // Threshold for blocking
         // Increased to 64 to improve AVX2 utilization and reduce unblocked overhead
-        const BLOCK_SIZE: usize = 64;
+        // Efficient L1/L2 cache usage considerations
+        const BLOCK_SIZE: usize = 16;
 
         if rows <= BLOCK_SIZE {
             Self::lu_unblocked(&mut lu, &mut p, 0, rows, &mut det_p);
@@ -65,7 +66,7 @@ impl<T: Scalar + num_traits::One, S: Storage<T>> PartialPivLU<T, S> {
             let mut imax = k;
 
             for i in k..rows {
-                let val = *mat.get(i, k).unwrap();
+                let val = unsafe { *mat.get_unchecked(i, k) };
                 let abs_val = val.abs(); // Returns T::Real
                 if abs_val > max_val {
                     max_val = abs_val;
@@ -75,16 +76,18 @@ impl<T: Scalar + num_traits::One, S: Storage<T>> PartialPivLU<T, S> {
 
             if imax != k {
                 for j in 0..cols {
-                    let tmp = *mat.get(k, j).unwrap();
-                    let val_imax = *mat.get(imax, j).unwrap();
-                    *mat.get_mut(k, j).unwrap() = val_imax;
-                    *mat.get_mut(imax, j).unwrap() = tmp;
+                    unsafe {
+                        let tmp = *mat.get_unchecked(k, j);
+                        let val_imax = *mat.get_unchecked(imax, j);
+                        *mat.get_unchecked_mut(k, j) = val_imax;
+                        *mat.get_unchecked_mut(imax, j) = tmp;
+                    }
                 }
                 p.swap(k, imax);
                 *det_p *= neg_one;
             }
 
-            let pivot = *mat.get(k, k).unwrap();
+            let pivot = unsafe { *mat.get_unchecked(k, k) };
             if pivot != T::from_usize(0) {
                 let inv_pivot = T::one() / pivot;
                 
@@ -109,7 +112,7 @@ impl<T: Scalar + num_traits::One, S: Storage<T>> PartialPivLU<T, S> {
                 #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
                 #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
                 for i in k + 1..rows {
-                    *mat.get_mut(i, k).unwrap() *= inv_pivot;
+                    unsafe { *mat.get_unchecked_mut(i, k) *= inv_pivot };
                 }
 
                 // 3. Update trailing submatrix (Rank-1 update)
@@ -129,10 +132,12 @@ impl<T: Scalar + num_traits::One, S: Storage<T>> PartialPivLU<T, S> {
 
                 // Scalar Fallback
                 for j in k + 1..end {
-                    let factor = *mat.get(k, j).unwrap();
+                    let factor = unsafe { *mat.get_unchecked(k, j) };
                     for i in k + 1..rows {
-                        let val = *mat.get(i, k).unwrap();
-                        *mat.get_mut(i, j).unwrap() -= val * factor;
+                        unsafe {
+                            let val = *mat.get_unchecked(i, k);
+                            *mat.get_unchecked_mut(i, j) -= val * factor;
+                        }
                     }
                 }
             }
@@ -308,13 +313,15 @@ impl<T: Scalar + num_traits::One, S: Storage<T>> PartialPivLU<T, S> {
         for j in k + kb..n {
             for i in 0..kb {
                 let global_i = k + i;
-                let mut val = *mat.get(global_i, j).unwrap();
+                let mut val = unsafe { *mat.get_unchecked(global_i, j) };
                 for l in 0..i {
                     let global_l = k + l;
-                    let val_l = *mat.get(global_l, global_i).unwrap();
-                    val -= val_l * (*mat.get(global_l, j).unwrap());
+                    unsafe {
+                        let val_l = *mat.get_unchecked(global_l, global_i);
+                        val -= val_l * (*mat.get_unchecked(global_l, j));
+                    }
                 }
-                *mat.get_mut(global_i, j).unwrap() = val;
+                unsafe { *mat.get_unchecked_mut(global_i, j) = val };
             }
         }
     }
@@ -749,14 +756,16 @@ impl<T: Scalar + num_traits::One, S: Storage<T>> PartialPivLU<T, S> {
         }
 
         // Fallback GEMM
-        for i in 0..m_size {
-            for j in 0..n_size {
-                let mut sum = T::from_usize(0);
-                for l in 0..k_size {
-                    sum += (*mat.get(k + kb + i, k + l).unwrap())
-                        * (*mat.get(k + l, k + kb + j).unwrap());
+        // Column-major ordering optimization: j, l, i
+        for j in 0..n_size {
+            for l in 0..k_size {
+                let u_val = unsafe { *mat.get_unchecked(k + l, k + kb + j) };
+                for i in 0..m_size {
+                    unsafe {
+                        let l_val = *mat.get_unchecked(k + kb + i, k + l);
+                        *mat.get_unchecked_mut(k + kb + i, k + kb + j) -= l_val * u_val;
+                    }
                 }
-                *mat.get_mut(k + kb + i, k + kb + j).unwrap() -= sum;
             }
         }
     }
