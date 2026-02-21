@@ -221,7 +221,7 @@ impl<T: Scalar> SparseMatrix<T> {
         }
     }
 
-    pub(crate) fn from_raw(
+    pub fn from_raw(
         rows: usize,
         cols: usize,
         values: Vec<T>,

@@ -701,3 +701,40 @@ impl<T: Scalar<Real = T> + PartialOrd + 'static, S: Storage<T> + 'static> BDCSVD
         &self.singular_values
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_bdc_svd_basic() {
+        let rows = 4;
+        let cols = 4;
+        let mut a = Matrix::<f32, DynamicStorage<f32>>::new_dynamic(rows, cols).unwrap();
+        *a.get_mut(0, 0).unwrap() = 1.0; *a.get_mut(0, 1).unwrap() = 2.0;
+        *a.get_mut(1, 0).unwrap() = 3.0; *a.get_mut(1, 1).unwrap() = 4.0;
+        *a.get_mut(2, 2).unwrap() = 5.0; *a.get_mut(3, 3).unwrap() = 6.0;
+
+        let svd = BDCSVD::new(&a).unwrap();
+        
+        let u = svd.matrix_u();
+        let v_t = svd.matrix_v().transpose();
+        let mut s_mat = Matrix::<f32, DynamicStorage<f32>>::new_dynamic(rows, cols).unwrap();
+        let s_vals = svd.singular_values();
+        for i in 0..std::cmp::min(rows, cols) {
+            *s_mat.get_mut(i, i).unwrap() = s_vals[i];
+        }
+
+        let mut us = Matrix::<f32, DynamicStorage<f32>>::new_dynamic(rows, cols).unwrap();
+        us.assign(&(u * &s_mat)).unwrap();
+        let mut recon = Matrix::<f32, DynamicStorage<f32>>::new_dynamic(rows, cols).unwrap();
+        recon.assign(&(&us * &v_t)).unwrap();
+
+        for i in 0..rows {
+            for j in 0..cols {
+                let diff = (*recon.get(i, j).unwrap() - *a.get(i, j).unwrap()).abs();
+                assert!(diff < 1e-4, "Mismatch at {},{}: orig {}, recon {}", i, j, *a.get(i, j).unwrap(), *recon.get(i, j).unwrap());
+            }
+        }
+    }
+}

@@ -223,7 +223,7 @@ impl<T: Scalar<Real = T> + PartialOrd + 'static, S: Storage<T> + 'static> Jacobi
                   }
                   
                   if !success {
-                       println!("JacobiSVD Error: Failed to complete basis for column {}", bad_idx);
+                       // Silently fail to complete basis.
                   }
                   
                   // 3. Add to basis
@@ -262,19 +262,6 @@ impl<T: Scalar<Real = T> + PartialOrd + 'static, S: Storage<T> + 'static> Jacobi
             }
         }
         
-        // Debug: Check sorted_u orthogonality immediately
-        for c1 in 0..n {
-             for c2 in 0..n {
-                 let mut dot = T::from_usize(0);
-                 for r in 0..m {
-                     dot += *sorted_u.get(r, c1).unwrap() * *sorted_u.get(r, c2).unwrap();
-                 }
-                 let expected = if c1 == c2 { T::from_usize(1) } else { T::from_usize(0) };
-                 if (dot - expected).abs() > eps * T::from_usize(1000) {
-                     println!("JacobiSVD Internal Ortho Error at {}x{}: dot={:?}, expected={:?}, error={:?}", c1, c2, dot, expected, (dot-expected).abs());
-                 }
-             }
-        }
 
         Ok(Self {
             u: sorted_u,

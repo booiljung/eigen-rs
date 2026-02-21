@@ -262,18 +262,17 @@ fn bench_geometry(filter: &str) {
     println!("QuatMul,4,{},{}", duration / iterations as u128, q_sum);
 
     // QuatRot
-    // if matches_filter("QuatRot", filter) {
-    //     let mut v_rot = Vector3::<f32>::default();
-    //     *v_rot.get_mut(0, 0).unwrap() = 1.0;
-    //     let mut v_res = Vector3::<f32>::default();
-    //     let start = Instant::now();
-    //     for _ in 0..iterations {
-    //          v_res = q1.rotate_vector(&v_rot);
-    //     }
-    //     let duration = start.elapsed().as_nanos();
-    //     println!("QuatRot,3,{}", duration / iterations as u128);
-    //     black_box(v_res.sum());
-    // }
+    if matches_filter("QuatRot", filter) {
+        let mut v_rot = Matrix::<f32, FixedStorage<f32, 3, 1, 3>>::from_array([1.0, 0.0, 0.0]);
+        let mut v_res = Matrix::<f32, FixedStorage<f32, 3, 1, 3>>::zeros();
+        let start = Instant::now();
+        for _ in 0..iterations {
+             *v_rot.get_mut(0, 0).unwrap() += 1e-6;
+             v_res = &q1 * &v_rot;
+        }
+        let duration = start.elapsed().as_nanos();
+        println!("QuatRot,3,{},{}", duration / iterations as u128, v_res.sum());
+    }
 }
 
 fn bench_dense_decomp_extra(size: usize) {
@@ -484,6 +483,7 @@ fn bench_geometry_advanced(filter: &str) {
 fn bench_sparse_advanced(size: usize) {
     use eigen_rs::core::sparse::solvers::{SparseLU, SparseQR};
     use eigen_rs::core::sparse::{SparseMatrix, StorageOrder, Triplet};
+    use eigen_rs::core::storage::Storage;
     
     // Generate sparse matrix
     let mut sp = SparseMatrix::<f32>::new(size, size, StorageOrder::ColMajor);
@@ -556,19 +556,27 @@ fn bench_sparse_advanced(size: usize) {
         // C++ runs iterations * 10
         let loop_iters = iterations * 10;
         for _ in 0..loop_iters {
-            // Emulate sparseView: dense -> triplets -> sparse
-            // We count this whole process as "SparseView".
-            let mut triplets = Vec::with_capacity(size * size / 20); // Approx 5%
+            let mut values = Vec::with_capacity(size * size / 20);
+            let mut inner_indices = Vec::with_capacity(size * size / 20);
+            let mut outer_starts = Vec::with_capacity(size + 1);
+
+            let mut nnz = 0;
             for c in 0..size {
+                outer_starts.push(nnz);
                 for r in 0..size {
-                     let val = *dense.get(r, c).unwrap();
+                     let val = unsafe { *dense.get_unchecked(r, c) };
                      if val != 0.0 {
-                         triplets.push(Triplet::new(r, c, val));
+                         values.push(val);
+                         inner_indices.push(r);
+                         nnz += 1;
                      }
                 }
             }
-            let mut s = SparseMatrix::<f32>::new(size, size, StorageOrder::ColMajor);
-            s.set_from_triplets(triplets);
+            outer_starts.push(nnz);
+
+            let s = SparseMatrix::<f32>::from_raw(
+                size, size, values, inner_indices, outer_starts, StorageOrder::ColMajor
+            );
             black_box(s.non_zeros());
         }
         let duration = start.elapsed().as_nanos();
