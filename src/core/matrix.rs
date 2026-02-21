@@ -252,16 +252,16 @@ impl<T: Scalar, S: Storage<T>> Matrix<T, S> {
             return Ok(());
         }
 
+        // Try Vectorized Path (AVX2/FMA) via Scalar Trait specialization
+        if T::assign_vectorized(self, xpr) {
+            return Ok(());
+        }
+
         #[cfg(feature = "parallel")]
         {
             if self.size() > 500000 {
                 return self.par_assign(xpr);
             }
-        }
-
-        // Try Vectorized Path (AVX2/FMA) via Scalar Trait specialization
-        if T::assign_vectorized(self, xpr) {
-            return Ok(());
         }
 
         let rows = self.rows();

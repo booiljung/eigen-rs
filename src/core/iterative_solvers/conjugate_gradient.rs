@@ -215,8 +215,10 @@ impl<T: Scalar<Real = T> + PartialOrd + 'static> IterativeSolver<T, DynamicStora
 
         // R = b - A * x
         // 1. Evaluate Ax = A * x
-        // For SparseMatrix, use mul_dense
-        let ax = a.mul_dense(&x).expect("Sparse-Dense multiplication failed");
+        // For SparseMatrix, use mul_dense_into
+        let mut ax = MatrixX::<T>::new_dynamic(rows, cols).unwrap();
+        ax.set_zero();
+        a.mul_dense_into(&x, &mut ax).expect("Sparse-Dense multiplication failed");
         
         // 2. Evaluate R = b - Ax
         let mut r = MatrixX::<T>::new_dynamic(rows, cols).unwrap();
@@ -237,13 +239,13 @@ impl<T: Scalar<Real = T> + PartialOrd + 'static> IterativeSolver<T, DynamicStora
         }
 
         // Pre-allocate Ap
-        // let mut ap = MatrixX::<T>::new_dynamic(rows, cols).unwrap();
+        let mut ap = MatrixX::<T>::new_dynamic(rows, cols).unwrap();
 
         for i in 0..self.max_iterations {
             *self.iterations.borrow_mut() = i + 1;
             
             // Ap = A * p
-            let ap = a.mul_dense(&p).expect("Sparse-Dense multiplication failed");
+            a.mul_dense_into(&p, &mut ap).expect("Sparse-Dense multiplication failed");
             
             // alpha = rs_old / (p . Ap)
             let p_ap = p.dot(&ap);

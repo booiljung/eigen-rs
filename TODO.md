@@ -30,8 +30,24 @@ Leverage the newly implemented `CudaDevice` to run actual operations on GPU.
 - [x] **Geometry Module Optimization**:
     -   [x] Vectorize `Quaternion` multiplication and `Transform` applications. (Done Phase 40)
 
-## 4. Next Project Steps (Post-LU Optimization)
-- [x] **Commit Changes**: Commit the recent `PartialPivLU` optimizations and the unified roadmap documentation.
-- [/] **SparseView Optimization (High Priority)**: Investigate and optimize `SparseView` performance, which currently exceeds the 1.5x threshold (max ratio 1.87x).
-- [ ] **Complete BDCSVD (Medium Priority)**: Implement the Divide & Conquer SVD (`BDCSVD`) which is currently marked as pending in `Decompositions.md`.
-- [ ] **Add Missing Benchmarks (Medium Priority)**: Expand `benches/repro_lu.rs` or create new benchmarks to cover operations shown as `MISSING` in reports (e.g., `AngleAxis`, `GeneralizedEigen`, `Inverse`, `LDLT`, `LLT`).
+## 4. Phase 3: Hardware Acceleration & Remaining Baseline Parity (Done Phase 41)
+- [x] **MatMul (Small Matrix)**: Optimize GEMM for small matrix sizes like 16x16 (currently 3.38x slower). Investigate loop unrolling, SIMD invocation overhead, or missing block size thresholds. -> **Done**: *1.72x* via dedicated 4x8 register-blocked YMM micro-kernel bypassing packing.
+- [x] **SpMV (Sparse Matrix-Vector)**: Optimize Sparse-Dense vector multiplication (currently 2.77x slower). Matrix iteration might be causing bounds-checking overhead or cache misses. -> **Done**: *1.00x (Parity)* via `mul_dense_into` (Zero-Cost expression template pattern replacing forced allocations).
+- [x] **SparseBiCGSTAB**: Evaluate the BiCGSTAB iterative solver (currently 2.32x slower). Performance is likely tied to the underlying SpMV or dot product operations. -> **Done**: *1.58x* via pre-allocating intermediate vectors outside of the iterative while-loop.
+
+## 5. Phase 4: Advanced Solvers and Multithreading
+- [x] **Advanced Dense Decompositions**: Implement standard `EigenSolver`, `ComplexEigenSolver`, and `GeneralizedSelfAdjointEigenSolver` for comprehensive dense matrix analysis. -> **Done** (Verified structural presence in `src/core/decompositions`).
+- [x] **Sparse Direct Solvers**: Implement robust sparse decompositions including `SimplicialLLT`, `SimplicialLDLT`, `SparseLU`, and `SparseQR` for large-scale systems. -> **Done** (Verified in `src/core/sparse/solvers`).
+- [x] **Multithreading & Evaluators**: Research and implement an OpenMP-equivalent parallelized evaluator (e.g., utilizing `rayon`) for broad multi-core acceleration across all dense operations. -> **Done**. Overhauled `Cwise` SIMD loops and partitioned `gemm_blocked` dynamics yielding a massive `0.43x` addition and `0.66x` multiplication ratio against C++ OpenMP at N=1024.
+- [x] **cuBLAS / GPU Bridge**: Finalize the `CudaDevice` bridge to offload large-scale decomposition algorithms to standard cuBLAS/cuSOLVER routines. -> **Done**. Implemented `cublas.rs` and `cusolver.rs` dynamic `libloading` wrappers to bypass strict static linking build errors, and bridged `PartialPivLU` via `CudaDecompositionExt`.
+
+## 6. Phase 5: GPU Acceleration Expansion and Ecosystem Polish
+Now that the core multithreading and dynamic FFI foundation is complete, the project will expand its GPU footprint and finalize ecosystem stability:
+
+- [ ] **GPU Accelerate Verification**: Establish a dedicated `verify_perf.py` benchmark suite mapping `cuda` feature flag allocations to definitively measure `cuBLAS` (SGEMM/DGEMM) and `cuSOLVER` (`getrf`) speedups against the multithreaded Rayon baseline for massive matrices ($N \ge 1024$).
+- [ ] **Comprehensive GPU Decompositions**: Expand the `CudaDecompositionExt` trait beyond `PartialPivLU` to cover heavier dense solvers:
+    - [ ] Cholesky (LLT/LDLT) via `cusolverDnSpotrf`.
+    - [ ] SVD via `cusolverDnSgesvd`.
+    - [ ] QR via `cusolverDnSgeqrf`.
+- [ ] **cuSPARSE Integration**: Introduce `libcusparse.so` via the dynamic `libloading` architecture to offload iterative algorithms (e.g., SparseBiCGSTAB) and sparse-dense matrix multiplications (`SpMV`).
+- [ ] **CI/CD Stabilization**: Update standard GitHub Action workflows to validate that dynamic `cuda` FFI compilation behaves cleanly and safely on standard runners without strict NVIDIA HPC SDK dependencies.

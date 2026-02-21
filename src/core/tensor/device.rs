@@ -4,6 +4,10 @@ use crate::core::scalar::Scalar;
 use crate::core::storage::AlignedStorage;
 
 pub mod cuda;
+#[cfg(feature = "cuda")]
+pub mod cublas;
+#[cfg(feature = "cuda")]
+pub mod cusolver;
 
 /// A device capable of allocating memory and executing tensor operations.
 pub trait Device: Clone + Default {

@@ -19,6 +19,9 @@ pub mod selfadjoint_eigen;
 pub mod svd;
 pub mod tridiagonal;
 
+#[cfg(feature = "cuda")]
+pub mod cuda_bridge;
+
 pub mod bdc_svd;
 
 pub use complex_eigen_solver::ComplexEigenSolver;

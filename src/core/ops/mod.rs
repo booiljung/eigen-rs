@@ -144,6 +144,69 @@ where
             let use_stream = size >= 32000 && (dest as usize) % 32 == 0;
             let prefetch_dist = 4 * packet_size;
 
+            #[cfg(feature = "parallel")]
+            if size > 500_000 {
+                use rayon::prelude::*;
+                let dest_slice = unsafe { std::slice::from_raw_parts_mut(dest, size) };
+                let mut chunk_size = 65536;
+                chunk_size = (chunk_size / packet_size) * packet_size;
+                let l_ptr_addr = l_ptr as usize;
+                let r_ptr_addr = r_ptr as usize;
+                dest_slice.par_chunks_mut(chunk_size).enumerate().for_each(
+                    move |(chunk_idx, out_chunk)| {
+                        let l_ptr_thread = l_ptr_addr as *const T;
+                        let r_ptr_thread = r_ptr_addr as *const T;
+                        let offset = chunk_idx * chunk_size;
+                        let len = out_chunk.len();
+                        let d_ptr = out_chunk.as_mut_ptr();
+                        let l_chk = unsafe { l_ptr_thread.add(offset) };
+                        let r_chk = unsafe { r_ptr_thread.add(offset) };
+                        let mut i = 0;
+                        unsafe {
+                            while i + 8 * packet_size <= len {
+                                P::prefetch(l_chk.add(i + prefetch_dist * 2));
+                                P::prefetch(r_chk.add(i + prefetch_dist * 2));
+                                let a0 = P::load(l_chk.add(i));
+                                let b0 = P::load(r_chk.add(i));
+                                (a0 + b0).store(d_ptr.add(i));
+                                let a1 = P::load(l_chk.add(i + packet_size));
+                                let b1 = P::load(r_chk.add(i + packet_size));
+                                (a1 + b1).store(d_ptr.add(i + packet_size));
+                                let a2 = P::load(l_chk.add(i + 2 * packet_size));
+                                let b2 = P::load(r_chk.add(i + 2 * packet_size));
+                                (a2 + b2).store(d_ptr.add(i + 2 * packet_size));
+                                let a3 = P::load(l_chk.add(i + 3 * packet_size));
+                                let b3 = P::load(r_chk.add(i + 3 * packet_size));
+                                (a3 + b3).store(d_ptr.add(i + 3 * packet_size));
+                                let a4 = P::load(l_chk.add(i + 4 * packet_size));
+                                let b4 = P::load(r_chk.add(i + 4 * packet_size));
+                                (a4 + b4).store(d_ptr.add(i + 4 * packet_size));
+                                let a5 = P::load(l_chk.add(i + 5 * packet_size));
+                                let b5 = P::load(r_chk.add(i + 5 * packet_size));
+                                (a5 + b5).store(d_ptr.add(i + 5 * packet_size));
+                                let a6 = P::load(l_chk.add(i + 6 * packet_size));
+                                let b6 = P::load(r_chk.add(i + 6 * packet_size));
+                                (a6 + b6).store(d_ptr.add(i + 6 * packet_size));
+                                let a7 = P::load(l_chk.add(i + 7 * packet_size));
+                                let b7 = P::load(r_chk.add(i + 7 * packet_size));
+                                (a7 + b7).store(d_ptr.add(i + 7 * packet_size));
+                                i += 8 * packet_size;
+                            }
+                            while i + packet_size <= len {
+                                let a = P::load(l_chk.add(i));
+                                let b = P::load(r_chk.add(i));
+                                (a + b).store(d_ptr.add(i));
+                                i += packet_size;
+                            }
+                            while i < len {
+                                *d_ptr.add(i) = *l_chk.add(i) + *r_chk.add(i);
+                                i += 1;
+                            }
+                        }
+                    },
+                );
+                return true;
+            }
             unsafe {
                 if use_stream {
                     while i + 8 * packet_size <= size {
@@ -377,6 +440,69 @@ where
             let use_stream = size >= 32000 && (dest as usize) % 32 == 0;
             let prefetch_dist = 4 * packet_size;
 
+            #[cfg(feature = "parallel")]
+            if size > 500_000 {
+                use rayon::prelude::*;
+                let dest_slice = unsafe { std::slice::from_raw_parts_mut(dest, size) };
+                let mut chunk_size = 65536;
+                chunk_size = (chunk_size / packet_size) * packet_size;
+                let l_ptr_addr = l_ptr as usize;
+                let r_ptr_addr = r_ptr as usize;
+                dest_slice.par_chunks_mut(chunk_size).enumerate().for_each(
+                    move |(chunk_idx, out_chunk)| {
+                        let l_ptr_thread = l_ptr_addr as *const T;
+                        let r_ptr_thread = r_ptr_addr as *const T;
+                        let offset = chunk_idx * chunk_size;
+                        let len = out_chunk.len();
+                        let d_ptr = out_chunk.as_mut_ptr();
+                        let l_chk = unsafe { l_ptr_thread.add(offset) };
+                        let r_chk = unsafe { r_ptr_thread.add(offset) };
+                        let mut i = 0;
+                        unsafe {
+                            while i + 8 * packet_size <= len {
+                                P::prefetch(l_chk.add(i + prefetch_dist * 2));
+                                P::prefetch(r_chk.add(i + prefetch_dist * 2));
+                                let a0 = P::load(l_chk.add(i));
+                                let b0 = P::load(r_chk.add(i));
+                                (a0 - b0).store(d_ptr.add(i));
+                                let a1 = P::load(l_chk.add(i + packet_size));
+                                let b1 = P::load(r_chk.add(i + packet_size));
+                                (a1 - b1).store(d_ptr.add(i + packet_size));
+                                let a2 = P::load(l_chk.add(i + 2 * packet_size));
+                                let b2 = P::load(r_chk.add(i + 2 * packet_size));
+                                (a2 - b2).store(d_ptr.add(i + 2 * packet_size));
+                                let a3 = P::load(l_chk.add(i + 3 * packet_size));
+                                let b3 = P::load(r_chk.add(i + 3 * packet_size));
+                                (a3 - b3).store(d_ptr.add(i + 3 * packet_size));
+                                let a4 = P::load(l_chk.add(i + 4 * packet_size));
+                                let b4 = P::load(r_chk.add(i + 4 * packet_size));
+                                (a4 - b4).store(d_ptr.add(i + 4 * packet_size));
+                                let a5 = P::load(l_chk.add(i + 5 * packet_size));
+                                let b5 = P::load(r_chk.add(i + 5 * packet_size));
+                                (a5 - b5).store(d_ptr.add(i + 5 * packet_size));
+                                let a6 = P::load(l_chk.add(i + 6 * packet_size));
+                                let b6 = P::load(r_chk.add(i + 6 * packet_size));
+                                (a6 - b6).store(d_ptr.add(i + 6 * packet_size));
+                                let a7 = P::load(l_chk.add(i + 7 * packet_size));
+                                let b7 = P::load(r_chk.add(i + 7 * packet_size));
+                                (a7 - b7).store(d_ptr.add(i + 7 * packet_size));
+                                i += 8 * packet_size;
+                            }
+                            while i + packet_size <= len {
+                                let a = P::load(l_chk.add(i));
+                                let b = P::load(r_chk.add(i));
+                                (a - b).store(d_ptr.add(i));
+                                i += packet_size;
+                            }
+                            while i < len {
+                                *d_ptr.add(i) = *l_chk.add(i) - *r_chk.add(i);
+                                i += 1;
+                            }
+                        }
+                    },
+                );
+                return true;
+            }
             unsafe {
                 if use_stream {
                     while i + 8 * packet_size <= size {
@@ -588,6 +714,56 @@ where
             // Prefetch distance
             let prefetch_dist = 4 * packet_size;
 
+            #[cfg(feature = "parallel")]
+            if size > 500_000 {
+                use rayon::prelude::*;
+                let dest_slice = unsafe { std::slice::from_raw_parts_mut(dest, size) };
+                let mut chunk_size = 65536;
+                chunk_size = (chunk_size / packet_size) * packet_size;
+                let x_ptr_addr = x_ptr as usize;
+                dest_slice.par_chunks_mut(chunk_size).enumerate().for_each(
+                    move |(chunk_idx, out_chunk)| {
+                        let x_ptr_thread = x_ptr_addr as *const T;
+                        let offset = chunk_idx * chunk_size;
+                        let len = out_chunk.len();
+                        let d_ptr = out_chunk.as_mut_ptr();
+                        let x_chk = unsafe { x_ptr_thread.add(offset) };
+                        let mut i = 0;
+                        unsafe {
+                            while i + 8 * packet_size <= len {
+                                P::prefetch(x_chk.add(i + prefetch_dist * 2));
+                                let a0 = P::load(x_chk.add(i));
+                                (a0 * s_packet).store(d_ptr.add(i));
+                                let a1 = P::load(x_chk.add(i + packet_size));
+                                (a1 * s_packet).store(d_ptr.add(i + packet_size));
+                                let a2 = P::load(x_chk.add(i + 2 * packet_size));
+                                (a2 * s_packet).store(d_ptr.add(i + 2 * packet_size));
+                                let a3 = P::load(x_chk.add(i + 3 * packet_size));
+                                (a3 * s_packet).store(d_ptr.add(i + 3 * packet_size));
+                                let a4 = P::load(x_chk.add(i + 4 * packet_size));
+                                (a4 * s_packet).store(d_ptr.add(i + 4 * packet_size));
+                                let a5 = P::load(x_chk.add(i + 5 * packet_size));
+                                (a5 * s_packet).store(d_ptr.add(i + 5 * packet_size));
+                                let a6 = P::load(x_chk.add(i + 6 * packet_size));
+                                (a6 * s_packet).store(d_ptr.add(i + 6 * packet_size));
+                                let a7 = P::load(x_chk.add(i + 7 * packet_size));
+                                (a7 * s_packet).store(d_ptr.add(i + 7 * packet_size));
+                                i += 8 * packet_size;
+                            }
+                            while i + packet_size <= len {
+                                let a = P::load(x_chk.add(i));
+                                (a * s_packet).store(d_ptr.add(i));
+                                i += packet_size;
+                            }
+                            while i < len {
+                                *d_ptr.add(i) = *x_chk.add(i) * self.scalar;
+                                i += 1;
+                            }
+                        }
+                    },
+                );
+                return true;
+            }
             unsafe {
                 while i + 8 * packet_size <= size {
                     // Prefetch only x_ptr (no streaming store used here as size unknown or scalar mult might not benefit enough from NT)

@@ -260,7 +260,9 @@ impl<T: Scalar<Real = T> + PartialOrd + 'static> IterativeSolver<T, DynamicStora
         x.assign(x0).unwrap();
 
         // r = b - A * x
-        let ax = a.mul_dense(&x).expect("Sparse-Dense multiplication failed");
+        let mut ax = MatrixX::<T>::new_dynamic(rows, cols).unwrap();
+        ax.set_zero();
+        a.mul_dense_into(&x, &mut ax).expect("Sparse-Dense multiplication failed");
         
         let mut r = MatrixX::<T>::new_dynamic(rows, cols).unwrap();
         r.assign(&(b - &ax)).unwrap();
@@ -319,8 +321,7 @@ impl<T: Scalar<Real = T> + PartialOrd + 'static> IterativeSolver<T, DynamicStora
             }
             
             // v = A * p
-            let ap = a.mul_dense(&p).expect("Sparse-Dense multiplication failed");
-            v.assign(&ap).unwrap();
+            a.mul_dense_into(&p, &mut v).expect("Sparse-Dense multiplication failed");
             
             let r_hat_v = r_hat.dot(&v);
              if r_hat_v.abs() < T::from_f64(1e-30) {
@@ -352,8 +353,7 @@ impl<T: Scalar<Real = T> + PartialOrd + 'static> IterativeSolver<T, DynamicStora
             }
             
             // t = A * s
-             let as_ = a.mul_dense(&s).expect("Sparse-Dense multiplication failed");
-             t.assign(&as_).unwrap();
+             a.mul_dense_into(&s, &mut t).expect("Sparse-Dense multiplication failed");
             
             // omega = (t . s) / (t . t)
             let t_t = t.squared_norm();

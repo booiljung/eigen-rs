@@ -5,8 +5,9 @@ use crate::core::scalar::Scalar;
 use std::ops::{Add, Mul, Sub};
 
 /// Trait representing a SIMD packet of a specific scalar type.
+/// Trait representing a SIMD packet of a specific scalar type.
 pub trait Packet<T: Scalar>:
-    Copy + Add<Output = Self> + Sub<Output = Self> + Mul<Output = Self>
+    Copy + Add<Output = Self> + Sub<Output = Self> + Mul<Output = Self> + Send + Sync
 {
     /// Number of scalars in this packet.
     const SIZE: usize;

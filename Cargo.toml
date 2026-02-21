@@ -21,6 +21,7 @@ libm = "0.2.16"
 rustfft = "6.4.1"
 num-traits = "0.2"
 num-complex = "0.4"
+libloading = { version = "0.8", optional = true }
 
 [dev-dependencies]
 criterion = "0.5"
@@ -54,7 +55,7 @@ name = "repro_lu"
 harness = false
 
 [features]
-cuda = ["dep:cuda-sys", "dep:cust"]
+cuda = ["dep:cuda-sys", "dep:cust", "dep:libloading"]
 suitesparse = []
 mkl = []
 parallel = ["dep:rayon"]

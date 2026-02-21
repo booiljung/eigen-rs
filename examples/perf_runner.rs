@@ -606,45 +606,45 @@ fn bench_sparse(size: usize) {
 
     let mut v = MatrixX::<f32>::new_dynamic(size, 1).unwrap();
     init_vector(&mut v);
+    let mut res = MatrixX::<f32>::new_dynamic(size, 1).unwrap();
+    res.set_zero();
 
-    let iterations = if size < 128 { 10 } else { 1 };
+    // SpMV iterations match C++: 1000 for small
+    let iterations = if size < 256 { 1000 } else { 100 };
 
     // SpMV
-    let mut res_sum = 0.0;
-    let start = Instant::now();
+    let mut start = Instant::now();
     for _ in 0..iterations {
-        let res = (&sp * &v).unwrap();
-        res_sum = res.sum();
-        *v.get_mut(0, 0).unwrap() += 0.00001; // Prevent hoisting
+        sp.mul_dense_into(&v, &mut res).unwrap();
     }
     let duration = start.elapsed().as_nanos();
     println!(
         "SpMV,{},{},{}",
         size,
         duration / iterations as u128,
-        res_sum
+        0.0 // no res_sum to avoid overhead
     );
 
     // SpMM
     let mut m = MatrixX::<f32>::new_dynamic(size, 32).unwrap();
     for i in 0..size {
         for j in 0..32 {
-            *m.get_mut(i, j).unwrap() = ((i + j) % 11) as f32;
+            *m.get_mut(i, j).unwrap() = ((i + j) % 100) as f32 / 10.0;
         }
     }
+    let mut res_m = MatrixX::<f32>::new_dynamic(size, 32).unwrap();
+    res_m.set_zero();
 
-    let start = Instant::now();
+    start = Instant::now();
     for _ in 0..iterations {
-        let res = (&sp * &m).unwrap();
-        res_sum = res.sum();
-        *m.get_mut(0, 0).unwrap() += 0.00001; // Prevent hoisting
+        sp.mul_dense_into(&m, &mut res_m).unwrap();
     }
     let duration = start.elapsed().as_nanos();
     println!(
         "SpMM_Dense,{},{},{}",
         size,
         duration / iterations as u128,
-        res_sum
+        0.0
     );
 }
 

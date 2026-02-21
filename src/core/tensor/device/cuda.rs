@@ -253,9 +253,71 @@ impl CudaDevice {
         b: &CudaStorage<T>,
         m: usize, n: usize, k: usize
     ) -> Result<(), String> {
-         let kernel_name = if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() {
+        let is_f32 = std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>();
+        let is_f64 = std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>();
+
+        if is_f32 || is_f64 {
+            let handled_cublas = super::cublas::CUBLAS_HANDLE.with(|h| {
+                if let Some(handle) = h {
+                    if let Some(api) = super::cublas::get_cublas() {
+                        let alpha_f32: f32 = 1.0;
+                        let beta_f32: f32 = 0.0;
+                        let alpha_f64: f64 = 1.0;
+                        let beta_f64: f64 = 0.0;
+
+                        let lda = m as i32;
+                        let ldb = k as i32;
+                        let ldc = m as i32;
+                        
+                        let ptr_a = a.buffer.as_device_ptr().as_ptr() as *const f32;
+                        let ptr_b = b.buffer.as_device_ptr().as_ptr() as *const f32;
+                        let ptr_c = c.buffer.as_device_ptr().as_ptr() as *mut f32;
+
+                        unsafe {
+                            if is_f32 {
+                                let status = (api.cublasSgemm_v2)(
+                                    *handle,
+                                    super::cublas::CUBLAS_OP_N, super::cublas::CUBLAS_OP_N,
+                                    m as i32, n as i32, k as i32,
+                                    &alpha_f32,
+                                    ptr_a, lda,
+                                    ptr_b, ldb,
+                                    &beta_f32,
+                                    ptr_c, ldc,
+                                );
+                                return if status == super::cublas::CUBLAS_STATUS_SUCCESS { Ok(true) } else { Err(format!("cuBLAS sgemm failed: {}", status)) };
+                            } else {
+                                let ptr_a_64 = a.buffer.as_device_ptr().as_ptr() as *const f64;
+                                let ptr_b_64 = b.buffer.as_device_ptr().as_ptr() as *const f64;
+                                let ptr_c_64 = c.buffer.as_device_ptr().as_ptr() as *mut f64;
+                                let status = (api.cublasDgemm_v2)(
+                                    *handle,
+                                    super::cublas::CUBLAS_OP_N, super::cublas::CUBLAS_OP_N,
+                                    m as i32, n as i32, k as i32,
+                                    &alpha_f64,
+                                    ptr_a_64, lda,
+                                    ptr_b_64, ldb,
+                                    &beta_f64,
+                                    ptr_c_64, ldc,
+                                );
+                                return if status == super::cublas::CUBLAS_STATUS_SUCCESS { Ok(true) } else { Err(format!("cuBLAS dgemm failed: {}", status)) };
+                            }
+                        }
+                    }
+                }
+                Ok(false)
+            });
+
+            match handled_cublas {
+                Ok(true) => return Ok(()),
+                Err(e) => return Err(e),
+                Ok(false) => {}
+            }
+        }
+
+         let kernel_name = if is_f32 {
             "matmul_kernel_f32"
-        } else if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>() {
+        } else if is_f64 {
             "matmul_kernel_f64"
         } else {
              return Err("Unsupported type for CUDA matmul".into());

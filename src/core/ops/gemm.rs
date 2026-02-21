@@ -59,6 +59,7 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)]
 pub unsafe fn gemm_blocked<T, K>(
     m: usize,
     k: usize,
@@ -75,7 +76,7 @@ pub unsafe fn gemm_blocked<T, K>(
     alpha: T,
 ) -> Result<(), String>
 where
-    T: Scalar + Copy + Default + num_traits::One,
+    T: Scalar + Copy + Default + num_traits::One + Send + Sync,
     K: GemmKernel<Elem = T>,
 {
     // Sizes for packing buffers
@@ -94,110 +95,85 @@ where
     // Alignment padding (64 bytes) + Safety Padding (4096 bytes) to prevent OOB corruption
     let required_cap = bytes_a + bytes_b + bytes_tmp + 64 + 4096;
 
-    with_gemm_workspace(required_cap, |ws_ptr| {
-        // Partition workspace
-        // A | B | TMP
-        let ptr_a = ws_ptr as *mut T;
-        let ptr_b = ws_ptr.add(bytes_a) as *mut T;
-        let ptr_tmp = ws_ptr.add(bytes_a + bytes_b) as *mut T;
+    // Dynamically choose NC to guarantee multithreading even for N=1024.
+    #[cfg(feature = "parallel")]
+    let num_threads = rayon::current_num_threads();
+    #[cfg(not(feature = "parallel"))]
+    let num_threads = 1;
 
-        // Create mutable slices (unsafe alias to workspace)
-        // Note: we don't zero-init. packing overwrites. tmp_c overwrites.
+    let mut dynamic_nc = NC;
+    if n <= NC && num_threads > 1 {
+        dynamic_nc = std::cmp::max(K::NR, (n + num_threads - 1) / num_threads);
+        dynamic_nc = (dynamic_nc / K::NR) * K::NR;
+        if dynamic_nc == 0 { dynamic_nc = K::NR; }
+    }
 
-        // Macro-kernel loops (GOTO BLAS Style)
-        // Loop 5: JC loop (Column blocks of C)
-        for jc in (0..n).step_by(NC) {
-            let nc_eff = std::cmp::min(n - jc, NC);
+    let jc_intervals: Vec<usize> = (0..n).step_by(dynamic_nc).collect();
 
-            // Loop 4: KC loop (Accumulation blocks via K)
+    #[cfg(feature = "parallel")]
+    let use_parallel = jc_intervals.len() > 1;
+    #[cfg(not(feature = "parallel"))]
+    let use_parallel = false;
+
+    let a_addr = a as usize;
+    let b_addr = b as usize;
+    let c_addr = c as usize;
+
+    let process_jc = |jc: usize| {
+        let a = a_addr as *const T;
+        let b = b_addr as *const T;
+        let c = c_addr as *mut T;
+        
+        with_gemm_workspace(required_cap, |ws_ptr| {
+            // Partition workspace
+            // A | B | TMP
+            let ptr_a = ws_ptr as *mut T;
+            let ptr_b = unsafe { ws_ptr.add(bytes_a) as *mut T };
+            let ptr_tmp = unsafe { ws_ptr.add(bytes_a + bytes_b) as *mut T };
+
+            let nc_eff = std::cmp::min(n - jc, dynamic_nc);
+
             for pc in (0..k).step_by(KC) {
                 let kc_eff = std::cmp::min(k - pc, KC);
 
-                // Pack B (KC x NC)
-                let b_sub_pointer = b.offset((pc as isize) * rs_b + (jc as isize) * cs_b);
-                K::pack_rhs(
-                    kc_eff,
-                    nc_eff,
-                    b_sub_pointer,
-                    rs_b,
-                    cs_b,
-                    ptr_b, // Packed B buffer
-                );
+                // Pack B
+                let b_sub_pointer = unsafe { b.offset((pc as isize) * rs_b + (jc as isize) * cs_b) };
+                unsafe {
+                    K::pack_rhs(kc_eff, nc_eff, b_sub_pointer, rs_b, cs_b, ptr_b);
+                }
 
-                // Loop 3: IC loop (Row blocks of C)
                 for ic in (0..m).step_by(MC) {
                     let mc_eff = std::cmp::min(m - ic, MC);
 
-                    // Pack A (MC x KC)
-                    let a_sub_pointer = a.offset((ic as isize) * rs_a + (pc as isize) * cs_a);
-                    K::pack_lhs(
-                        kc_eff,
-                        mc_eff,
-                        a_sub_pointer,
-                        rs_a,
-                        cs_a,
-                        ptr_a, // Packed A buffer
-                    );
+                    // Pack A
+                    let a_sub_pointer = unsafe { a.offset((ic as isize) * rs_a + (pc as isize) * cs_a) };
+                    unsafe {
+                        K::pack_lhs(kc_eff, mc_eff, a_sub_pointer, rs_a, cs_a, ptr_a);
+                    }
 
-                    // Micro-kernel Loop (jr, ir)
                     for jr in (0..nc_eff).step_by(K::NR) {
                         let nr_curr = std::cmp::min(nc_eff - jr, K::NR);
 
                         for ir in (0..mc_eff).step_by(K::MR) {
                             let mr_curr = std::cmp::min(mc_eff - ir, K::MR);
 
-                            // Call Micro-kernel
-                            // ptr_a is MC*KC. We access block at ir.
-                            // ptr_aLayout: [MC_strips]. Strip is KC*MR.
-                            // We need to offset carefully.
-                            // Check packing.rs: pack_lhs produces contiguous MR-strips.
-                            // Strip index = ir / MR.
-                            // Offset = (ir / MR) * (KC * MR).
-                            // My previous code used: `packed_a.as_ptr().add(ir * kc_eff)`.
-                            // Let's verify.
-                            // Iter ir (step MR). ir=0, MR, 2MR...
-                            // (ir/MR) * KC * MR == ir * KC.
-                            // This matches.
-                            let a_ptr_k = ptr_a.add(ir * kc_eff);
-                            let b_ptr_k = ptr_b.add(jr * kc_eff);
+                            let a_ptr_k = unsafe { ptr_a.add(ir * kc_eff) };
+                            let b_ptr_k = unsafe { ptr_b.add(jr * kc_eff) };
 
                             if mr_curr == K::MR && nr_curr == K::NR {
-                                // Fast path
-                                let c_ptr = c.offset(
-                                    (ic as isize + ir as isize) * rs_c
-                                        + (jc as isize + jr as isize) * cs_c,
-                                );
-                                K::microkernel(
-                                    kc_eff,
-                                    alpha,
-                                    a_ptr_k,
-                                    b_ptr_k,
-                                    T::one(),
-                                    c_ptr,
-                                    rs_c,
-                                    cs_c,
-                                );
+                                let c_ptr = unsafe { c.offset((ic as isize + ir as isize) * rs_c + (jc as isize + jr as isize) * cs_c) };
+                                unsafe {
+                                    K::microkernel(kc_eff, alpha, a_ptr_k, b_ptr_k, T::one(), c_ptr, rs_c, cs_c);
+                                }
                             } else {
-                                // Slow path using tmp_c
-                                K::microkernel(
-                                    kc_eff,
-                                    alpha,
-                                    a_ptr_k,
-                                    b_ptr_k,
-                                    T::default(),
-                                    ptr_tmp, // tmp_c
-                                    1,
-                                    K::MR as isize,
-                                );
-
-                                // Accumulate
-                                let tmp_slice = std::slice::from_raw_parts(ptr_tmp, K::MR * K::NR);
-                                for j in 0..nr_curr {
-                                    for i in 0..mr_curr {
-                                        let c_idx = (ic as isize + (ir + i) as isize) * rs_c
-                                            + (jc as isize + (jr + j) as isize) * cs_c;
-                                        *c.offset(c_idx) =
-                                            *c.offset(c_idx) + tmp_slice[j * K::MR + i];
+                                unsafe {
+                                    K::microkernel(kc_eff, alpha, a_ptr_k, b_ptr_k, T::default(), ptr_tmp, 1, K::MR as isize);
+                                    for j in 0..nr_curr {
+                                        for i in 0..mr_curr {
+                                            let val = *ptr_tmp.add(j * K::MR + i);
+                                            let c_out = c.offset((ic as isize + ir as isize + i as isize) * rs_c + (jc as isize + jr as isize + j as isize) * cs_c);
+                                            *c_out += val;
+                                        }
                                     }
                                 }
                             }
@@ -205,9 +181,20 @@ where
                     }
                 }
             }
+        });
+    };
+
+    #[cfg(feature = "parallel")]
+    {
+        if use_parallel {
+            use rayon::prelude::*;
+            jc_intervals.into_par_iter().for_each(process_jc);
+            return Ok(());
         }
-        Ok(())
-    })
+    }
+
+    jc_intervals.into_iter().for_each(process_jc);
+    Ok(())
 }
 
 /// Baseline Column-Major GEMM that works on any MatrixXpr.

@@ -239,52 +239,50 @@ impl<T: Scalar> SparseMatrix<T> {
         }
     }
 
-    /// Multiplies this sparse matrix by a dense matrix.
-    pub fn mul_dense<S: Storage<T>>(
+    /// Multiplies this sparse matrix by a dense matrix and stores the result in `res` without allocating.
+    pub fn mul_dense_into<S: Storage<T>, R: Storage<T>>(
         &self,
         rhs: &Matrix<T, S>,
-    ) -> Result<Matrix<T, DynamicStorage<T>>, String> {
+        res: &mut Matrix<T, R>,
+    ) -> Result<(), String> {
         if self.cols != rhs.rows() {
             return Err("Incompatible dimensions for sparse-dense product".to_string());
         }
+        if res.rows() != self.rows || res.cols() != rhs.cols() {
+            return Err("Incompatible dimensions for result sparse-dense product".to_string());
+        }
 
         // Use optimized AVX path for f32/f64 if available
-        // Only use for larger number of columns where packing overhead is amortized
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
             if is_x86_feature_detected!("fma")
                 && self.order == StorageOrder::RowMajor
                 && rhs.cols() >= 64
             {
-                // Check if T is f32/f64
                 use std::any::TypeId;
                 let tid = TypeId::of::<T>();
                 if tid == TypeId::of::<f32>() || tid == TypeId::of::<f64>() {
                     unsafe {
-                        return self.mul_dense_avx(rhs);
+                        return self.mul_dense_avx_into(rhs, res);
                     }
                 }
             }
         }
 
-        let mut res = Matrix::<T, DynamicStorage<T>>::new_dynamic(self.rows, rhs.cols())?;
-
         #[cfg(feature = "parallel")]
         {
             if self.non_zeros() > 50000 || (self.rows * rhs.cols() > 10000) {
-                return self.par_mul_dense(rhs);
+                return self.par_mul_dense_into(rhs, res);
             }
         }
 
         // Specialized path for Matrix-Vector multiplication (RHS cols == 1)
         if rhs.cols() == 1 {
-            // Helper to get raw pointer to RHS data (assuming contiguous column)
             let rhs_ptr = rhs.storage().data().as_ptr();
             let res_ptr = res.storage_mut().data_mut().as_mut_ptr();
 
             match self.order {
                 StorageOrder::RowMajor => {
-                    // CSR SpMV
                     for i in 0..self.rows {
                         unsafe {
                             let start = *self.outer_starts.get_unchecked(i);
@@ -302,18 +300,9 @@ impl<T: Scalar> SparseMatrix<T> {
                     }
                 }
                 StorageOrder::ColMajor => {
-                    // CSC SpMV
-                    // Initialize result to zero
-                    unsafe {
-                        std::ptr::write_bytes(res_ptr, 0, self.rows);
-                    }
-
                     for j in 0..self.cols {
                         unsafe {
                             let rhs_val = *rhs_ptr.add(j);
-                            // Skip if rhs is zero? (Optimization)
-                            // if rhs_val == T::zero() { continue; }
-
                             let start = *self.outer_starts.get_unchecked(j);
                             let end = *self.outer_starts.get_unchecked(j + 1);
 
@@ -326,7 +315,7 @@ impl<T: Scalar> SparseMatrix<T> {
                     }
                 }
             }
-            return Ok(res);
+            return Ok(());
         }
 
         match self.order {
@@ -363,15 +352,28 @@ impl<T: Scalar> SparseMatrix<T> {
                 }
             }
         }
-        Ok(res)
+        Ok(())
     }
 
-    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-    unsafe fn mul_dense_avx<S: Storage<T>>(
+    /// Multiplies this sparse matrix by a dense matrix. Allocates a new vector.
+    pub fn mul_dense<S: Storage<T>>(
         &self,
         rhs: &Matrix<T, S>,
     ) -> Result<Matrix<T, DynamicStorage<T>>, String> {
         let mut res = Matrix::<T, DynamicStorage<T>>::new_dynamic(self.rows, rhs.cols())?;
+        res.set_zero();
+        self.mul_dense_into(rhs, &mut res)?;
+        Ok(res)
+    }
+
+
+
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    unsafe fn mul_dense_avx_into<S: Storage<T>, R: Storage<T>>(
+        &self,
+        rhs: &Matrix<T, S>,
+        res: &mut Matrix<T, R>,
+    ) -> Result<(), String> {
 
         // This optimization only supports CSR (RowMajor) for now
         // Assuming self.order == RowMajor checked by caller
@@ -608,22 +610,25 @@ impl<T: Scalar> SparseMatrix<T> {
             }
         }
 
-        Ok(res)
+        Ok(())
     }
 
     /// Parallel multiplication by a dense matrix.
     #[cfg(feature = "parallel")]
-    pub fn par_mul_dense<S: Storage<T> + Sync>(
+    pub fn par_mul_dense_into<S: Storage<T> + Sync, R: Storage<T>>(
         &self,
         rhs: &Matrix<T, S>,
-    ) -> Result<Matrix<T, DynamicStorage<T>>, String>
+        res: &mut Matrix<T, R>,
+    ) -> Result<(), String>
     where
         T: Scalar + Send + Sync + 'static,
     {
         if self.cols != rhs.rows() {
             return Err("Incompatible dimensions for parallel sparse-dense product".to_string());
         }
-        let mut res = Matrix::<T, DynamicStorage<T>>::new_dynamic(self.rows, rhs.cols())?;
+        if res.rows() != self.rows || res.cols() != rhs.cols() {
+            return Err("Incompatible dimensions for parallel result sparse-dense product".to_string());
+        }
         let res_rows = self.rows;
         let res_cols = rhs.cols();
 
@@ -668,7 +673,7 @@ impl<T: Scalar> SparseMatrix<T> {
                 });
             }
         }
-        Ok(res)
+        Ok(())
     }
 }
 
