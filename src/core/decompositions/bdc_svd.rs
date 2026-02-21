@@ -301,7 +301,21 @@ impl<T: Scalar<Real = T> + PartialOrd + 'static, S: Storage<T> + 'static> BDCSVD
         
         // Sort D and permute Z accordingly
         let mut p: Vec<usize> = (0..n).collect();
-        p.sort_by(|&i, &j| d_merged[i].partial_cmp(&d_merged[j]).unwrap_or(std::cmp::Ordering::Equal));
+        p.sort_by(|&i, &j| {
+            if let Some(ord) = d_merged[i].partial_cmp(&d_merged[j]) {
+                ord
+            } else {
+                let i_nan = d_merged[i] != d_merged[i];
+                let j_nan = d_merged[j] != d_merged[j];
+                if i_nan && j_nan {
+                    std::cmp::Ordering::Equal
+                } else if i_nan {
+                    std::cmp::Ordering::Greater
+                } else {
+                    std::cmp::Ordering::Less
+                }
+            }
+        });
         
         let d_sorted: Vec<T> = p.iter().map(|&i| d_merged[i]).collect();
         let z_sorted: Vec<T> = p.iter().map(|&i| z[i]).collect();

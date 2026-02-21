@@ -8,7 +8,7 @@ fn main() {
     let mut t1 = Tensor::<f32, 2>::new([2, 2]).unwrap();
     
     // Fill data (Col-Major)
-    let data = t1.data_mut();
+    let data = t1.data_mut().unwrap();
     // Col 0: 1, 2
     data[0] = 1.0; // (0,0)
     data[1] = 2.0; // (1,0)
@@ -25,7 +25,7 @@ fn main() {
 
     // 2. Create another tensor explicitly with CpuDevice
     let mut t2 = Tensor::<f32, 2, CpuDevice>::new_with_device([2, 2], CpuDevice::default()).unwrap();
-    let data2 = t2.data_mut();
+    let data2 = t2.data_mut().unwrap();
     data2[0] = 1.0; // (0,0)
     data2[1] = 0.0; // (1,0)
     data2[2] = 0.0; // (0,1)

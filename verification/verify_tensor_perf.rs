@@ -62,8 +62,8 @@ fn main() {
     // Fill with data
     let data_size = size * size;
     for i in 0..data_size {
-        t1.data_mut()[i] = ((i % 10) as f32) * 0.1;
-        t2.data_mut()[i] = (((i + 1) % 10) as f32) * 0.1;
+        t1.data_mut().unwrap()[i] = ((i % 10) as f32) * 0.1;
+        t2.data_mut().unwrap()[i] = (((i + 1) % 10) as f32) * 0.1;
     }
     
     // 1. Warmup and Validation
@@ -75,7 +75,7 @@ fn main() {
     // Verify
     let mut max_diff = 0.0;
     for i in 0..res_gemm.size() {
-        let d = (res_gemm.data()[i] - res_naive.data()[i]).abs();
+        let d = (res_gemm.data().unwrap()[i] - res_naive.data().unwrap()[i]).abs();
         if d > max_diff {
             max_diff = d;
         }

@@ -146,6 +146,18 @@ impl<T: Scalar, S: Storage<T>> Matrix<T, S> {
         }
     }
 
+    /// Unsafely gets a reference to the element at the specified row and column.
+    pub unsafe fn get_unchecked(&self, row: usize, col: usize) -> &T {
+        let index = col * self.rows() + row;
+        self.storage.data().get_unchecked(index)
+    }
+
+    /// Unsafely gets a mutable reference to the element at the specified row and column.
+    pub unsafe fn get_unchecked_mut(&mut self, row: usize, col: usize) -> &mut T {
+        let index = col * self.rows() + row;
+        self.storage.data_mut().get_unchecked_mut(index)
+    }
+
     /// Computes the Partial Pivoting LU decomposition of the matrix.
     pub fn partial_piv_lu(&self) -> Result<PartialPivLU<T, S>, String>
     where

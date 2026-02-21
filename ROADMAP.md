@@ -11,7 +11,10 @@ This document serves as the high-level index for the `eigen-rs` project roadmap.
 | **Geometry** | Rotations, Transforms, Spatial primitives | **100%** | [See Details](docs/roadmap/Geometry.md) |
 | **Decompositions** | LU, QR, Cholesky, SVD, Eigensolvers | **100%** | [See Details](docs/roadmap/Decompositions.md) |
 | **Sparse** | Sparse Storage (CSR/CSC), Solvers | **100%** | [See Details](docs/roadmap/Sparse.md) |
-| **Unsupported** | FFT, Splines, Polynomials, Tensors, Optimization | **100%** | [See Details](docs/roadmap/Unsupported.md) |
+| **Unsupported** | FFT, Splines, Polynomials, Matrix functions | **100%** | [See Details](docs/roadmap/Unsupported.md) |
+| **Neural Networks** | NN Layers, Operations | **100%** | [See Details](docs/roadmap/NN.md) |
+| **Tensors** | Multidimensional Arrays, Contraction | **100%** | [See Details](docs/roadmap/Tensor.md) |
+| **Optimization** | Levenberg-Marquardt, Hybrid, AutoDiff | **100%** | [See Details](docs/roadmap/Optimization.md) |
 
 ## Strategic Philosophy: Pure Rust Core + Optional FFI
 

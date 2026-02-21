@@ -226,7 +226,21 @@ mod tests {
         let evs = solver.eigenvalues();
 
         let mut vals: Vec<f64> = evs.iter().map(|c| c.re).collect();
-        vals.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        vals.sort_by(|a, b| {
+            if let Some(ord) = a.partial_cmp(b) {
+                ord
+            } else {
+                let a_nan = *a != *a;
+                let b_nan = *b != *b;
+                if a_nan && b_nan {
+                    std::cmp::Ordering::Equal
+                } else if a_nan {
+                    std::cmp::Ordering::Greater
+                } else {
+                    std::cmp::Ordering::Less
+                }
+            }
+        });
 
         assert!((vals[0] - 1.0).abs() < 1e-10);
         assert!((vals[1] - 2.0).abs() < 1e-10);

@@ -12,6 +12,18 @@ fn init_matrix(m: &mut MatrixX<f32>) {
     }
 }
 
+fn matches_filter(name: &str, filter: &str) -> bool {
+    if filter.is_empty() {
+        return true;
+    }
+    for part in filter.split('|') {
+        if !part.is_empty() && name.contains(part) {
+            return true;
+        }
+    }
+    false
+}
+
 fn init_vector(v: &mut MatrixX<f32>) {
     for i in 0..v.size() {
         *v.get_mut(i, 0).unwrap() = (i % 17) as f32 / 10.0;
@@ -218,12 +230,12 @@ fn bench_matrix_arithmetic(size: usize) {
     );
 }
 
-fn bench_geometry() {
-    use eigen_rs::core::matrix::{FixedStorage, Matrix};
+fn bench_geometry(filter: &str) {
+    use eigen_rs::core::matrix::{FixedStorage, Matrix, Vector3};
     use eigen_rs::core::xpr::MatrixXpr;
     use eigen_rs::geometry::Quaternion;
 
-    let iterations = 10_000;
+    let iterations = 100_000_000;
 
     // Cross Product (3D)
     let mut v1 = Matrix::<f32, FixedStorage<f32, 3, 1, 3>>::from_array([1.0, 2.0, 3.0]);
@@ -248,6 +260,20 @@ fn bench_geometry() {
     let duration = start.elapsed().as_nanos();
     let q_sum = q1.w() + q1.x() + q1.y() + q1.z();
     println!("QuatMul,4,{},{}", duration / iterations as u128, q_sum);
+
+    // QuatRot
+    // if matches_filter("QuatRot", filter) {
+    //     let mut v_rot = Vector3::<f32>::default();
+    //     *v_rot.get_mut(0, 0).unwrap() = 1.0;
+    //     let mut v_res = Vector3::<f32>::default();
+    //     let start = Instant::now();
+    //     for _ in 0..iterations {
+    //          v_res = q1.rotate_vector(&v_rot);
+    //     }
+    //     let duration = start.elapsed().as_nanos();
+    //     println!("QuatRot,3,{}", duration / iterations as u128);
+    //     black_box(v_res.sum());
+    // }
 }
 
 fn bench_dense_decomp_extra(size: usize) {
@@ -300,7 +326,7 @@ fn bench_decompositions_advanced(size: usize, filter: &str) {
     let iterations = if size < 64 { 20 } else { 1 };
 
     // 1. Determinant
-    if filter.is_empty() || "Determinant".contains(filter) {
+    if matches_filter("Determinant", filter) {
         let start = Instant::now();
         let mut det_sum = 0.0;
         for _ in 0..iterations {
@@ -313,7 +339,7 @@ fn bench_decompositions_advanced(size: usize, filter: &str) {
     }
 
     // 2. LDLT
-    if filter.is_empty() || "LDLT".contains(filter) {
+    if matches_filter("LDLT", filter) {
         let start = Instant::now();
         for _ in 0..iterations {
             let _ = sym.ldlt();
@@ -323,7 +349,7 @@ fn bench_decompositions_advanced(size: usize, filter: &str) {
     }
 
     // 3. Hessenberg
-    if filter.is_empty() || "Hessenberg".contains(filter) {
+    if matches_filter("Hessenberg", filter) {
         let start = Instant::now();
         for _ in 0..iterations {
             let _ = HessenbergDecomposition::new(&a);
@@ -333,7 +359,7 @@ fn bench_decompositions_advanced(size: usize, filter: &str) {
     }
 
     // 4. Tridiagonalization
-    if filter.is_empty() || "Tridiagonal".contains(filter) {
+    if matches_filter("Tridiagonal", filter) {
         let start = Instant::now();
         for _ in 0..iterations {
             let _ = Tridiagonalization::new(&sym);
@@ -343,7 +369,7 @@ fn bench_decompositions_advanced(size: usize, filter: &str) {
     }
 
     // 5. GeneralizedSelfAdjointEigenSolver
-    if filter.is_empty() || "GeneralizedEigen".contains(filter) {
+    if matches_filter("GeneralizedEigen", filter) {
         use eigen_rs::core::decompositions::GeneralizedSelfAdjointEigenSolver;
         let start = Instant::now();
         for _ in 0..iterations {
@@ -354,7 +380,7 @@ fn bench_decompositions_advanced(size: usize, filter: &str) {
     }
 
     // 6. RealSchur
-    if filter.is_empty() || "RealSchur".contains(filter) {
+    if matches_filter("RealSchur", filter) {
         let start = Instant::now();
         for _ in 0..iterations {
             let _ = RealSchur::new(&a);
@@ -364,7 +390,7 @@ fn bench_decompositions_advanced(size: usize, filter: &str) {
     }
 
     // 7. BDCSVD
-    if filter.is_empty() || "BDCSVD".contains(filter) {
+    if matches_filter("BDCSVD", filter) {
         use eigen_rs::core::decompositions::bdc_svd::BDCSVD;
         let start = Instant::now();
         for _ in 0..iterations {
@@ -375,12 +401,12 @@ fn bench_decompositions_advanced(size: usize, filter: &str) {
     }
 }
 
-fn bench_geometry_advanced() {
+fn bench_geometry_advanced(filter: &str) {
     use eigen_rs::core::geometry::{AngleAxis, EulerAngles, Scaling, Transform3, Translation};
     use eigen_rs::core::matrix::{Vector3, Matrix3};
     use std::ops::Mul; // For .mul() calls or * syntax
     
-    let iterations = 1000000;
+    let iterations = 100_000_000;
     
     // Transform
     // C++: Translation * Scaling
@@ -399,6 +425,18 @@ fn bench_geometry_advanced() {
     let duration = start.elapsed().as_nanos();
     println!("Transform,3,{}", duration / iterations as u128);
     black_box(v);
+
+    // TransformMul
+    if matches_filter("TransformMul", filter) {
+        let mut t_res = Transform3::identity();
+        let start = Instant::now();
+        for _ in 0..iterations {
+            t_res = t_tr.mul(&t_sc);
+        }
+        let duration = start.elapsed().as_nanos();
+        println!("TransformMul,4,{}", duration / iterations as u128);
+        black_box(t_res.matrix().get(0,0));
+    }
 
     // Translation
     let mut v = Vector3::<f32>::from_array([0.5, 0.5, 0.5]);
@@ -808,15 +846,15 @@ fn main() {
     }
 
     if sizes.is_empty() {
-        // 1. Standard Sweep: 16 to 384, stride 13
-        sizes = (16..=384).step_by(13).collect();
-        sizes.extend_from_slice(&[64, 128, 256]);
+        // 1. Standard Sweep: 4 to 384, stride 13
+        sizes = (4..=384).step_by(13).collect();
+        sizes.extend_from_slice(&[8, 12, 16, 64, 128, 256]);
     }
 
     if small_sizes.is_empty() {
-        // 2. Small Sweep: 16 to 64, stride 7
-        small_sizes = (16..=64).step_by(7).collect();
-        small_sizes.extend_from_slice(&[32, 64]);
+        // 2. Small Sweep: 4 to 64, stride 7
+        small_sizes = (4..=64).step_by(7).collect();
+        small_sizes.extend_from_slice(&[8, 12, 16, 32, 64]);
     }
 
     sizes.sort();
@@ -826,57 +864,57 @@ fn main() {
     small_sizes.dedup();
 
     for &size in &sizes {
-        if filter.is_empty() || "MatMul".contains(&filter) { bench_matmul(size); }
-        if filter.is_empty() || "LLT".contains(&filter) { bench_llt(size); }
-        if filter.is_empty() || "QR".contains(&filter) || "LU".contains(&filter) { bench_dense_decomp_extra(size); }
+        if matches_filter("MatMul", &filter) { bench_matmul(size); }
+        if matches_filter("LLT", &filter) { bench_llt(size); }
+        if matches_filter("QR", &filter) || matches_filter("LU", &filter) { bench_dense_decomp_extra(size); }
         
         // Jacobi SVD (Slow for large N, but useful for comparison)
-        if "SVD".contains(&filter) && !filter.is_empty() { bench_svd(size); }
+        if matches_filter("SVD", &filter) { bench_svd(size); }
         
         // Pass filter to advanced decompositions (RealSchur, Hessenberg, etc.)
         bench_decompositions_advanced(size, &filter);
         
-        if filter.is_empty() || "MatAdd".contains(&filter) || "MatScale".contains(&filter) { bench_matrix_arithmetic(size); }
-        if filter.is_empty() || "VecDot".contains(&filter) || "VecNorm".contains(&filter) { bench_vector_ops(size); }
-        if filter.is_empty() || "SpMV".contains(&filter) || "SpMM".contains(&filter) { bench_sparse(size); }
-        if filter.is_empty() 
-            || "SparseAdvanced".contains(&filter) 
-            || "SparseLU".contains(&filter) 
-            || "SparseQR".contains(&filter) 
-            || "SparseView".contains(&filter) 
+        if matches_filter("MatAdd", &filter) || matches_filter("MatScale", &filter) { bench_matrix_arithmetic(size); }
+        if matches_filter("VecDot", &filter) || matches_filter("VecNorm", &filter) { bench_vector_ops(size); }
+        if matches_filter("SpMV", &filter) || matches_filter("SpMM", &filter) { bench_sparse(size); }
+        if matches_filter("SparseAdvanced", &filter) 
+            || matches_filter("SparseLU", &filter) 
+            || matches_filter("SparseQR", &filter) 
+            || matches_filter("SparseView", &filter) 
         { 
             bench_sparse_advanced(size); 
         }
-        if filter.is_empty() || "SparseCG".contains(&filter) || "SparseBiCGSTAB".contains(&filter) { bench_sparse_iterative(size); }
-        if filter.is_empty() || "SimplicialLLT".contains(&filter) || "SimplicialLDLT".contains(&filter) { bench_sparse_cholesky(size); }
-        if filter.is_empty() || "Inverse".contains(&filter) { bench_inverse(size); }
+        if matches_filter("SparseCG", &filter) || matches_filter("SparseBiCGSTAB", &filter) { bench_sparse_iterative(size); }
+        if matches_filter("SimplicialLLT", &filter) || matches_filter("SimplicialLDLT", &filter) { bench_sparse_cholesky(size); }
+        if matches_filter("Inverse", &filter) { bench_inverse(size); }
     }
 
     // 3. Large Vector Benchmarks (Fixed for now, or could be added to args)
     let large_vec_sizes = [4096, 16384, 65536]; // Removed 1M to match args
     for &size in &large_vec_sizes {
-        if filter.is_empty() || "VecDot".contains(&filter) || "VecNorm".contains(&filter) {
+        if matches_filter("VecDot", &filter) || matches_filter("VecNorm", &filter) {
             bench_vector_ops(size);
         }
     }
 
     for &size in &small_sizes {
-        if filter.is_empty() || "SVD".contains(&filter) { bench_svd(size); }
-        if filter.is_empty() || "Eigenvalues".contains(&filter) { bench_eigenvalues(size); }
+        if matches_filter("SVD", &filter) { bench_svd(size); }
+        if matches_filter("Eigenvalues", &filter) { bench_eigenvalues(size); }
     }
 
-    if filter.is_empty() 
-        || "Geometry".contains(&filter) 
-        || "AngleAxis".contains(&filter) 
-        || "EulerAngles".contains(&filter) 
-        || "Cross3D".contains(&filter) 
-        || "QuatMul".contains(&filter) 
-        || "Transform".contains(&filter) 
-        || "Translation".contains(&filter) 
-        || "Scaling".contains(&filter) 
+    if matches_filter("Geometry", &filter) 
+        || matches_filter("AngleAxis", &filter) 
+        || matches_filter("EulerAngles", &filter) 
+        || matches_filter("Cross3D", &filter) 
+        || matches_filter("QuatMul", &filter) 
+        || matches_filter("QuatRot", &filter) 
+        || matches_filter("Transform", &filter) 
+        || matches_filter("TransformMul", &filter) 
+        || matches_filter("Translation", &filter) 
+        || matches_filter("Scaling", &filter) 
     {
-        bench_geometry();
-        bench_geometry_advanced();
+        bench_geometry(&filter);
+        bench_geometry_advanced(&filter);
     }
     bench_optimization();
 }

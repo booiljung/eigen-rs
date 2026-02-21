@@ -10,6 +10,7 @@
     - [x] **Multiplication**: Sparse-Sparse Matrix Product ($C = A \cdot B$).
 - **Direct & Iterative Solvers**
     - [x] **Built-in**: `SimplicialLLT` [x], `SimplicialLDLT` [x], `SparseLU` [x], `SparseQR` [x].
-    - [x] **Iterative**: `ConjugateGradient`, `BiCGSTAB` (with ILU/IC preconditioning).
+    - [x] **Iterative**: `ConjugateGradient`, `BiCGSTAB`, `GMRES`.
+    - [x] **Preconditioners**: `IncompleteCholesky`, `IncompleteLUT`.
 - **External Interfaces**
     - [x] **Bridges**: LAPACK (LU/QR optimized), Cholmod, UmfPack, SuperLU, Pardiso, Pastix, SuiteSparse.

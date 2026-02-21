@@ -263,6 +263,37 @@ where
     let k = a.cols();
     let n = b.cols();
 
+    // Use specialized unsafe scalar fallback for small matrices to avoid packing/workspace overhead.
+    if m <= 8 && n <= 8 && k <= 8 {
+        // Prepare pointers for unsafe fallback
+        let a_ptr = a.storage().data().as_ptr();
+        // Since we are inside generic Matrix, we need to handle Strides?
+        // Current Matrix impl is dense column-major, DynamicStorage is contiguous.
+        // But let's check strides.
+        // For DynamicStorage, strides are (1, rows).
+        let rs_a = 1;
+        let cs_a = a.rows() as isize;
+
+        let b_ptr = b.storage().data().as_ptr();
+        let rs_b = 1;
+        let cs_b = b.rows() as isize;
+
+        let c_ptr = c.storage_mut().data_mut().as_mut_ptr();
+        let rs_c = 1;
+        let cs_c = c.rows() as isize;
+        
+        unsafe {
+            gemm_small_unsafe(
+                m, k, n,
+                a_ptr, rs_a, cs_a,
+                b_ptr, rs_b, cs_b,
+                c_ptr, rs_c, cs_c,
+                T::from_usize(1)
+            );
+        }
+        return Ok(());
+    }
+
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     {
         let tid = std::any::TypeId::of::<T>();
@@ -369,6 +400,18 @@ pub unsafe fn gemm_dispatch_pointers<T: Scalar + Copy + Default>(
     rs_c: isize,
     cs_c: isize,
 ) -> Result<bool, String> {
+    // Use scalar fallback for small matrices to avoid packing/workspace overhead.
+    if m <= 8 && n <= 8 && k <= 8 {
+        gemm_small_unsafe(
+            m, k, n,
+            a_ptr, rs_a, cs_a,
+            b_ptr, rs_b, cs_b,
+            c_ptr, rs_c, cs_c,
+            T::from_usize(1) // Assuming alpha=1 for dispatch
+        );
+        return Ok(true); // Handled
+    }
+
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     {
         let tid = std::any::TypeId::of::<T>();
@@ -412,4 +455,41 @@ pub unsafe fn gemm_dispatch_pointers<T: Scalar + Copy + Default>(
         }
     }
     Ok(false)
+}
+
+/// Unsafe Scalar GEMM for Small Matrices (N <= 16)
+/// Avoids overhead of packing, workspace allocation, and bounds checking.
+///
+/// # Safety
+/// Pointers must be valid and bounds `m, k, n` must match.
+pub unsafe fn gemm_small_unsafe<T: Scalar + Copy + Default>(
+    m: usize,
+    k: usize,
+    n: usize,
+    a_ptr: *const T,
+    rs_a: isize,
+    cs_a: isize,
+    b_ptr: *const T,
+    rs_b: isize,
+    cs_b: isize,
+    c_ptr: *mut T,
+    rs_c: isize,
+    cs_c: isize,
+    alpha: T,
+) {
+    // J-K-I Loop Order (Column-Major Friendly)
+    for j in 0..n {
+        let b_col = b_ptr.offset(j as isize * cs_b);
+        let c_col = c_ptr.offset(j as isize * cs_c);
+
+        for l in 0..k { // l used for k index to avoid confusion with k size
+            let b_val = *b_col.offset(l as isize * rs_b) * alpha;
+            let a_col = a_ptr.offset(l as isize * cs_a);
+
+            for i in 0..m {
+                let a_val = *a_col.offset(i as isize * rs_a);
+                *c_col.offset(i as isize * rs_c) += a_val * b_val;
+            }
+        }
+    }
 }

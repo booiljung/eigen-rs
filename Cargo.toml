@@ -49,6 +49,10 @@ harness = false
 name = "gemm_bench"
 harness = false
 
+[[bench]]
+name = "repro_lu"
+harness = false
+
 [features]
 cuda = ["dep:cuda-sys", "dep:cust"]
 suitesparse = []

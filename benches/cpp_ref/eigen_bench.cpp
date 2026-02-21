@@ -171,7 +171,7 @@ void bench_matrix_arithmetic(int size) {
 }
 
 void bench_geometry() {
-    int iterations = 10000000;
+    long long iterations = 20000000;
     
     // Cross Product (3D)
     Eigen::Vector3f v1 = Eigen::Vector3f::Random();
@@ -185,6 +185,7 @@ void bench_geometry() {
     }
     auto end = high_resolution_clock::now();
     cout << "Cross3D,3," << duration_cast<nanoseconds>(end - start).count() / iterations << endl;
+    black_box(v1.sum()); // Anti-DCE
     
     // Quaternion Mul
     Eigen::Quaternionf q1 = Eigen::Quaternionf::UnitRandom();
@@ -196,6 +197,19 @@ void bench_geometry() {
     }
     end = high_resolution_clock::now();
     cout << "QuatMul,4," << duration_cast<nanoseconds>(end - start).count() / iterations << endl;
+    black_box(q1.x()); // Anti-DCE
+
+    // QuatRot
+    Eigen::Vector3f v_rot(1.0f, 0.0f, 0.0f);
+    Eigen::Vector3f v_res;
+    start = high_resolution_clock::now();
+    for(int i=0; i<iterations; ++i) {
+         v_rot[0] += 1e-6f; // Anti-DCE / Constant Folding
+         v_res = q1 * v_rot;
+    }
+    end = high_resolution_clock::now();
+    cout << "QuatRot,3," << duration_cast<nanoseconds>(end - start).count() / iterations << endl;
+    black_box(v_res.sum());
 }
 
 void bench_dense_decomp_extra(int size) {
@@ -509,7 +523,7 @@ void bench_sparse_cholesky(int size) {
 }
 
 void bench_geometry_advanced() {
-    int iterations = 1000000;
+    long long iterations = 10000000;
     
     // Transform
     Eigen::Transform<float, 3, Eigen::Affine> t;
@@ -522,6 +536,18 @@ void bench_geometry_advanced() {
     }
     auto end = high_resolution_clock::now();
     cout << "Transform," << 3 << "," << duration_cast<nanoseconds>(end - start).count() / iterations << endl;
+    black_box(v.sum());
+
+    // TransformMul
+    Eigen::Transform<float, 3, Eigen::Affine> t_res = t;
+    start = high_resolution_clock::now();
+    for(int i=0; i<iterations; ++i) {
+        t_res.translation().x() += 1e-9f; // Anti-DCE
+        t_res = t_res * t; 
+    }
+    end = high_resolution_clock::now();
+    cout << "TransformMul,4," << duration_cast<nanoseconds>(end - start).count() / iterations << endl;
+    black_box(t_res(0,0));
 
     // Translation
     Eigen::Translation3f trans(1.0f, 2.0f, 3.0f);
@@ -531,6 +557,7 @@ void bench_geometry_advanced() {
     }
     end = high_resolution_clock::now();
     cout << "Translation," << 3 << "," << duration_cast<nanoseconds>(end - start).count() / iterations << endl;
+    black_box(v.sum());
 
     // Scaling
     Eigen::UniformScaling<float> s(0.5f);
@@ -540,6 +567,7 @@ void bench_geometry_advanced() {
     }
     end = high_resolution_clock::now();
     cout << "Scaling," << 3 << "," << duration_cast<nanoseconds>(end - start).count() / iterations << endl;
+    black_box(v.sum());
 
     // AngleAxis -> Matrix
     Eigen::AngleAxisf aa(0.5f, Eigen::Vector3f::UnitX());
@@ -551,6 +579,7 @@ void bench_geometry_advanced() {
     }
     end = high_resolution_clock::now();
     cout << "AngleAxis," << 3 << "," << duration_cast<nanoseconds>(end - start).count() / iterations << endl;
+    black_box(rot(0,0));
 
     // Matrix -> EulerAngles
     start = high_resolution_clock::now();
@@ -560,6 +589,7 @@ void bench_geometry_advanced() {
     }
     end = high_resolution_clock::now();
     cout << "EulerAngles," << 3 << "," << duration_cast<nanoseconds>(end - start).count() / iterations << endl;
+    black_box(euler.sum());
 }
 
 // Levenberg Marquardt Stub

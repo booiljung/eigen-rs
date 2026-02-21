@@ -30,3 +30,8 @@ Leverage the newly implemented `CudaDevice` to run actual operations on GPU.
 - [x] **Geometry Module Optimization**:
     -   [x] Vectorize `Quaternion` multiplication and `Transform` applications. (Done Phase 40)
 
+## 4. Next Project Steps (Post-LU Optimization)
+- [ ] **Commit Changes**: Commit the recent `PartialPivLU` optimizations and the unified roadmap documentation.
+- [ ] **SparseView Optimization (High Priority)**: Investigate and optimize `SparseView` performance, which currently exceeds the 1.5x threshold (max ratio 1.87x).
+- [ ] **Complete BDCSVD (Medium Priority)**: Implement the Divide & Conquer SVD (`BDCSVD`) which is currently marked as pending in `Decompositions.md`.
+- [ ] **Add Missing Benchmarks (Medium Priority)**: Expand `benches/repro_lu.rs` or create new benchmarks to cover operations shown as `MISSING` in reports (e.g., `AngleAxis`, `GeneralizedEigen`, `Inverse`, `LDLT`, `LLT`).
