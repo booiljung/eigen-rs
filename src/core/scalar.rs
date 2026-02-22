@@ -2,8 +2,8 @@
 //! Defines requirements for types that can be used as matrix elements.
 
 use crate::core::xpr::MatrixXpr;
-use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 use num_traits::Float;
+use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 
 /// Marker trait for scalar types supported by eigen-rs.
 pub trait Scalar:
@@ -327,8 +327,7 @@ impl Scalar for f32 {
                         }
                     }
 
-                    let mut sum_packet =
-                        (sum0 + sum1) + (sum2 + sum3) + (sum4 + sum5) + (sum6 + sum7);
+                    let sum_packet = (sum0 + sum1) + (sum2 + sum3) + (sum4 + sum5) + (sum6 + sum7);
 
                     let mut sum = sum_packet.sum();
 
@@ -405,7 +404,7 @@ impl Scalar for f32 {
 
 impl Scalar for f64 {
     type Real = f64;
-    
+
     fn from_usize(v: usize) -> Self {
         v as f64
     }
@@ -797,7 +796,17 @@ where
 // Implementation for num_complex::Complex
 // We implement Scalar for num_complex::Complex<T> where T is a real-valued Scalar (f32/f64).
 
-impl<T: Scalar<Real = T> + Float + num_traits::NumAssign + num_traits::Num + num_traits::NumCast + num_traits::One + num_traits::ToPrimitive + num_traits::Zero> Scalar for num_complex::Complex<T> {
+impl<
+        T: Scalar<Real = T>
+            + Float
+            + num_traits::NumAssign
+            + num_traits::Num
+            + num_traits::NumCast
+            + num_traits::One
+            + num_traits::ToPrimitive
+            + num_traits::Zero,
+    > Scalar for num_complex::Complex<T>
+{
     type Real = T;
 
     fn from_usize(v: usize) -> Self {
@@ -825,28 +834,28 @@ impl<T: Scalar<Real = T> + Float + num_traits::NumAssign + num_traits::Num + num
         self.inv()
     }
     fn sin(self) -> Self {
-         self.sin()
+        self.sin()
     }
     fn cos(self) -> Self {
-         self.cos()
+        self.cos()
     }
     fn asin(self) -> Self {
-         self.asin()
+        self.asin()
     }
     fn acos(self) -> Self {
-         self.acos()
+        self.acos()
     }
     fn atan2(self, _other: Self) -> Self {
-         unimplemented!("atan2 not supported for Complex")
+        unimplemented!("atan2 not supported for Complex")
     }
     fn powf(self, n: Self) -> Self {
-         self.powc(n)
+        self.powc(n)
     }
     fn exp(self) -> Self {
-         self.exp()
+        self.exp()
     }
     fn ln(self) -> Self {
-         self.ln()
+        self.ln()
     }
     fn epsilon() -> Self::Real {
         <T as Float>::epsilon()

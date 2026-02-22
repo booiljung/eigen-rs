@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod tests {
+    use eigen_rs::core::decompositions::HessenbergDecomposition;
     use eigen_rs::core::matrix::Matrix;
     use eigen_rs::core::storage::DynamicStorage;
-    use eigen_rs::core::decompositions::HessenbergDecomposition;
 
     #[test]
     fn test_hessenberg_decomposition_perf_correctness() {
@@ -16,7 +16,7 @@ mod tests {
         }
 
         let decomp = HessenbergDecomposition::new(&a).unwrap();
-        
+
         // A = Q H Q^T -> Q^T A Q = H
         let h = decomp.matrix_h();
         let q = decomp.matrix_q();
@@ -29,10 +29,15 @@ mod tests {
         for i in 0..n {
             for j in 0..n {
                 let expected = if i == j { 1.0 } else { 0.0 };
-                assert!((qtq.get(i, j).unwrap() - expected).abs() < 1e-9, "Q Orthogonality failed at ({},{})", i, j);
+                assert!(
+                    (qtq.get(i, j).unwrap() - expected).abs() < 1e-9,
+                    "Q Orthogonality failed at ({},{})",
+                    i,
+                    j
+                );
             }
         }
-        
+
         // 2. Check Reconstruction: Q H Q^T = A
         let mut h_qt = Matrix::<f64, DynamicStorage<f64>>::new_dynamic(n, n).unwrap();
         h_qt.assign_product(&(&h * &qt)).unwrap();
@@ -42,7 +47,14 @@ mod tests {
         for i in 0..n {
             for j in 0..n {
                 let diff = (recon.get(i, j).unwrap() - a.get(i, j).unwrap()).abs();
-                assert!(diff < 1e-9, "Reconstruction failed at ({},{}) expected {}, got {}", i, j, a.get(i, j).unwrap(), recon.get(i, j).unwrap());
+                assert!(
+                    diff < 1e-9,
+                    "Reconstruction failed at ({},{}) expected {}, got {}",
+                    i,
+                    j,
+                    a.get(i, j).unwrap(),
+                    recon.get(i, j).unwrap()
+                );
             }
         }
 
@@ -50,7 +62,12 @@ mod tests {
         for i in 0..n {
             for j in 0..n {
                 if i > j + 1 {
-                    assert!(h.get(i, j).unwrap().abs() < 1e-9, "H not Hessenberg at ({},{})", i, j);
+                    assert!(
+                        h.get(i, j).unwrap().abs() < 1e-9,
+                        "H not Hessenberg at ({},{})",
+                        i,
+                        j
+                    );
                 }
             }
         }

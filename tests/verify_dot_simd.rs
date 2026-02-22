@@ -1,5 +1,4 @@
 use eigen_rs::core::matrix::MatrixX;
-use eigen_rs::core::xpr::MatrixXpr;
 
 #[test]
 fn test_vec_dot_simd_correctness() {
@@ -9,8 +8,8 @@ fn test_vec_dot_simd_correctness() {
 
     // Fill with values
     for i in 0..size {
-         *v1.get_mut(i, 0).unwrap() = (i % 10) as f32;
-         *v2.get_mut(i, 0).unwrap() = ((i + 1) % 10) as f32;
+        *v1.get_mut(i, 0).unwrap() = (i % 10) as f32;
+        *v2.get_mut(i, 0).unwrap() = ((i + 1) % 10) as f32;
     }
 
     // Expected dot product
@@ -33,12 +32,12 @@ fn test_vec_dot_small() {
     let mut v2 = MatrixX::<f32>::new_dynamic(size, 1).unwrap();
 
     for i in 0..size {
-         *v1.get_mut(i, 0).unwrap() = 1.0;
-         *v2.get_mut(i, 0).unwrap() = 2.0;
+        *v1.get_mut(i, 0).unwrap() = 1.0;
+        *v2.get_mut(i, 0).unwrap() = 2.0;
     }
 
     let expected = (size as f32) * 2.0;
     let actual = v1.dot(&v2);
-    
+
     assert!((actual - expected).abs() < 1e-5);
 }

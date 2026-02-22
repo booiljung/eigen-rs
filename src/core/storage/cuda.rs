@@ -17,18 +17,9 @@ impl<T: Scalar> CudaStorage<T> {
         #[cfg(feature = "cuda")]
         {
             let size = rows * cols;
-            let mut ptr: *mut T = std::ptr::null_mut();
-
-            unsafe {
-                use cuda_sys::cudart::{cudaError_t, cudaMalloc};
-                let res = cudaMalloc(
-                    &mut ptr as *mut *mut T as *mut *mut std::ffi::c_void,
-                    size * std::mem::size_of::<T>(),
-                );
-                if res != cudaError_t::Success {
-                    return Err(format!("CUDA malloc failed with error code: {:?}", res));
-                }
-            }
+            let ptr =
+                crate::core::tensor::device::cudart::cuda_malloc(size * std::mem::size_of::<T>())?
+                    as *mut T;
 
             Ok(Self {
                 data: NonNull::new(ptr).ok_or("Failed to create NonNull from CUDA pointer")?,
@@ -51,18 +42,12 @@ impl<T: Scalar> CudaStorage<T> {
         }
 
         #[cfg(feature = "cuda")]
-        unsafe {
-            use cuda_sys::cudart::{cudaError_t, cudaMemcpy};
-            // cudaMemcpyHostToDevice is usually 1
-            let res = cudaMemcpy(
+        {
+            crate::core::tensor::device::cudart::cuda_memcpy_h2d(
                 self.data.as_ptr() as *mut std::ffi::c_void,
                 host_data.as_ptr() as *const std::ffi::c_void,
                 host_data.len() * std::mem::size_of::<T>(),
-                1, // cudaMemcpyHostToDevice
-            );
-            if res != cudaError_t::Success {
-                return Err(format!("CUDA memcpy H2D failed: {:?}", res));
-            }
+            )?;
             Ok(())
         }
 
@@ -80,18 +65,12 @@ impl<T: Scalar> CudaStorage<T> {
         }
 
         #[cfg(feature = "cuda")]
-        unsafe {
-            use cuda_sys::cudart::{cudaError_t, cudaMemcpy};
-            // cudaMemcpyDeviceToHost is usually 2
-            let res = cudaMemcpy(
+        {
+            crate::core::tensor::device::cudart::cuda_memcpy_d2h(
                 host_data.as_mut_ptr() as *mut std::ffi::c_void,
                 self.data.as_ptr() as *const std::ffi::c_void,
                 host_data.len() * std::mem::size_of::<T>(),
-                2, // cudaMemcpyDeviceToHost
-            );
-            if res != cudaError_t::Success {
-                return Err(format!("CUDA memcpy D2H failed: {:?}", res));
-            }
+            )?;
             Ok(())
         }
 
@@ -130,9 +109,10 @@ impl<T: Scalar> Storage<T> for CudaStorage<T> {
 impl<T: Scalar> Drop for CudaStorage<T> {
     fn drop(&mut self) {
         #[cfg(feature = "cuda")]
-        unsafe {
-            use cuda_sys::cudart::cudaFree;
-            let _ = cudaFree(self.data.as_ptr() as *mut std::ffi::c_void);
+        {
+            let _ = crate::core::tensor::device::cudart::cuda_free(
+                self.data.as_ptr() as *mut std::ffi::c_void
+            );
         }
     }
 }

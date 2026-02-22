@@ -1,10 +1,9 @@
-
 use crate::core::matrix::Matrix;
 use crate::core::scalar::Scalar;
 use crate::core::sparse::iterators::InnerIterator;
+use crate::core::sparse::ordering::{Ordering, Permutation, COLAMD};
 use crate::core::sparse::sparse_matrix::{SparseMatrix, StorageOrder};
 use crate::core::storage::{DynamicStorage, Storage};
-use crate::core::sparse::ordering::{Ordering, Permutation, COLAMD};
 
 /// Simplicial LDLT factorization of a sparse symmetric matrix.
 pub struct SimplicialLDLT<T: Scalar> {
@@ -44,13 +43,13 @@ impl<T: Scalar> SimplicialLDLT<T> {
         if matrix.rows() != matrix.cols() {
             return Err("Matrix must be square for LDLT factorization".to_string());
         }
-        
+
         let ordering = COLAMD;
         let p = ordering.compute(matrix);
         self.p = Some(p);
-        
+
         // n is needed to init d/inv_d if we want to pre-allocate?
-        // Actually factorize calls init. 
+        // Actually factorize calls init.
         // But if we want consistent state after analyze:
         let n = matrix.rows();
         self.l = SparseMatrix::new(n, n, StorageOrder::ColMajor);
@@ -63,17 +62,17 @@ impl<T: Scalar> SimplicialLDLT<T> {
     /// Numerical factorization: computes A = L D L^T.
     pub fn factorize(&mut self, matrix: &SparseMatrix<T>) -> Result<(), String> {
         let n = matrix.rows();
-        
+
         // 1. Permute Matrix: A_prime = P * A * P^T
         let a_prime = if let Some(ref p) = self.p {
-             p.permute_symmetric(matrix)
+            p.permute_symmetric(matrix)
         } else {
-             matrix.clone()
+            matrix.clone()
         };
-        
+
         self.d = vec![T::default(); n];
         self.inv_d = vec![T::default(); n];
-        
+
         // Columns of L. We explicitly store the unit diagonal for simplicity in usage?
         // Actually, if we use standard SparseMatrix, we should store them.
         let mut l_cols: Vec<Vec<(usize, T)>> = vec![Vec::new(); n];
@@ -166,18 +165,18 @@ impl<T: Scalar> SimplicialLDLT<T> {
         }
 
         let mut x = Matrix::<T, DynamicStorage<T>>::new_dynamic(n, b.cols())?;
-        
+
         let p = self.p.as_ref().unwrap();
         let p_inv = p.inverse_indices();
-        
+
         for k in 0..b.cols() {
             let mut sol = vec![T::default(); n];
             // 1. Permute b -> c (c stored in sol)
-             for i in 0..n {
+            for i in 0..n {
                 let new_idx = p_inv[i];
                 sol[new_idx] = *b.get(i, k).unwrap();
             }
-            
+
             // 1. Forward substitution L * z = c
             // L has unit diagonal.
             #[allow(clippy::needless_range_loop)]
@@ -215,7 +214,7 @@ impl<T: Scalar> SimplicialLDLT<T> {
                 }
                 sol[j] -= sum; // Div by 1.0
             }
-            
+
             // 4. Permute x_perm -> x
             for i in 0..n {
                 let new_idx = p_inv[i];

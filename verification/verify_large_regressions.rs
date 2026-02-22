@@ -1,5 +1,5 @@
 use eigen_rs::core::matrix::Matrix;
-use eigen_rs::core::storage::{DynamicStorage, Storage};
+use eigen_rs::core::storage::DynamicStorage;
 use std::time::Instant;
 
 fn main() {
@@ -26,7 +26,7 @@ fn main() {
         black_box += a.dot(&b);
     }
     let duration = start.elapsed();
-    
+
     println!("Vector Size: {}", size);
     println!("Iterations: {}", iterations);
     println!("Total Time: {:?}", duration);

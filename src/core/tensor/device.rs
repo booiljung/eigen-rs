@@ -3,34 +3,43 @@
 use crate::core::scalar::Scalar;
 use crate::core::storage::AlignedStorage;
 
-pub mod cuda;
 #[cfg(feature = "cuda")]
 pub mod cublas;
+pub mod cuda;
+#[cfg(feature = "cuda")]
+pub mod cudart;
 #[cfg(feature = "cuda")]
 pub mod cusolver;
+#[cfg(feature = "cuda")]
+pub mod cusparse;
 
 /// A device capable of allocating memory and executing tensor operations.
-pub trait Device: Clone + Default {
+pub trait Device: Clone + Default + 'static {
     type Storage<T: Scalar>: DeviceStorage<T>;
-    
+
     fn name(&self) -> &'static str;
 
     // Optional: Methods for cross-device copy could be here or on Storage.
 }
 
 /// Abstract storage managed by a device.
-/// 
+///
 /// We do NOT require AsRef<[T]> / AsMut<[T]> because GPU memory cannot be
 /// accessed as a CPU slice directly.
 pub trait DeviceStorage<T: Scalar> {
-    fn new(size: usize) -> Result<Self, String> where Self: Sized;
-    
+    fn new(size: usize) -> Result<Self, String>
+    where
+        Self: Sized;
+
     /// Returns a slice if the memory is CPU-accessible.
     /// Returns None if memory is on a discrete device (GPU).
     fn as_slice(&self) -> Option<&[T]>;
-    
+
     /// Returns a mutable slice if the memory is CPU-accessible.
     fn as_mut_slice(&mut self) -> Option<&mut [T]>;
+
+    fn copy_from_host(&mut self, src: &[T]) -> Result<(), String>;
+    fn copy_to_host(&self, dest: &mut [T]) -> Result<(), String>;
 }
 
 /// Standard CPU Device.
@@ -39,7 +48,7 @@ pub struct CpuDevice;
 
 impl Device for CpuDevice {
     type Storage<T: Scalar> = CpuStorage<T>;
-    
+
     fn name(&self) -> &'static str {
         "CPU"
     }
@@ -78,6 +87,16 @@ impl<T: Scalar> DeviceStorage<T> for CpuStorage<T> {
 
     fn as_mut_slice(&mut self) -> Option<&mut [T]> {
         Some(self.data.as_mut_slice())
+    }
+
+    fn copy_from_host(&mut self, src: &[T]) -> Result<(), String> {
+        self.data.as_mut_slice().copy_from_slice(src);
+        Ok(())
+    }
+
+    fn copy_to_host(&self, dest: &mut [T]) -> Result<(), String> {
+        dest.copy_from_slice(self.data.as_slice());
+        Ok(())
     }
 }
 

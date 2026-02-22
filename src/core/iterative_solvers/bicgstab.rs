@@ -1,8 +1,8 @@
 use crate::core::iterative_solvers::traits::IterativeSolver;
 use crate::core::matrix::{Matrix, MatrixX};
 use crate::core::scalar::Scalar;
-use crate::core::storage::{DynamicStorage, Storage};
 use crate::core::sparse::SparseMatrix;
+use crate::core::storage::{DynamicStorage, Storage};
 use std::marker::PhantomData;
 
 /// BiConjugate Gradient Stabilized solver for non-self-adjoint problems.
@@ -39,9 +39,10 @@ impl<T: Scalar, M: Clone> BiCGSTAB<T, M> {
 }
 
 // Implementation for Dense Matrix
-impl<T: Scalar<Real = T> + PartialOrd + 'static, S: Storage<T> + 'static> IterativeSolver<T, DynamicStorage<T>> 
-    for BiCGSTAB<T, Matrix<T, S>> 
-    where S: Clone 
+impl<T: Scalar<Real = T> + PartialOrd + 'static, S: Storage<T> + 'static>
+    IterativeSolver<T, DynamicStorage<T>> for BiCGSTAB<T, Matrix<T, S>>
+where
+    S: Clone,
 {
     type MatrixType = Matrix<T, S>;
 
@@ -69,10 +70,13 @@ impl<T: Scalar<Real = T> + PartialOrd + 'static, S: Storage<T> + 'static> Iterat
         S2: Storage<T>,
         S3: Storage<T>,
     {
-        let a = self.matrix.as_ref().expect("Matrix not initialized. Call compute() first.");
+        let a = self
+            .matrix
+            .as_ref()
+            .expect("Matrix not initialized. Call compute() first.");
         let rows = b.rows();
         let cols = b.cols();
-        
+
         // x = x0
         let mut x = MatrixX::<T>::new_dynamic(rows, cols).unwrap();
         x.assign(x0).unwrap();
@@ -80,25 +84,25 @@ impl<T: Scalar<Real = T> + PartialOrd + 'static, S: Storage<T> + 'static> Iterat
         // r = b - A * x
         let mut ax = MatrixX::<T>::new_dynamic(rows, cols).unwrap();
         ax.assign(&(a * &x)).unwrap();
-        
+
         let mut r = MatrixX::<T>::new_dynamic(rows, cols).unwrap();
         r.assign(&(b - &ax)).unwrap();
-        
+
         // r_hat = r
         let mut r_hat = MatrixX::<T>::new_dynamic(rows, cols).unwrap();
         r_hat.assign(&r).unwrap();
-        
+
         // p = r
         let mut p = MatrixX::<T>::new_dynamic(rows, cols).unwrap();
         p.assign(&r).unwrap();
-        
+
         // v = 0
         let mut v = MatrixX::<T>::new_dynamic(rows, cols).unwrap();
         v.set_zero();
-        
+
         // s = 0 (placeholder)
         let mut s = MatrixX::<T>::new_dynamic(rows, cols).unwrap();
-        
+
         // t = 0 (placeholder)
         let mut t = MatrixX::<T>::new_dynamic(rows, cols).unwrap();
 
@@ -108,7 +112,7 @@ impl<T: Scalar<Real = T> + PartialOrd + 'static, S: Storage<T> + 'static> Iterat
 
         let tol_sq = self.tolerance * self.tolerance;
         let mut error_sq = r.squared_norm();
-        
+
         *self.iterations.borrow_mut() = 0;
         *self.error.borrow_mut() = error_sq.sqrt();
 
@@ -118,14 +122,14 @@ impl<T: Scalar<Real = T> + PartialOrd + 'static, S: Storage<T> + 'static> Iterat
 
         for i in 0..self.max_iterations {
             *self.iterations.borrow_mut() = i + 1;
-            
+
             let rho = r_hat.dot(&r);
             if rho.abs() < T::from_f64(1e-30) {
-                 break; 
+                break;
             }
-            
+
             let beta = (rho / rho_old) * (alpha / omega);
-            
+
             // p = r + beta * (p - omega * v)
             let size = x.size();
             {
@@ -136,17 +140,17 @@ impl<T: Scalar<Real = T> + PartialOrd + 'static, S: Storage<T> + 'static> Iterat
                     p_data[k] = r_data[k] + beta * (p_data[k] - omega * v_data[k]);
                 }
             }
-            
+
             // v = A * p
             v.assign(&(a * &p)).unwrap();
-            
+
             let r_hat_v = r_hat.dot(&v);
-             if r_hat_v.abs() < T::from_f64(1e-30) {
-                 break; 
+            if r_hat_v.abs() < T::from_f64(1e-30) {
+                break;
             }
-            
+
             alpha = rho / r_hat_v;
-            
+
             // s = r - alpha * v
             {
                 let s_data = s.storage_mut().data_mut();
@@ -156,7 +160,7 @@ impl<T: Scalar<Real = T> + PartialOrd + 'static, S: Storage<T> + 'static> Iterat
                     s_data[k] = r_data[k] - alpha * v_data[k];
                 }
             }
-            
+
             let s_norm_sq = s.squared_norm();
             if s_norm_sq < tol_sq {
                 // x = x + alpha * p
@@ -168,62 +172,62 @@ impl<T: Scalar<Real = T> + PartialOrd + 'static, S: Storage<T> + 'static> Iterat
                 *self.error.borrow_mut() = s_norm_sq.sqrt();
                 break;
             }
-            
+
             // t = A * s
             t.assign(&(a * &s)).unwrap();
-            
+
             // omega = (t . s) / (t . t)
             let t_t = t.squared_norm();
             if t_t.abs() < T::from_f64(1e-30) {
-                 break; 
+                break;
             }
             omega = t.dot(&s) / t_t;
-            
+
             // x = x + alpha * p + omega * s
             // r = s - omega * t
             {
                 let x_data = x.storage_mut().data_mut();
                 let p_data = p.storage().data();
                 let s_data = s.storage().data();
-                
+
                 let r_data = r.storage_mut().data_mut();
                 let t_data = t.storage().data();
-                
+
                 for k in 0..size {
                     x_data[k] += alpha * p_data[k] + omega * s_data[k];
                     r_data[k] = s_data[k] - omega * t_data[k];
                 }
             }
-            
+
             error_sq = r.squared_norm();
             *self.error.borrow_mut() = error_sq.sqrt();
-            
+
             if error_sq < tol_sq {
                 break;
             }
-            
+
             if omega.abs() < T::from_f64(1e-30) {
-                 break; 
+                break;
             }
-            
+
             rho_old = rho;
         }
-        
+
         x
     }
-    
+
     fn iterations(&self) -> usize {
         *self.iterations.borrow()
     }
-    
+
     fn error(&self) -> T {
         *self.error.borrow()
     }
 }
 
 // Implementation for Sparse Matrix
-impl<T: Scalar<Real = T> + PartialOrd + 'static> IterativeSolver<T, DynamicStorage<T>> 
-    for BiCGSTAB<T, SparseMatrix<T>> 
+impl<T: Scalar<Real = T> + PartialOrd + 'static> IterativeSolver<T, DynamicStorage<T>>
+    for BiCGSTAB<T, SparseMatrix<T>>
 {
     type MatrixType = SparseMatrix<T>;
 
@@ -251,10 +255,13 @@ impl<T: Scalar<Real = T> + PartialOrd + 'static> IterativeSolver<T, DynamicStora
         S2: Storage<T>,
         S3: Storage<T>,
     {
-        let a = self.matrix.as_ref().expect("Matrix not initialized. Call compute() first.");
+        let a = self
+            .matrix
+            .as_ref()
+            .expect("Matrix not initialized. Call compute() first.");
         let rows = b.rows();
         let cols = b.cols();
-        
+
         // x = x0
         let mut x = MatrixX::<T>::new_dynamic(rows, cols).unwrap();
         x.assign(x0).unwrap();
@@ -262,26 +269,27 @@ impl<T: Scalar<Real = T> + PartialOrd + 'static> IterativeSolver<T, DynamicStora
         // r = b - A * x
         let mut ax = MatrixX::<T>::new_dynamic(rows, cols).unwrap();
         ax.set_zero();
-        a.mul_dense_into(&x, &mut ax).expect("Sparse-Dense multiplication failed");
-        
+        a.mul_dense_into(&x, &mut ax)
+            .expect("Sparse-Dense multiplication failed");
+
         let mut r = MatrixX::<T>::new_dynamic(rows, cols).unwrap();
         r.assign(&(b - &ax)).unwrap();
-        
+
         // r_hat = r
         let mut r_hat = MatrixX::<T>::new_dynamic(rows, cols).unwrap();
         r_hat.assign(&r).unwrap();
-        
+
         // p = r
         let mut p = MatrixX::<T>::new_dynamic(rows, cols).unwrap();
         p.assign(&r).unwrap();
-        
+
         // v = 0
         let mut v = MatrixX::<T>::new_dynamic(rows, cols).unwrap();
         v.set_zero();
-        
+
         // s = 0 (placeholder)
         let mut s = MatrixX::<T>::new_dynamic(rows, cols).unwrap();
-        
+
         // t = 0 (placeholder)
         let mut t = MatrixX::<T>::new_dynamic(rows, cols).unwrap();
 
@@ -291,7 +299,7 @@ impl<T: Scalar<Real = T> + PartialOrd + 'static> IterativeSolver<T, DynamicStora
 
         let tol_sq = self.tolerance * self.tolerance;
         let mut error_sq = r.squared_norm();
-        
+
         *self.iterations.borrow_mut() = 0;
         *self.error.borrow_mut() = error_sq.sqrt();
 
@@ -301,14 +309,14 @@ impl<T: Scalar<Real = T> + PartialOrd + 'static> IterativeSolver<T, DynamicStora
 
         for i in 0..self.max_iterations {
             *self.iterations.borrow_mut() = i + 1;
-            
+
             let rho = r_hat.dot(&r);
             if rho.abs() < T::from_f64(1e-30) {
-                 break; 
+                break;
             }
-            
+
             let beta = (rho / rho_old) * (alpha / omega);
-            
+
             // p = r + beta * (p - omega * v)
             let size = x.size();
             {
@@ -319,17 +327,18 @@ impl<T: Scalar<Real = T> + PartialOrd + 'static> IterativeSolver<T, DynamicStora
                     p_data[k] = r_data[k] + beta * (p_data[k] - omega * v_data[k]);
                 }
             }
-            
+
             // v = A * p
-            a.mul_dense_into(&p, &mut v).expect("Sparse-Dense multiplication failed");
-            
+            a.mul_dense_into(&p, &mut v)
+                .expect("Sparse-Dense multiplication failed");
+
             let r_hat_v = r_hat.dot(&v);
-             if r_hat_v.abs() < T::from_f64(1e-30) {
-                 break; 
+            if r_hat_v.abs() < T::from_f64(1e-30) {
+                break;
             }
-            
+
             alpha = rho / r_hat_v;
-            
+
             // s = r - alpha * v
             {
                 let s_data = s.storage_mut().data_mut();
@@ -339,7 +348,7 @@ impl<T: Scalar<Real = T> + PartialOrd + 'static> IterativeSolver<T, DynamicStora
                     s_data[k] = r_data[k] - alpha * v_data[k];
                 }
             }
-            
+
             let s_norm_sq = s.squared_norm();
             if s_norm_sq < tol_sq {
                 // x = x + alpha * p
@@ -351,54 +360,55 @@ impl<T: Scalar<Real = T> + PartialOrd + 'static> IterativeSolver<T, DynamicStora
                 *self.error.borrow_mut() = s_norm_sq.sqrt();
                 break;
             }
-            
+
             // t = A * s
-             a.mul_dense_into(&s, &mut t).expect("Sparse-Dense multiplication failed");
-            
+            a.mul_dense_into(&s, &mut t)
+                .expect("Sparse-Dense multiplication failed");
+
             // omega = (t . s) / (t . t)
             let t_t = t.squared_norm();
             if t_t.abs() < T::from_f64(1e-30) {
-                 break; 
+                break;
             }
             omega = t.dot(&s) / t_t;
-            
+
             // x = x + alpha * p + omega * s
             // r = s - omega * t
             {
                 let x_data = x.storage_mut().data_mut();
                 let p_data = p.storage().data();
                 let s_data = s.storage().data();
-                
+
                 let r_data = r.storage_mut().data_mut();
                 let t_data = t.storage().data();
-                
+
                 for k in 0..size {
                     x_data[k] += alpha * p_data[k] + omega * s_data[k];
                     r_data[k] = s_data[k] - omega * t_data[k];
                 }
             }
-            
+
             error_sq = r.squared_norm();
             *self.error.borrow_mut() = error_sq.sqrt();
-            
+
             if error_sq < tol_sq {
                 break;
             }
-            
+
             if omega.abs() < T::from_f64(1e-30) {
-                 break; 
+                break;
             }
-            
+
             rho_old = rho;
         }
-        
+
         x
     }
-    
+
     fn iterations(&self) -> usize {
         *self.iterations.borrow()
     }
-    
+
     fn error(&self) -> T {
         *self.error.borrow()
     }

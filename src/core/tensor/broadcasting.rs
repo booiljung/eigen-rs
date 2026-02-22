@@ -1,7 +1,7 @@
 //! Tensor broadcasting implementation.
 
-use crate::core::scalar::Scalar;
 use super::Tensor;
+use crate::core::scalar::Scalar;
 
 use crate::core::tensor::device::{CpuDevice, Device};
 

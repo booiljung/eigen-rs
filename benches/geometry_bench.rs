@@ -1,5 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use eigen_rs::core::geometry::{AlignedBox, EulerAngles, Hyperplane, Ray};
+use eigen_rs::core::geometry::{AlignedBox, EulerAngles, Ray};
 use eigen_rs::core::matrix::Vector3;
 
 fn vec3(x: f64, y: f64, z: f64) -> Vector3<f64> {

@@ -38,15 +38,6 @@ where
     }
 }
 
-impl<'a, T, X, F> crate::core::cuda::CudaDispatcher<T> for CwiseUnaryOp<'a, T, X, F>
-where
-    T: Scalar,
-    X: MatrixXpr<T>,
-    F: UnaryFunctor<T>,
-{
-    // TODO: CUDA support for unary ops
-}
-
 impl<'a, T, X, F> MatrixXpr<T> for CwiseUnaryOp<'a, T, X, F>
 where
     T: Scalar,

@@ -16,7 +16,7 @@ pub trait TensorXpr<T: Scalar, const RANK: usize> {
     fn size(&self) -> usize {
         self.dims().iter().product()
     }
-    
+
     /// Returns a reference to the underlying CUDA storage if available.
     /// This is used for eager execution on GPU.
     #[cfg(feature = "cuda")]
@@ -76,11 +76,13 @@ where
     fn eval(&self, indices: [usize; RANK]) -> T {
         self.lhs.eval(indices) + self.rhs.eval(indices)
     }
-    
+
     #[cfg(feature = "cuda")]
     fn eval_on_cuda(&self, device: &CudaDevice, out: &mut CudaStorage<T>) -> Result<(), ()> {
-        if let (Some(l_store), Some(r_store)) = (self.lhs.as_cuda_storage(), self.rhs.as_cuda_storage()) {
-            CudaOpsHelper::add(device, out, l_store, r_store)
+        if let (Some(l_store), Some(r_store)) =
+            (self.lhs.as_cuda_storage(), self.rhs.as_cuda_storage())
+        {
+            <T as CudaOpsHelper<T>>::add(device, out, l_store, r_store)
         } else {
             Err(())
         }
@@ -90,16 +92,42 @@ where
 // Helper trait to dispatch CUDA ops only for supported types
 #[cfg(feature = "cuda")]
 trait CudaOpsHelper<T: Scalar> {
-    fn add(device: &CudaDevice, out: &mut CudaStorage<T>, a: &CudaStorage<T>, b: &CudaStorage<T>) -> Result<(), ()> {
+    fn add(
+        _device: &CudaDevice,
+        _out: &mut CudaStorage<T>,
+        _a: &CudaStorage<T>,
+        _b: &CudaStorage<T>,
+    ) -> Result<(), ()> {
         Err(())
     }
-    
-    // Add sub/mul/etc later
+
+    fn sub(
+        _device: &CudaDevice,
+        _out: &mut CudaStorage<T>,
+        _a: &CudaStorage<T>,
+        _b: &CudaStorage<T>,
+    ) -> Result<(), ()> {
+        Err(())
+    }
+
+    fn mul_scalar(
+        _device: &CudaDevice,
+        _out: &mut CudaStorage<T>,
+        _a: &CudaStorage<T>,
+        _scalar: T,
+    ) -> Result<(), ()> {
+        Err(())
+    }
 }
 
 #[cfg(feature = "cuda")]
 impl<T: Scalar + 'static> CudaOpsHelper<T> for T {
-    fn add(device: &CudaDevice, out: &mut CudaStorage<T>, a: &CudaStorage<T>, b: &CudaStorage<T>) -> Result<(), ()> {
+    fn add(
+        device: &CudaDevice,
+        out: &mut CudaStorage<T>,
+        a: &CudaStorage<T>,
+        b: &CudaStorage<T>,
+    ) -> Result<(), ()> {
         use std::any::TypeId;
         if TypeId::of::<T>() == TypeId::of::<f32>() {
             let out_f32: &mut CudaStorage<f32> = unsafe { std::mem::transmute(out) };
@@ -111,6 +139,54 @@ impl<T: Scalar + 'static> CudaOpsHelper<T> for T {
             let a_f64: &CudaStorage<f64> = unsafe { std::mem::transmute(a) };
             let b_f64: &CudaStorage<f64> = unsafe { std::mem::transmute(b) };
             device.add(out_f64, a_f64, b_f64).map_err(|_| ())
+        } else {
+            Err(())
+        }
+    }
+
+    fn sub(
+        device: &CudaDevice,
+        out: &mut CudaStorage<T>,
+        a: &CudaStorage<T>,
+        b: &CudaStorage<T>,
+    ) -> Result<(), ()> {
+        use std::any::TypeId;
+        if TypeId::of::<T>() == TypeId::of::<f32>() {
+            let out_f32: &mut CudaStorage<f32> = unsafe { std::mem::transmute(out) };
+            let a_f32: &CudaStorage<f32> = unsafe { std::mem::transmute(a) };
+            let b_f32: &CudaStorage<f32> = unsafe { std::mem::transmute(b) };
+            device.sub(out_f32, a_f32, b_f32).map_err(|_| ())
+        } else if TypeId::of::<T>() == TypeId::of::<f64>() {
+            let out_f64: &mut CudaStorage<f64> = unsafe { std::mem::transmute(out) };
+            let a_f64: &CudaStorage<f64> = unsafe { std::mem::transmute(a) };
+            let b_f64: &CudaStorage<f64> = unsafe { std::mem::transmute(b) };
+            device.sub(out_f64, a_f64, b_f64).map_err(|_| ())
+        } else {
+            Err(())
+        }
+    }
+
+    fn mul_scalar(
+        device: &CudaDevice,
+        out: &mut CudaStorage<T>,
+        a: &CudaStorage<T>,
+        scalar: T,
+    ) -> Result<(), ()> {
+        use std::any::TypeId;
+        if TypeId::of::<T>() == TypeId::of::<f32>() {
+            let out_f32: &mut CudaStorage<f32> = unsafe { std::mem::transmute(out) };
+            let a_f32: &CudaStorage<f32> = unsafe { std::mem::transmute(a) };
+            let scalar_f32: f32 = unsafe { std::mem::transmute_copy(&scalar) };
+            device
+                .mul_scalar(out_f32, a_f32, scalar_f32)
+                .map_err(|_| ())
+        } else if TypeId::of::<T>() == TypeId::of::<f64>() {
+            let out_f64: &mut CudaStorage<f64> = unsafe { std::mem::transmute(out) };
+            let a_f64: &CudaStorage<f64> = unsafe { std::mem::transmute(a) };
+            let scalar_f64: f64 = unsafe { std::mem::transmute_copy(&scalar) };
+            device
+                .mul_scalar(out_f64, a_f64, scalar_f64)
+                .map_err(|_| ())
         } else {
             Err(())
         }
@@ -159,6 +235,17 @@ where
     fn eval(&self, indices: [usize; RANK]) -> T {
         self.lhs.eval(indices) - self.rhs.eval(indices)
     }
+
+    #[cfg(feature = "cuda")]
+    fn eval_on_cuda(&self, device: &CudaDevice, out: &mut CudaStorage<T>) -> Result<(), ()> {
+        if let (Some(l_store), Some(r_store)) =
+            (self.lhs.as_cuda_storage(), self.rhs.as_cuda_storage())
+        {
+            <T as CudaOpsHelper<T>>::sub(device, out, l_store, r_store)
+        } else {
+            Err(())
+        }
+    }
 }
 
 /// Lazy scalar multiplication (broadcasting).
@@ -189,6 +276,15 @@ where
 
     fn eval(&self, indices: [usize; RANK]) -> T {
         self.xpr.eval(indices) * self.scalar
+    }
+
+    #[cfg(feature = "cuda")]
+    fn eval_on_cuda(&self, device: &CudaDevice, out: &mut CudaStorage<T>) -> Result<(), ()> {
+        if let Some(xpr_store) = self.xpr.as_cuda_storage() {
+            <T as CudaOpsHelper<T>>::mul_scalar(device, out, xpr_store, self.scalar)
+        } else {
+            Err(())
+        }
     }
 }
 

@@ -82,7 +82,11 @@ impl<T: Scalar, S: Storage<T>> Bidiagonalization<T, S> {
             // Only perform if norm is not effectively zero
             if norm.abs() > T::epsilon() {
                 let v0 = val_k;
-                let sigma = if v0.real() >= <T::Real as num_traits::Zero>::zero() { -norm } else { norm };
+                let sigma = if v0.real() >= <T::Real as num_traits::Zero>::zero() {
+                    -norm
+                } else {
+                    norm
+                };
                 let v0_minus_sigma = v0 - sigma;
 
                 // We handle the singularity case where v0_minus_sigma is close to zero

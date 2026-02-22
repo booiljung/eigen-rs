@@ -24,6 +24,7 @@ pub mod cuda_bridge;
 
 pub mod bdc_svd;
 
+pub use bdc_svd::BDCSVD;
 pub use complex_eigen_solver::ComplexEigenSolver;
 pub use complex_schur::ComplexSchur;
 pub use eigen_solver::EigenSolver;
@@ -38,5 +39,4 @@ pub use qr::HouseholderQR;
 pub use schur::RealSchur;
 pub use selfadjoint_eigen::{ComputationInfo, SelfAdjointEigenSolver};
 pub use svd::JacobiSVD;
-pub use bdc_svd::BDCSVD;
 pub use tridiagonal::Tridiagonalization;

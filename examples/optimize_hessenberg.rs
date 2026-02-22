@@ -1,9 +1,9 @@
 use eigen_rs::core::matrix::MatrixX;
-use std::time::Instant;
 use std::hint::black_box;
+use std::time::Instant;
 
 fn main() {
-    let size = 256; 
+    let size = 256;
     println!("Benchmarking Hessenberg Optimization (N={})", size);
 
     let mut a = MatrixX::<f64>::new_dynamic(size, size).unwrap();
@@ -23,5 +23,8 @@ fn main() {
         black_box(eigen_rs::core::decompositions::HessenbergDecomposition::new(&a).unwrap());
     }
     let duration = start.elapsed();
-    println!("Hessenberg Time: {:.2} ms per iter", duration.as_secs_f64() * 1000.0 / iterations as f64);
+    println!(
+        "Hessenberg Time: {:.2} ms per iter",
+        duration.as_secs_f64() * 1000.0 / iterations as f64
+    );
 }

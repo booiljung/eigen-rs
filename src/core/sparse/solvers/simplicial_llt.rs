@@ -1,10 +1,9 @@
-
 use crate::core::matrix::Matrix;
 use crate::core::scalar::Scalar;
 use crate::core::sparse::iterators::InnerIterator;
+use crate::core::sparse::ordering::{Ordering, Permutation, COLAMD};
 use crate::core::sparse::sparse_matrix::{SparseMatrix, StorageOrder};
 use crate::core::storage::{DynamicStorage, Storage};
-use crate::core::sparse::ordering::{Ordering, Permutation, COLAMD};
 
 /// Simplicial Cholesky (LLT) factorization of a sparse symmetric positive-definite matrix.
 pub struct SimplicialLLT<T: Scalar> {
@@ -40,16 +39,16 @@ impl<T: Scalar + std::cmp::PartialOrd> SimplicialLLT<T> {
         if matrix.rows() != matrix.cols() {
             return Err("Matrix must be square for Cholesky factorization".to_string());
         }
-        
+
         // Compute ordering (COLAMD)
         let ordering = COLAMD;
         let p = ordering.compute(matrix);
-        
-        // Store inverse permutation for convenience if needed, 
+
+        // Store inverse permutation for convenience if needed,
         // though our Permutation struct has inv_indices.
         // We clone it for now to keep ownership simple.
         // Actually Permutation struct holds both indices and inv_indices.
-        
+
         self.p = Some(p);
         self.is_factorized = false;
         Ok(())
@@ -58,14 +57,14 @@ impl<T: Scalar + std::cmp::PartialOrd> SimplicialLLT<T> {
     /// Numerical factorization: computes the actual LLT decomposition.
     pub fn factorize(&mut self, matrix: &SparseMatrix<T>) -> Result<(), String> {
         let n = matrix.rows();
-        
+
         // 1. Permute Matrix: A_prime = P * A * P^T
         let a_prime = if let Some(ref p) = self.p {
-             p.permute_symmetric(matrix)
+            p.permute_symmetric(matrix)
         } else {
-             matrix.clone()
+            matrix.clone()
         };
-        
+
         // We'll store columns of L as they are computed.
         let mut l_cols: Vec<Vec<(usize, T)>> = vec![Vec::new(); n];
         let mut l_dense = vec![T::default(); n]; // Temporary dense column
@@ -151,20 +150,20 @@ impl<T: Scalar + std::cmp::PartialOrd> SimplicialLLT<T> {
         }
 
         let mut x = Matrix::<T, DynamicStorage<T>>::new_dynamic(n, b.cols())?;
-        
+
         let p = self.p.as_ref().unwrap(); // Should exist if factorized
-        let p_indices = p.indices();      // new = old[p[i]]? Check Permutation def.
-        let p_inv = p.inverse_indices();  // new -> old map?
-        // Wait, Permutation::permute_symmetric used inv_indices to map A.
-        // P maps: new_vector[inv_indices[i]] = old_vector[i] (scatter)
-        // or new_vector[i] = old_vector[indices[i]] (gather)
-        
+        let _p_indices = p.indices(); // new = old[p[i]]? Check Permutation def.
+        let p_inv = p.inverse_indices(); // new -> old map?
+                                         // Wait, Permutation::permute_symmetric used inv_indices to map A.
+                                         // P maps: new_vector[inv_indices[i]] = old_vector[i] (scatter)
+                                         // or new_vector[i] = old_vector[indices[i]] (gather)
+
         // Let's rely on logic:
         // A x = b
         // P A P^T (P x) = P b
         // A' y = c
         // where y = P x, c = P b.
-        
+
         // 1. Compute c = P b
         // c[i] = b[indices[i]] (Gather)
         // Check `permute_symmetric` used `inv_indices`.
@@ -174,17 +173,17 @@ impl<T: Scalar + std::cmp::PartialOrd> SimplicialLLT<T> {
         // So y[new_idx] = x[old_idx].
         // Where new_idx = inv[old_idx].
         // So c[inv[k]] = b[k]. (Scatter)
-        
+
         // Let's verify `Permutation::new` again.
         // indices[i] = p. inv_indices[p] = i.
         // indices maps: new_pos -> old_pos.
         // inv_indices maps: old_pos -> new_pos.
-        
+
         // So `permute_symmetric` used `inv_indices` to map row/col (old) to new_row/new_col (new).
         // Correct.
         // So to compute c = P b, we want c to be the "new" vector.
         // c[new_idx] = b[old_idx] => c[inv_indices[k]] = b[k].
-        
+
         for k in 0..b.cols() {
             let mut c = vec![T::default(); n];
             // 1. Permute b -> c
@@ -229,12 +228,12 @@ impl<T: Scalar + std::cmp::PartialOrd> SimplicialLLT<T> {
                 }
                 c[j] = (c[j] - sum) / l_jj;
             }
-            
+
             // 3. Permute y -> x
             // y is "new" vector. x is "old".
             // x = P^T y.
             // x[old_idx] = y[new_idx] => x[i] = y[inv_indices[i]]
-            
+
             for i in 0..n {
                 let new_idx = p_inv[i];
                 *x.get_mut(i, k).unwrap() = c[new_idx];

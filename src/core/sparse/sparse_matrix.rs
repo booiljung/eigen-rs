@@ -326,10 +326,8 @@ impl<T: Scalar> SparseMatrix<T> {
                         let val = it.value();
                         let col = it.index();
                         for j in 0..rhs.cols() {
-                            unsafe {
-                                *res.get_mut(i, j).unwrap() =
-                                    *res.get(i, j).unwrap() + val * (*rhs.get(col, j).unwrap());
-                            }
+                            *res.get_mut(i, j).unwrap() =
+                                *res.get(i, j).unwrap() + val * (*rhs.get(col, j).unwrap());
                         }
                         it.next();
                     }
@@ -342,10 +340,8 @@ impl<T: Scalar> SparseMatrix<T> {
                         let val = it.value();
                         let row = it.index();
                         for k in 0..rhs.cols() {
-                             unsafe {
-                                *res.get_mut(row, k).unwrap() =
-                                    *res.get(row, k).unwrap() + val * (*rhs.get(j, k).unwrap());
-                            }
+                            *res.get_mut(row, k).unwrap() =
+                                *res.get(row, k).unwrap() + val * (*rhs.get(j, k).unwrap());
                         }
                         it.next();
                     }
@@ -366,15 +362,12 @@ impl<T: Scalar> SparseMatrix<T> {
         Ok(res)
     }
 
-
-
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     unsafe fn mul_dense_avx_into<S: Storage<T>, R: Storage<T>>(
         &self,
         rhs: &Matrix<T, S>,
         res: &mut Matrix<T, R>,
     ) -> Result<(), String> {
-
         // This optimization only supports CSR (RowMajor) for now
         // Assuming self.order == RowMajor checked by caller
 
@@ -627,10 +620,11 @@ impl<T: Scalar> SparseMatrix<T> {
             return Err("Incompatible dimensions for parallel sparse-dense product".to_string());
         }
         if res.rows() != self.rows || res.cols() != rhs.cols() {
-            return Err("Incompatible dimensions for parallel result sparse-dense product".to_string());
+            return Err(
+                "Incompatible dimensions for parallel result sparse-dense product".to_string(),
+            );
         }
         let res_rows = self.rows;
-        let res_cols = rhs.cols();
 
         // Get raw pointer for parallel updates
         let res_ptr_val = res.storage_mut().data_mut().as_mut_ptr() as usize;
@@ -644,7 +638,8 @@ impl<T: Scalar> SparseMatrix<T> {
                     while it.is_valid() {
                         let val = it.value();
                         let col = it.index();
-                        for j in 0..rhs.cols() { // Note: using rhs.cols() instead of res_cols
+                        for j in 0..rhs.cols() {
+                            // Note: using rhs.cols() instead of res_cols
                             unsafe {
                                 let target = res_ptr.add(j * self.rows + i);
                                 *target += val * (*rhs.get(col, j).unwrap());

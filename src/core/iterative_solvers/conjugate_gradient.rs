@@ -41,13 +41,14 @@ impl<T: Scalar, M: Clone> ConjugateGradient<T, M> {
 }
 
 // We need a trait bound on M that allows Matrix-Vector multiplication.
-// For now, let's assume M is &Matrix<T, S> or similar. 
+// For now, let's assume M is &Matrix<T, S> or similar.
 // Ideally M implements specific Mul traits.
 
 // Hardcoding for M = Matrix<T, S> for now to demonstrate.
-impl<T: Scalar<Real = T> + PartialOrd + 'static, S: Storage<T> + 'static> IterativeSolver<T, DynamicStorage<T>> 
-    for ConjugateGradient<T, Matrix<T, S>> 
-    where S: Clone // Requirement to store Matrix
+impl<T: Scalar<Real = T> + PartialOrd + 'static, S: Storage<T> + 'static>
+    IterativeSolver<T, DynamicStorage<T>> for ConjugateGradient<T, Matrix<T, S>>
+where
+    S: Clone, // Requirement to store Matrix
 {
     type MatrixType = Matrix<T, S>;
 
@@ -75,10 +76,13 @@ impl<T: Scalar<Real = T> + PartialOrd + 'static, S: Storage<T> + 'static> Iterat
         S2: Storage<T>,
         S3: Storage<T>,
     {
-        let a = self.matrix.as_ref().expect("Matrix not initialized. Call compute() first.");
+        let a = self
+            .matrix
+            .as_ref()
+            .expect("Matrix not initialized. Call compute() first.");
         let rows = b.rows();
         let cols = b.cols();
-        
+
         // x = x0
         let mut x = MatrixX::<T>::new_dynamic(rows, cols).unwrap();
         x.assign(x0).unwrap();
@@ -87,23 +91,23 @@ impl<T: Scalar<Real = T> + PartialOrd + 'static, S: Storage<T> + 'static> Iterat
         // 1. Evaluate Ax
         let mut ax = MatrixX::<T>::new_dynamic(rows, cols).unwrap();
         ax.assign(&(a * &x)).unwrap();
-        
+
         // 2. Evaluate R = b - Ax
         let mut r = MatrixX::<T>::new_dynamic(rows, cols).unwrap();
         r.assign(&(b - &ax)).unwrap();
-        
+
         // P = R
         let mut p = MatrixX::<T>::new_dynamic(rows, cols).unwrap();
         p.assign(&r).unwrap();
-        
+
         let mut rs_old = r.squared_norm();
         let tol_sq = self.tolerance * self.tolerance;
 
         *self.iterations.borrow_mut() = 0;
         *self.error.borrow_mut() = rs_old.sqrt();
-        
+
         if rs_old < tol_sq {
-             return x;
+            return x;
         }
 
         // Pre-allocate Ap
@@ -111,26 +115,26 @@ impl<T: Scalar<Real = T> + PartialOrd + 'static, S: Storage<T> + 'static> Iterat
 
         for i in 0..self.max_iterations {
             *self.iterations.borrow_mut() = i + 1;
-            
+
             // Ap = A * p
             ap.assign(&(a * &p)).unwrap();
-            
+
             // alpha = rs_old / (p . Ap)
             let p_ap = p.dot(&ap);
-            
+
             if p_ap.abs() < T::from_f64(1e-30) {
-                 break; // Avoid division by zero
+                break; // Avoid division by zero
             }
 
             let alpha = rs_old / p_ap;
-            
+
             // Vector updates:
             // x = x + alpha * p
             // r = r - alpha * Ap
-            
+
             // Fix Borrow Checker: Get size first
-            let size = x.size(); 
-            
+            let size = x.size();
+
             let x_data = x.storage_mut().data_mut();
             let p_data = p.storage().data();
             let r_data = r.storage_mut().data_mut();
@@ -140,28 +144,28 @@ impl<T: Scalar<Real = T> + PartialOrd + 'static, S: Storage<T> + 'static> Iterat
                 x_data[k] += alpha * p_data[k];
                 r_data[k] -= alpha * ap_data[k];
             }
-            
+
             let rs_new = r.squared_norm();
             *self.error.borrow_mut() = rs_new.sqrt();
 
             if rs_new < tol_sq {
                 break;
             }
-            
+
             let beta = rs_new / rs_old;
-            
+
             // p = r + beta * p
             let p_data_mut = p.storage_mut().data_mut();
             let r_data_read = r.storage().data();
-            
+
             // No need to re-fetch size, it's consistent
             for k in 0..size {
                 p_data_mut[k] = r_data_read[k] + beta * p_data_mut[k];
             }
-            
+
             rs_old = rs_new;
         }
-        
+
         x
     }
 
@@ -176,8 +180,8 @@ impl<T: Scalar<Real = T> + PartialOrd + 'static, S: Storage<T> + 'static> Iterat
 
 use crate::core::sparse::SparseMatrix;
 
-impl<T: Scalar<Real = T> + PartialOrd + 'static> IterativeSolver<T, DynamicStorage<T>> 
-    for ConjugateGradient<T, SparseMatrix<T>> 
+impl<T: Scalar<Real = T> + PartialOrd + 'static> IterativeSolver<T, DynamicStorage<T>>
+    for ConjugateGradient<T, SparseMatrix<T>>
 {
     type MatrixType = SparseMatrix<T>;
 
@@ -205,10 +209,13 @@ impl<T: Scalar<Real = T> + PartialOrd + 'static> IterativeSolver<T, DynamicStora
         S2: Storage<T>,
         S3: Storage<T>,
     {
-        let a = self.matrix.as_ref().expect("Matrix not initialized. Call compute() first.");
+        let a = self
+            .matrix
+            .as_ref()
+            .expect("Matrix not initialized. Call compute() first.");
         let rows = b.rows();
         let cols = b.cols();
-        
+
         // x = x0
         let mut x = MatrixX::<T>::new_dynamic(rows, cols).unwrap();
         x.assign(x0).unwrap();
@@ -218,24 +225,25 @@ impl<T: Scalar<Real = T> + PartialOrd + 'static> IterativeSolver<T, DynamicStora
         // For SparseMatrix, use mul_dense_into
         let mut ax = MatrixX::<T>::new_dynamic(rows, cols).unwrap();
         ax.set_zero();
-        a.mul_dense_into(&x, &mut ax).expect("Sparse-Dense multiplication failed");
-        
+        a.mul_dense_into(&x, &mut ax)
+            .expect("Sparse-Dense multiplication failed");
+
         // 2. Evaluate R = b - Ax
         let mut r = MatrixX::<T>::new_dynamic(rows, cols).unwrap();
         r.assign(&(b - &ax)).unwrap();
-        
+
         // P = R
         let mut p = MatrixX::<T>::new_dynamic(rows, cols).unwrap();
         p.assign(&r).unwrap();
-        
+
         let mut rs_old = r.squared_norm();
         let tol_sq = self.tolerance * self.tolerance;
 
         *self.iterations.borrow_mut() = 0;
         *self.error.borrow_mut() = rs_old.sqrt();
-        
+
         if rs_old < tol_sq {
-             return x;
+            return x;
         }
 
         // Pre-allocate Ap
@@ -243,23 +251,24 @@ impl<T: Scalar<Real = T> + PartialOrd + 'static> IterativeSolver<T, DynamicStora
 
         for i in 0..self.max_iterations {
             *self.iterations.borrow_mut() = i + 1;
-            
+
             // Ap = A * p
-            a.mul_dense_into(&p, &mut ap).expect("Sparse-Dense multiplication failed");
-            
+            a.mul_dense_into(&p, &mut ap)
+                .expect("Sparse-Dense multiplication failed");
+
             // alpha = rs_old / (p . Ap)
             let p_ap = p.dot(&ap);
-            
+
             if p_ap.abs() < T::from_f64(1e-30) {
-                 break; // Avoid division by zero
+                break; // Avoid division by zero
             }
 
             let alpha = rs_old / p_ap;
-            
+
             // Vector updates:
             // x = x + alpha * p
             // r = r - alpha * Ap
-            
+
             let size = x.size();
             let x_data = x.storage_mut().data_mut();
             let p_data = p.storage().data();
@@ -270,30 +279,30 @@ impl<T: Scalar<Real = T> + PartialOrd + 'static> IterativeSolver<T, DynamicStora
                 x_data[k] += alpha * p_data[k];
                 r_data[k] -= alpha * ap_data[k];
             }
-            
+
             let rs_new = r.squared_norm();
             *self.error.borrow_mut() = rs_new.sqrt();
 
             if rs_new < tol_sq {
                 break;
             }
-            
+
             let beta = rs_new / rs_old;
-            
+
             // p = r + beta * p
             let p_data_mut = p.storage_mut().data_mut();
             let r_data_read = r.storage().data();
-            
+
             for k in 0..size {
                 p_data_mut[k] = r_data_read[k] + beta * p_data_mut[k];
             }
-            
+
             rs_old = rs_new;
         }
-        
+
         x
     }
-    
+
     fn iterations(&self) -> usize {
         *self.iterations.borrow()
     }

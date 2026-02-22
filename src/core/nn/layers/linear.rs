@@ -64,6 +64,10 @@ impl<T: Scalar + 'static> Layer<T> for Linear<T> {
             }
         }
 
-        Ok(Tensor::from_matrix_reshaped(y_mat, crate::core::tensor::device::CpuDevice, [m, n])?)
+        Ok(Tensor::from_matrix_reshaped(
+            y_mat,
+            crate::core::tensor::device::CpuDevice,
+            [m, n],
+        )?)
     }
 }

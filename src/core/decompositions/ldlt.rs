@@ -55,7 +55,7 @@ impl<T: Scalar + 'static, S: Storage<T> + 'static> LDLT<T, S> {
 
                 // Symmetric Swap: Swap row/col j and max_idx
                 // This is O(N) but indispensable for pivot stability.
-                // We utilize the fact that we only need to swap up to 'rows' and the structure is symmetric 
+                // We utilize the fact that we only need to swap up to 'rows' and the structure is symmetric
                 // in the lower triangle, but we store full matrix.
 
                 // Swap rows (j, max_idx)
@@ -82,14 +82,16 @@ impl<T: Scalar + 'static, S: Storage<T> + 'static> LDLT<T, S> {
             // Eigen uses "Left Looking": For current column j, gather contributions from k < j.
 
             unsafe {
-                if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>() && is_x86_feature_detected!("fma") {
+                if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>()
+                    && is_x86_feature_detected!("fma")
+                {
                     let ptr = mat_ptr as *mut f64;
                     // Gather contributions from previous columns
                     // Col j = Col j - L(:, 0..j) * (D(0..j) * L(j, 0..j))^T
                     // This inner loop is the bottleneck.
                     // Improving locality: Process in blocks of K columns?
                     // For now, let's just ensure inner loop is tight and vectorized.
-                    
+
                     for k in 0..j {
                         let l_jk_val = *ptr.add(k * rows + j); // mat(j, k)
                         let d_k_val = *(d.as_ptr() as *const f64).add(k);
@@ -98,25 +100,27 @@ impl<T: Scalar + 'static, S: Storage<T> + 'static> LDLT<T, S> {
                         // Vectorized Update: Col(j) -= val * Col(k)
                         Self::update_column_vectorized_f64(ptr, rows, j, k, val_kj);
                     }
-                } else if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() && is_x86_feature_detected!("fma") {
-                     let ptr = mat_ptr as *mut f32;
-                     for k in 0..j {
+                } else if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>()
+                    && is_x86_feature_detected!("fma")
+                {
+                    let ptr = mat_ptr as *mut f32;
+                    for k in 0..j {
                         let l_jk_val = *ptr.add(k * rows + j);
                         let d_k_val = *(d.as_ptr() as *const f32).add(k);
                         let val_kj = l_jk_val * d_k_val;
                         Self::update_column_vectorized_f32(ptr, rows, j, k, val_kj);
-                     }
+                    }
                 } else {
-                     // Scalar Fallback
-                     for k in 0..j {
-                         let val = unsafe { *mat_ptr.add(k * rows + j) }.conj() * d[k];
-                         // Update column j starting from row j
-                         for i in j..rows {
-                             unsafe {
+                    // Scalar Fallback
+                    for k in 0..j {
+                        let val = unsafe { *mat_ptr.add(k * rows + j) }.conj() * d[k];
+                        // Update column j starting from row j
+                        for i in j..rows {
+                            unsafe {
                                 *mat_ptr.add(j * rows + i) -= val * *mat_ptr.add(k * rows + i);
-                             }
-                         }
-                     }
+                            }
+                        }
+                    }
                 }
             }
 
@@ -134,11 +138,11 @@ impl<T: Scalar + 'static, S: Storage<T> + 'static> LDLT<T, S> {
                     }
                 }
             } else {
-                 unsafe {
+                unsafe {
                     for i in j + 1..rows {
                         *mat_ptr.add(j * rows + i) = T::from_usize(0);
                     }
-                 }
+                }
             }
         }
 
@@ -225,7 +229,7 @@ impl<T: Scalar + 'static, S: Storage<T> + 'static> LDLT<T, S> {
         for i in 0..rows {
             let dest_idx = self.p[i];
             for j in 0..b_cols {
-               *result.get_mut(dest_idx, j).unwrap() = *x.get(i, j).unwrap();
+                *result.get_mut(dest_idx, j).unwrap() = *x.get(i, j).unwrap();
             }
         }
 
@@ -242,18 +246,18 @@ impl<T: Scalar + 'static, S: Storage<T> + 'static> LDLT<T, S> {
         val: f32,
     ) {
         use std::arch::x86_64::*;
-        // Col pointers. Matrix is Column-Major. 
+        // Col pointers. Matrix is Column-Major.
         // Col j (Target) starts at j * rows.
         // Col k (Source) starts at k * rows.
         let col_j_ptr = mat_ptr.add(j * rows);
         let col_k_ptr = mat_ptr.add(k * rows);
-        
+
         // Update range: rows [j..rows]
         let len = rows - j;
         let mut r = 0;
-        
+
         let val_vec = _mm256_set1_ps(val);
-        
+
         while r + 8 <= len {
             let idx = j + r; // Row index
             let mut y_vec = _mm256_loadu_ps(col_j_ptr.add(idx));
@@ -262,7 +266,7 @@ impl<T: Scalar + 'static, S: Storage<T> + 'static> LDLT<T, S> {
             _mm256_storeu_ps(col_j_ptr.add(idx), y_vec);
             r += 8;
         }
-        
+
         for rr in r..len {
             let idx = j + rr;
             *col_j_ptr.add(idx) -= val * *col_k_ptr.add(idx);
@@ -281,12 +285,12 @@ impl<T: Scalar + 'static, S: Storage<T> + 'static> LDLT<T, S> {
         use std::arch::x86_64::*;
         let col_j_ptr = mat_ptr.add(j * rows);
         let col_k_ptr = mat_ptr.add(k * rows);
-        
+
         let len = rows - j;
         let mut r = 0;
-        
+
         let val_vec = _mm256_set1_pd(val);
-        
+
         while r + 4 <= len {
             let idx = j + r;
             let mut y_vec = _mm256_loadu_pd(col_j_ptr.add(idx));
@@ -295,7 +299,7 @@ impl<T: Scalar + 'static, S: Storage<T> + 'static> LDLT<T, S> {
             _mm256_storeu_pd(col_j_ptr.add(idx), y_vec);
             r += 4;
         }
-        
+
         for rr in r..len {
             let idx = j + rr;
             *col_j_ptr.add(idx) -= val * *col_k_ptr.add(idx);

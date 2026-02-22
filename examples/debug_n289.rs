@@ -1,6 +1,6 @@
 extern crate eigen_rs;
-use eigen_rs::core::matrix::MatrixX;
 use eigen_rs::core::decompositions::llt::LLT;
+use eigen_rs::core::matrix::MatrixX;
 use std::time::Instant;
 
 fn bench_size(n: usize) {
@@ -31,7 +31,10 @@ fn bench_size(n: usize) {
         c.assign(&(&a + &b)).unwrap();
     }
     let duration = start.elapsed();
-    println!("MatAdd: {:.2} ns/iter", duration.as_nanos() as f64 / iters as f64);
+    println!(
+        "MatAdd: {:.2} ns/iter",
+        duration.as_nanos() as f64 / iters as f64
+    );
 
     // Bench MatMul
     // Reduce iters for MM
@@ -41,7 +44,10 @@ fn bench_size(n: usize) {
         c.assign(&(&a * &b)).unwrap();
     }
     let duration = start.elapsed();
-    println!("MatMul: {:.2} us/iter", duration.as_micros() as f64 / mm_iters as f64);
+    println!(
+        "MatMul: {:.2} us/iter",
+        duration.as_micros() as f64 / mm_iters as f64
+    );
 
     // Bench LLT
     let start = Instant::now();
@@ -49,7 +55,10 @@ fn bench_size(n: usize) {
         let _llt = LLT::new(&a).ok();
     }
     let duration = start.elapsed();
-    println!("LLT:    {:.2} us/iter", duration.as_micros() as f64 / 1000.0);
+    println!(
+        "LLT:    {:.2} us/iter",
+        duration.as_micros() as f64 / 1000.0
+    );
 }
 
 fn main() {

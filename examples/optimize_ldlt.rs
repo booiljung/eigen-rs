@@ -1,6 +1,6 @@
 use eigen_rs::core::matrix::MatrixX;
-use std::time::Instant;
 use std::hint::black_box;
+use std::time::Instant;
 
 fn main() {
     let size = 512;
@@ -27,12 +27,15 @@ fn main() {
     let start = Instant::now();
     let iterations = 20;
     for _ in 0..iterations {
-        // We clone inside the loop to ensure we restart with fresh data 
+        // We clone inside the loop to ensure we restart with fresh data
         // (LDLT is in-place usually? Wait, LDLT::new takes reference but creates new matrix internally)
         // LDLT::new(matrix: &Matrix) -> Result<Self>
         // Internally it copies into a new matrix. So we can reuse `sym`.
         black_box(sym.ldlt().unwrap());
     }
     let duration = start.elapsed();
-    println!("LDLT Time: {:.2} ms per iter", duration.as_secs_f64() * 1000.0 / iterations as f64);
+    println!(
+        "LDLT Time: {:.2} ms per iter",
+        duration.as_secs_f64() * 1000.0 / iterations as f64
+    );
 }

@@ -28,7 +28,10 @@ fn main() {
         let _ = a.inverse();
     }
     let duration_total = start_total.elapsed();
-    println!("Total Inverse Time (Avg): {} us", duration_total.as_micros() / iterations);
+    println!(
+        "Total Inverse Time (Avg): {} us",
+        duration_total.as_micros() / iterations
+    );
 
     // Profile Separation
     let start_lu = Instant::now();
@@ -52,6 +55,14 @@ fn main() {
     println!("Solve Time (Avg): {} us", avg_solve);
 
     println!("Breakdown:");
-    println!("  LU:    {} us ({:.1}%)", avg_lu, (avg_lu as f64 / (avg_lu + avg_solve) as f64) * 100.0);
-    println!("  Solve: {} us ({:.1}%)", avg_solve, (avg_solve as f64 / (avg_lu + avg_solve) as f64) * 100.0);
+    println!(
+        "  LU:    {} us ({:.1}%)",
+        avg_lu,
+        (avg_lu as f64 / (avg_lu + avg_solve) as f64) * 100.0
+    );
+    println!(
+        "  Solve: {} us ({:.1}%)",
+        avg_solve,
+        (avg_solve as f64 / (avg_lu + avg_solve) as f64) * 100.0
+    );
 }

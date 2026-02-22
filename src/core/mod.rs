@@ -1,13 +1,12 @@
 pub mod allocator;
 pub mod arch;
 pub mod complex;
-pub mod cuda;
 pub mod decompositions;
 pub mod geometry;
+pub mod iterative_solvers;
 pub mod matrix;
 pub mod nn;
 pub mod ops;
-pub mod iterative_solvers;
 pub mod optimization;
 pub mod scalar;
 pub mod sparse;

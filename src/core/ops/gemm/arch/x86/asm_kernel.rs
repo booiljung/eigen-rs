@@ -234,7 +234,7 @@ impl GemmKernel for AsmFmaKernelF32 {
             "5:", // End
             a_ptr = inout(reg) a_ptr,
             b_ptr = inout(reg) b_ptr,
-            k = inout(reg) k,
+            k = inout(reg) k => _,
 
             c00 = inout(ymm_reg) c00, c01 = inout(ymm_reg) c01, c02 = inout(ymm_reg) c02, c03 = inout(ymm_reg) c03,
             c10 = inout(ymm_reg) c10, c11 = inout(ymm_reg) c11, c12 = inout(ymm_reg) c12, c13 = inout(ymm_reg) c13,

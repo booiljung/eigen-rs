@@ -51,9 +51,9 @@ impl<T: Scalar<Real = T> + PartialOrd, S: Storage<T>> RealSchur<T, S> {
         let mut iter = 0;
         let mut low = 0;
         let mut high = n - 1;
-        
+
         // PANIC TEST removed
-        
+
         // Numerical precision epsilon
         let eps = T::from_f64(
             if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() {
@@ -70,10 +70,13 @@ impl<T: Scalar<Real = T> + PartialOrd, S: Storage<T>> RealSchur<T, S> {
 
         // Compute initial norm for robust deflation check
         let h_norm = h.norm();
-        
+
         while high > 0 {
             if iter > max_iter {
-                println!("RealSchur(N={}): Failed to converge at index high={}. Total iters: {}", n, high, _total_iters_global);
+                println!(
+                    "RealSchur(N={}): Failed to converge at index high={}. Total iters: {}",
+                    n, high, _total_iters_global
+                );
                 return Err("RealSchur failed to converge".to_string());
             }
 
@@ -83,14 +86,18 @@ impl<T: Scalar<Real = T> + PartialOrd, S: Storage<T>> RealSchur<T, S> {
                 let h_i_im1 = *h.get(i, i - 1).unwrap();
                 let h_im1_im1 = *h.get(i - 1, i - 1).unwrap();
                 let h_i_i = *h.get(i, i).unwrap();
-                
+
                 // Dynamic epsilon: Relax tolerance if we are stuck to ensure convergence.
                 // This is a trade-off between precision and convergence guarantees.
-                let current_eps = if iter > 200 { eps * T::from_f64(100.0) } else { eps };
+                let current_eps = if iter > 200 {
+                    eps * T::from_f64(100.0)
+                } else {
+                    eps
+                };
 
                 let val = h_i_im1.abs();
                 let sum_diags = h_im1_im1.abs() + h_i_i.abs();
-                
+
                 // If sum_diags is too small, fallback to matrix norm.
                 // Also use norm-based threshold if we are stuck (iter > 200).
                 let reference = if sum_diags < eps * h_norm || iter > 200 {
@@ -98,7 +105,7 @@ impl<T: Scalar<Real = T> + PartialOrd, S: Storage<T>> RealSchur<T, S> {
                 } else {
                     sum_diags
                 };
-                
+
                 let threshold = current_eps * reference;
 
                 // Absolute threshold for underflow/denormals
@@ -106,7 +113,7 @@ impl<T: Scalar<Real = T> + PartialOrd, S: Storage<T>> RealSchur<T, S> {
                     *h.get_mut(i, i - 1).unwrap() = T::default();
                     break;
                 }
-                
+
                 i -= 1;
             }
 
@@ -129,7 +136,7 @@ impl<T: Scalar<Real = T> + PartialOrd, S: Storage<T>> RealSchur<T, S> {
 
                 if iter > 0 && iter % 10 == 0 {
                     // Exceptional shift using sub-diagonals (Datta / LAPACK strategy) to break cycles.
-                    // We add a 'jitter' based on 'iter' to ensure we don't apply the SAME exceptional shift 
+                    // We add a 'jitter' based on 'iter' to ensure we don't apply the SAME exceptional shift
                     // repeatedly if we stay stuck in the same block.
                     let h_high_m1 = h.get(high, high - 1).unwrap().abs();
                     let h_m1_m2 = if high > low + 1 {
@@ -140,7 +147,7 @@ impl<T: Scalar<Real = T> + PartialOrd, S: Storage<T>> RealSchur<T, S> {
                     let s_val = h_high_m1 + h_m1_m2;
 
                     // Jitter: 1.5, 1.1, 0.75, ...
-                    let jitter = 1.5 * (1.0 - ((iter / 10) % 3) as f64 * 0.25); 
+                    let jitter = 1.5 * (1.0 - ((iter / 10) % 3) as f64 * 0.25);
                     s = T::from_f64(jitter) * s_val;
                     t = s_val * s_val;
                 } else {
@@ -169,13 +176,17 @@ impl<T: Scalar<Real = T> + PartialOrd, S: Storage<T>> RealSchur<T, S> {
                 low += 1;
             }
         }
-        
 
-
-        if _total_iters_global > n * 10 { // Only print if suspicious
-            println!("RealSchur(N={}): Total iters = {}, Ratio = {:.2}", n, _total_iters_global, _total_iters_global as f64 / n as f64);
+        if _total_iters_global > n * 10 {
+            // Only print if suspicious
+            println!(
+                "RealSchur(N={}): Total iters = {}, Ratio = {:.2}",
+                n,
+                _total_iters_global,
+                _total_iters_global as f64 / n as f64
+            );
         } else {
-             // println!("RealSchur(N={}): Total iters = {}, Ratio = {:.2}", n, _total_iters_global, _total_iters_global as f64 / n as f64);
+            // println!("RealSchur(N={}): Total iters = {}, Ratio = {:.2}", n, _total_iters_global, _total_iters_global as f64 / n as f64);
         }
 
         Ok(())
@@ -200,51 +211,67 @@ impl<T: Scalar<Real = T> + PartialOrd, S: Storage<T>> RealSchur<T, S> {
         {
             if is_x86_feature_detected!("avx2") && is_x86_feature_detected!("fma") {
                 if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>() {
-                     unsafe {
-                         let workspace_f64: &mut [f64] = std::mem::transmute(&mut workspace[..]);
-                         Self::francis_qr_step_f64_avx2(
-                             std::mem::transmute::<&mut Matrix<T, DynamicStorage<T>>, &mut Matrix<f64, DynamicStorage<f64>>>(h),
-                             std::mem::transmute::<&mut Matrix<T, DynamicStorage<T>>, &mut Matrix<f64, DynamicStorage<f64>>>(q),
-                             start, end, 
-                             *(&s as *const T as *const f64), 
-                             *(&t as *const T as *const f64),
-                             workspace_f64
-                         );
-                     }
-                     vectorized = true;
+                    unsafe {
+                        let workspace_f64: &mut [f64] = std::mem::transmute(&mut workspace[..]);
+                        Self::francis_qr_step_f64_avx2(
+                            std::mem::transmute::<
+                                &mut Matrix<T, DynamicStorage<T>>,
+                                &mut Matrix<f64, DynamicStorage<f64>>,
+                            >(h),
+                            std::mem::transmute::<
+                                &mut Matrix<T, DynamicStorage<T>>,
+                                &mut Matrix<f64, DynamicStorage<f64>>,
+                            >(q),
+                            start,
+                            end,
+                            *(&s as *const T as *const f64),
+                            *(&t as *const T as *const f64),
+                            workspace_f64,
+                        );
+                    }
+                    vectorized = true;
                 } else if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() {
-                      unsafe {
-                         let workspace_f32: &mut [f32] = std::mem::transmute(&mut workspace[..]);
-                         Self::francis_qr_step_f32_avx2(
-                             std::mem::transmute::<&mut Matrix<T, DynamicStorage<T>>, &mut Matrix<f32, DynamicStorage<f32>>>(h),
-                             std::mem::transmute::<&mut Matrix<T, DynamicStorage<T>>, &mut Matrix<f32, DynamicStorage<f32>>>(q),
-                             start, end, 
-                             *(&s as *const T as *const f32), 
-                             *(&t as *const T as *const f32),
-                             workspace_f32
-                         );
-                      }
-                      vectorized = true;
+                    unsafe {
+                        let workspace_f32: &mut [f32] = std::mem::transmute(&mut workspace[..]);
+                        Self::francis_qr_step_f32_avx2(
+                            std::mem::transmute::<
+                                &mut Matrix<T, DynamicStorage<T>>,
+                                &mut Matrix<f32, DynamicStorage<f32>>,
+                            >(h),
+                            std::mem::transmute::<
+                                &mut Matrix<T, DynamicStorage<T>>,
+                                &mut Matrix<f32, DynamicStorage<f32>>,
+                            >(q),
+                            start,
+                            end,
+                            *(&s as *const T as *const f32),
+                            *(&t as *const T as *const f32),
+                            workspace_f32,
+                        );
+                    }
+                    vectorized = true;
                 }
             }
         }
 
-        if vectorized { return; }
+        if vectorized {
+            return;
+        }
 
         use std::sync::atomic::{AtomicBool, Ordering};
         static PRINTED: AtomicBool = AtomicBool::new(false);
         if !PRINTED.swap(true, Ordering::Relaxed) {
-             // eprintln!("**** RealSchur: Using SCALAR FALLBACK Path ****");
+            // eprintln!("**** RealSchur: Using SCALAR FALLBACK Path ****");
         }
 
         // --- Scalar Fallback (Reference Implementation with minor optimizations) ---
         let n = h.rows();
-        // Calculate indices manually to allow split borrows if necessary, 
+        // Calculate indices manually to allow split borrows if necessary,
         // or just use raw pointers for simplicity in this fallback too.
         // Using raw pointers avoids the slice borrow checker dance if we want to be free.
         let h_ptr = h.storage_mut().data_mut().as_mut_ptr();
         let q_ptr = q.storage_mut().data_mut().as_mut_ptr();
-        
+
         unsafe {
             let h00 = *h_ptr.add(start * n + start);
             let h10 = *h_ptr.add(start * n + start + 1);
@@ -264,7 +291,9 @@ impl<T: Scalar<Real = T> + PartialOrd, S: Storage<T>> RealSchur<T, S> {
 
             for k in start..end {
                 let nr = std::cmp::min(3, end - k + 1);
-                if nr < 2 { break; }
+                if nr < 2 {
+                    break;
+                }
 
                 if k > start {
                     v[0] = *h_ptr.add((k - 1) * n + k);
@@ -275,20 +304,20 @@ impl<T: Scalar<Real = T> + PartialOrd, S: Storage<T>> RealSchur<T, S> {
                 }
 
                 let (tau, house) = Self::make_householder(&v[..nr]);
-                
+
                 // Left: H = P H
                 let left_start = if k == start { start } else { k - 1 };
                 for j in left_start..n {
                     let ptr_k = h_ptr.add(j * n + k);
                     let val0 = *ptr_k;
                     let val1 = *ptr_k.add(1);
-                    
+
                     let mut dot = val0 + house[1] * val1;
                     if nr == 3 {
                         dot += house[2] * *ptr_k.add(2);
                     }
                     let factor = tau * dot;
-                    
+
                     *ptr_k -= factor;
                     *ptr_k.add(1) -= factor * house[1];
                     if nr == 3 {
@@ -302,17 +331,17 @@ impl<T: Scalar<Real = T> + PartialOrd, S: Storage<T>> RealSchur<T, S> {
                 for i in 0..rows_limit {
                     let val0 = *col_k_ptr.add(i);
                     let val1 = *col_k_ptr.add(n + i);
-                    
+
                     let mut dot = val0 + house[1] * val1;
                     if nr == 3 {
-                        dot += house[2] * *col_k_ptr.add(2*n + i);
+                        dot += house[2] * *col_k_ptr.add(2 * n + i);
                     }
                     let factor = tau * dot;
-                    
+
                     *col_k_ptr.add(i) -= factor;
                     *col_k_ptr.add(n + i) -= factor * house[1];
                     if nr == 3 {
-                        *col_k_ptr.add(2*n + i) -= factor * house[2];
+                        *col_k_ptr.add(2 * n + i) -= factor * house[2];
                     }
                 }
 
@@ -329,17 +358,17 @@ impl<T: Scalar<Real = T> + PartialOrd, S: Storage<T>> RealSchur<T, S> {
                 for i in 0..n {
                     let val0 = *q_col_k_ptr.add(i);
                     let val1 = *q_col_k_ptr.add(n + i);
-                    
+
                     let mut dot = val0 + house[1] * val1;
                     if nr == 3 {
-                        dot += house[2] * *q_col_k_ptr.add(2*n + i);
+                        dot += house[2] * *q_col_k_ptr.add(2 * n + i);
                     }
                     let factor = tau * dot;
-                    
+
                     *q_col_k_ptr.add(i) -= factor;
                     *q_col_k_ptr.add(n + i) -= factor * house[1];
                     if nr == 3 {
-                        *q_col_k_ptr.add(2*n + i) -= factor * house[2];
+                        *q_col_k_ptr.add(2 * n + i) -= factor * house[2];
                     }
                 }
             }
@@ -360,13 +389,13 @@ impl<T: Scalar<Real = T> + PartialOrd, S: Storage<T>> RealSchur<T, S> {
         use std::sync::atomic::{AtomicBool, Ordering};
         static PRINTED: AtomicBool = AtomicBool::new(false);
         if !PRINTED.swap(true, Ordering::Relaxed) {
-             // eprintln!("**** RealSchur: Using AVX2 F64 Path ****");
+            // eprintln!("**** RealSchur: Using AVX2 F64 Path ****");
         }
 
         use crate::core::decompositions::hessenberg_utils::apply_householder_on_the_right_vectorized_f64;
         let n = h.rows();
         let h_ptr = h.storage_mut().data_mut().as_mut_ptr();
-        
+
         let h00 = *h_ptr.add(start * n + start);
         let h10 = *h_ptr.add(start * n + start + 1);
         let h01 = *h_ptr.add((start + 1) * n + start);
@@ -385,7 +414,9 @@ impl<T: Scalar<Real = T> + PartialOrd, S: Storage<T>> RealSchur<T, S> {
 
         for k in start..end {
             let nr = std::cmp::min(3, end - k + 1);
-            if nr < 2 { break; }
+            if nr < 2 {
+                break;
+            }
 
             if k > start {
                 v[0] = *h_ptr.add((k - 1) * n + k);
@@ -407,13 +438,13 @@ impl<T: Scalar<Real = T> + PartialOrd, S: Storage<T>> RealSchur<T, S> {
                 let p = ptr_k.add(col_offset);
                 let val0 = *p;
                 let val1 = *p.add(1);
-                
+
                 let mut dot = val0 + house[1] * val1;
                 if nr == 3 {
                     dot += house[2] * *p.add(2);
                 }
                 let factor = tau * dot;
-                
+
                 *p -= factor;
                 *p.add(1) -= factor * house[1];
                 if nr == 3 {
@@ -424,14 +455,7 @@ impl<T: Scalar<Real = T> + PartialOrd, S: Storage<T>> RealSchur<T, S> {
 
             // Right: H = H P^T
             let rows_limit = std::cmp::min(n, k + 4);
-            apply_householder_on_the_right_vectorized_f64(
-                h, 
-                house, 
-                tau, 
-                k, 
-                rows_limit,
-                workspace
-            );
+            apply_householder_on_the_right_vectorized_f64(h, house, tau, k, rows_limit, workspace);
 
             // Clean sub-diagonal
             if k > start {
@@ -442,14 +466,7 @@ impl<T: Scalar<Real = T> + PartialOrd, S: Storage<T>> RealSchur<T, S> {
             }
 
             // Q = Q P^T
-            apply_householder_on_the_right_vectorized_f64(
-                q,
-                house,
-                tau,
-                k,
-                n,
-                workspace
-            );
+            apply_householder_on_the_right_vectorized_f64(q, house, tau, k, n, workspace);
         }
     }
 
@@ -464,7 +481,7 @@ impl<T: Scalar<Real = T> + PartialOrd, S: Storage<T>> RealSchur<T, S> {
         t: f32,
         workspace: &mut [f32],
     ) {
-         use crate::core::decompositions::hessenberg_utils::apply_householder_on_the_right_vectorized_f32;
+        use crate::core::decompositions::hessenberg_utils::apply_householder_on_the_right_vectorized_f32;
         let n = h.rows();
         let h_ptr = h.storage_mut().data_mut().as_mut_ptr();
 
@@ -486,7 +503,9 @@ impl<T: Scalar<Real = T> + PartialOrd, S: Storage<T>> RealSchur<T, S> {
 
         for k in start..end {
             let nr = std::cmp::min(3, end - k + 1);
-            if nr < 2 { break; }
+            if nr < 2 {
+                break;
+            }
 
             if k > start {
                 v[0] = *h_ptr.add((k - 1) * n + k);
@@ -500,20 +519,20 @@ impl<T: Scalar<Real = T> + PartialOrd, S: Storage<T>> RealSchur<T, S> {
             let house = &house_arr[..nr];
 
             let left_start = if k == start { start } else { k - 1 };
-            
+
             let ptr_k = h_ptr.add(left_start * n + k);
             let mut col_offset = 0;
             for _j in left_start..n {
                 let p = ptr_k.add(col_offset);
                 let val0 = *p;
                 let val1 = *p.add(1);
-                
+
                 let mut dot = val0 + house[1] * val1;
                 if nr == 3 {
                     dot += house[2] * *p.add(2);
                 }
                 let factor = tau * dot;
-                
+
                 *p -= factor;
                 *p.add(1) -= factor * house[1];
                 if nr == 3 {
@@ -523,14 +542,7 @@ impl<T: Scalar<Real = T> + PartialOrd, S: Storage<T>> RealSchur<T, S> {
             }
 
             let rows_limit = std::cmp::min(n, k + 4);
-            apply_householder_on_the_right_vectorized_f32(
-                h, 
-                house, 
-                tau, 
-                k, 
-                rows_limit,
-                workspace
-            );
+            apply_householder_on_the_right_vectorized_f32(h, house, tau, k, rows_limit, workspace);
 
             if k > start {
                 *h_ptr.add((k - 1) * n + k + 1) = 0.0;
@@ -539,14 +551,7 @@ impl<T: Scalar<Real = T> + PartialOrd, S: Storage<T>> RealSchur<T, S> {
                 }
             }
 
-            apply_householder_on_the_right_vectorized_f32(
-                q,
-                house,
-                tau,
-                k,
-                n,
-                workspace
-            );
+            apply_householder_on_the_right_vectorized_f32(q, house, tau, k, n, workspace);
         }
     }
 
@@ -554,11 +559,11 @@ impl<T: Scalar<Real = T> + PartialOrd, S: Storage<T>> RealSchur<T, S> {
         let n = v.len();
         let mut house = [0.0; 3];
         // house vector has length 'n' effectively, but stored in fixed 3.
-        // house[0] = 1.0 (implicit?) 
-        // Logic: v[0] = 1.0. house[1..] = v[1..]. 
-        // Existing logic: house[0] = 1.0. 
+        // house[0] = 1.0 (implicit?)
+        // Logic: v[0] = 1.0. house[1..] = v[1..].
+        // Existing logic: house[0] = 1.0.
         house[0] = 1.0;
-        
+
         let mut norm_sq = 0.0;
         for i in 1..n {
             let val = v[i];
@@ -577,7 +582,7 @@ impl<T: Scalar<Real = T> + PartialOrd, S: Storage<T>> RealSchur<T, S> {
         } else {
             -norm_sq / (v0 + mu)
         };
-        
+
         let tau = 2.0 * v0_prime * v0_prime / (v0_prime * v0_prime + norm_sq);
         let inv_v0 = 1.0 / v0_prime;
 
@@ -591,7 +596,7 @@ impl<T: Scalar<Real = T> + PartialOrd, S: Storage<T>> RealSchur<T, S> {
         let n = v.len();
         let mut house = [0.0; 3];
         house[0] = 1.0;
-        
+
         let mut norm_sq = 0.0;
         for i in 1..n {
             let val = v[i];
@@ -608,9 +613,9 @@ impl<T: Scalar<Real = T> + PartialOrd, S: Storage<T>> RealSchur<T, S> {
         let v0_prime = if v0 <= 0.0 {
             v0 - mu
         } else {
-             -norm_sq / (v0 + mu)
+            -norm_sq / (v0 + mu)
         };
-        
+
         let tau = 2.0 * v0_prime * v0_prime / (v0_prime * v0_prime + norm_sq);
         let inv_v0 = 1.0 / v0_prime;
 
@@ -619,7 +624,6 @@ impl<T: Scalar<Real = T> + PartialOrd, S: Storage<T>> RealSchur<T, S> {
         }
         (tau, house)
     }
-
 
     fn make_householder(v: &[T]) -> (T, Vec<T>) {
         let n = v.len();

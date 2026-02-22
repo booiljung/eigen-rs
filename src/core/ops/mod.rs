@@ -41,53 +41,6 @@ where
     }
 }
 
-impl<'a, T, L, R> crate::core::cuda::CudaDispatcher<T> for CwiseAddOp<'a, T, L, R>
-where
-    T: Scalar,
-    L: MatrixXpr<T>,
-    R: MatrixXpr<T>,
-{
-    fn try_assign_cuda<S: Storage<T>>(
-        &self,
-        _dest: &mut crate::core::matrix::Matrix<T, S>,
-    ) -> Result<bool, String> {
-        #[cfg(feature = "cuda")]
-        {
-            if let (Some(l_storage), Some(r_storage)) =
-                (self.lhs.as_cuda_storage(), self.rhs.as_cuda_storage())
-            {
-                // Both operands are on CUDA.
-                // We need to verify if dest is also on CUDA.
-                if std::any::TypeId::of::<S>()
-                    == std::any::TypeId::of::<crate::core::storage::cuda::CudaStorage<T>>()
-                {
-                    // Safety: We checked TypeId. Use row() and col() to build matrices for specialized call.
-                    // This is still a bit round-about, but works.
-                    // A better way is to call the kernel directly here.
-                    let ctx = crate::core::cuda::get_cuda_context()?;
-                    let n = _dest.size() as i32;
-                    let a_ptr = l_storage.get_ptr(0, 0);
-                    let b_ptr = r_storage.get_ptr(0, 0);
-                    let c_ptr = _dest.storage_mut().get_ptr(0, 0) as *mut T;
-
-                    if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() {
-                        unsafe {
-                            ctx.launch_add_f32(
-                                a_ptr as *const f32,
-                                b_ptr as *const f32,
-                                c_ptr as *mut f32,
-                                n,
-                            )?;
-                        }
-                        return Ok(true);
-                    }
-                }
-            }
-        }
-        Ok(false)
-    }
-}
-
 impl<'a, T, L, R> MatrixXpr<T> for CwiseAddOp<'a, T, L, R>
 where
     T: Scalar,
@@ -344,48 +297,6 @@ where
     }
 }
 
-impl<'a, T, L, R> crate::core::cuda::CudaDispatcher<T> for CwiseSubOp<'a, T, L, R>
-where
-    T: Scalar,
-    L: MatrixXpr<T>,
-    R: MatrixXpr<T>,
-{
-    fn try_assign_cuda<S: Storage<T>>(
-        &self,
-        _dest: &mut crate::core::matrix::Matrix<T, S>,
-    ) -> Result<bool, String> {
-        #[cfg(feature = "cuda")]
-        {
-            if let (Some(l_storage), Some(r_storage)) =
-                (self.lhs.as_cuda_storage(), self.rhs.as_cuda_storage())
-            {
-                if std::any::TypeId::of::<S>()
-                    == std::any::TypeId::of::<crate::core::storage::cuda::CudaStorage<T>>()
-                {
-                    let ctx = crate::core::cuda::get_cuda_context()?;
-                    let n = _dest.size() as i32;
-                    let a_ptr = l_storage.get_ptr(0, 0);
-                    let b_ptr = r_storage.get_ptr(0, 0);
-                    let c_ptr = _dest.storage_mut().get_ptr(0, 0) as *mut T;
-
-                    if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() {
-                        unsafe {
-                            ctx.launch_sub_f32(
-                                a_ptr as *const f32,
-                                b_ptr as *const f32,
-                                c_ptr as *mut f32,
-                                n,
-                            )?;
-                        }
-                        return Ok(true);
-                    }
-                }
-            }
-        }
-        Ok(false)
-    }
-}
-
 impl<'a, T, L, R> MatrixXpr<T> for CwiseSubOp<'a, T, L, R>
 where
     T: Scalar,
@@ -622,45 +533,6 @@ where
     }
 }
 
-impl<'a, T, X> crate::core::cuda::CudaDispatcher<T> for CwiseScalarMulOp<'a, T, X>
-where
-    T: Scalar,
-    X: MatrixXpr<T>,
-{
-    fn try_assign_cuda<S: Storage<T>>(
-        &self,
-        _dest: &mut crate::core::matrix::Matrix<T, S>,
-    ) -> Result<bool, String> {
-        #[cfg(feature = "cuda")]
-        {
-            if let Some(x_storage) = self.xpr.as_cuda_storage() {
-                if std::any::TypeId::of::<S>()
-                    == std::any::TypeId::of::<crate::core::storage::cuda::CudaStorage<T>>()
-                {
-                    let ctx = crate::core::cuda::get_cuda_context()?;
-                    let n = _dest.size() as i32;
-                    let a_ptr = x_storage.get_ptr(0, 0);
-                    let c_ptr = _dest.storage_mut().get_ptr(0, 0) as *mut T;
-
-                    if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() {
-                        let s_f32: f32 = unsafe { *(&self.scalar as *const T as *const f32) };
-                        unsafe {
-                            ctx.launch_scalar_mul_f32(
-                                a_ptr as *const f32,
-                                s_f32,
-                                c_ptr as *mut f32,
-                                n,
-                            )?;
-                        }
-                        return Ok(true);
-                    }
-                }
-            }
-        }
-        Ok(false)
-    }
-}
-
 impl<'a, T, X> MatrixXpr<T> for CwiseScalarMulOp<'a, T, X>
 where
     T: Scalar,
@@ -852,14 +724,6 @@ where
     }
 }
 
-impl<'a, T, L, R> crate::core::cuda::CudaDispatcher<T> for Product<'a, T, L, R>
-where
-    T: Scalar,
-    L: MatrixXpr<T>,
-    R: MatrixXpr<T>,
-{
-}
-
 impl<'a, T, L, R> MatrixXpr<T> for Product<'a, T, L, R>
 where
     T: Scalar,
@@ -918,13 +782,6 @@ where
             _phantom: std::marker::PhantomData,
         }
     }
-}
-
-impl<'a, T, X> crate::core::cuda::CudaDispatcher<T> for TransposeOp<'a, T, X>
-where
-    T: Scalar,
-    X: MatrixXpr<T>,
-{
 }
 
 impl<'a, T, X> MatrixXpr<T> for TransposeOp<'a, T, X>
@@ -991,13 +848,6 @@ where
             _phantom: std::marker::PhantomData,
         })
     }
-}
-
-impl<'a, T, X> crate::core::cuda::CudaDispatcher<T> for BlockOp<'a, T, X>
-where
-    T: Scalar,
-    X: MatrixXpr<T>,
-{
 }
 
 impl<'a, T, X> MatrixXpr<T> for BlockOp<'a, T, X>

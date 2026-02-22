@@ -10,6 +10,8 @@ pub mod solvers;
 pub mod sparse_matrix;
 
 #[cfg(feature = "cuda")]
+pub mod cuda_sparse_bridge;
+#[cfg(feature = "cuda")]
 pub use cuda_storage::CudaSparseStorage;
 pub use iterators::InnerIterator;
 pub use ordering::{NaturalOrdering, Ordering, Permutation};

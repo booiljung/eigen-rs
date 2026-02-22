@@ -1,5 +1,5 @@
-use eigen_rs::core::matrix::Matrix;
 use eigen_rs::core::decompositions::lu::PartialPivLU;
+use eigen_rs::core::matrix::Matrix;
 use num_complex::Complex;
 
 fn main() {
@@ -16,7 +16,7 @@ fn main() {
     println!("Matrix A:\n{:?}", a);
 
     let lu = PartialPivLU::new(&a).unwrap();
-    
+
     // Verify PA = LU
     // Or solve Ax = b
     let b = Matrix::<Complex<f64>, _>::new_dynamic(2, 1).unwrap();
@@ -35,7 +35,7 @@ fn main() {
 
     let mut diff = Matrix::<Complex<f64>, _>::new_dynamic(2, 1).unwrap();
     diff.assign(&(&ax - &b_ones)).unwrap();
-    
+
     let norm = diff.norm();
     println!("Residual Norm: {:?}", norm);
 

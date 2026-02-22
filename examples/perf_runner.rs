@@ -1,6 +1,7 @@
 use eigen_rs::core::matrix::MatrixX;
 use eigen_rs::core::xpr::MatrixXpr;
 use std::hint::black_box;
+use std::io::Write;
 use std::time::Instant;
 
 fn init_matrix(m: &mut MatrixX<f32>) {
@@ -36,12 +37,18 @@ fn bench_matmul(size: usize) {
     let mut c = MatrixX::<f32>::new_dynamic(size, size).unwrap();
 
     // Randomize
-    for i in 0..size*size {
+    for i in 0..size * size {
         *a.get_mut(i % size, i / size).unwrap() = (i % 100) as f32;
         *b.get_mut(i % size, i / size).unwrap() = ((i + 1) % 100) as f32;
     }
 
-    let iterations = if size < 64 { 100 } else if size < 256 { 10 } else { 1 };
+    let iterations = if size < 64 {
+        100
+    } else if size < 256 {
+        10
+    } else {
+        1
+    };
 
     // Warm up
     for _ in 0..5 {
@@ -55,6 +62,7 @@ fn bench_matmul(size: usize) {
     let duration = start.elapsed().as_nanos();
 
     println!("MatMul,{},{}", size, duration / iterations as u128);
+    std::io::stdout().flush().unwrap();
 }
 
 fn bench_llt(size: usize) {
@@ -70,7 +78,13 @@ fn bench_llt(size: usize) {
         *m.get_mut(i, i).unwrap() += size as f32;
     }
 
-    let iterations = if size < 64 { 100 } else if size < 256 { 10 } else { 1 };
+    let iterations = if size < 64 {
+        100
+    } else if size < 256 {
+        10
+    } else {
+        1
+    };
 
     // Warm up
     for _ in 0..5 {
@@ -84,6 +98,7 @@ fn bench_llt(size: usize) {
     let duration = start.elapsed().as_nanos();
 
     println!("LLT,{},{}", size, duration / iterations as u128);
+    std::io::stdout().flush().unwrap();
 }
 
 fn bench_svd(size: usize) {
@@ -92,7 +107,13 @@ fn bench_svd(size: usize) {
         *a.get_mut(i % size, i / size).unwrap() = (i % 100) as f32;
     }
 
-    let iterations = if size < 64 { 100 } else if size < 256 { 10 } else { 1 };
+    let iterations = if size < 64 {
+        100
+    } else if size < 256 {
+        10
+    } else {
+        1
+    };
 
     // Warm up
     for _ in 0..2 {
@@ -106,6 +127,7 @@ fn bench_svd(size: usize) {
     let duration = start.elapsed().as_nanos();
 
     println!("SVD,{},{}", size, duration / iterations as u128);
+    std::io::stdout().flush().unwrap();
 }
 
 fn bench_eigenvalues(size: usize) {
@@ -122,7 +144,13 @@ fn bench_eigenvalues(size: usize) {
         }
     }
 
-    let iterations = if size < 64 { 100 } else if size < 256 { 10 } else { 1 };
+    let iterations = if size < 64 {
+        100
+    } else if size < 256 {
+        10
+    } else {
+        1
+    };
 
     // Warm up
     for _ in 0..2 {
@@ -136,6 +164,7 @@ fn bench_eigenvalues(size: usize) {
     let duration = start.elapsed().as_nanos();
 
     println!("EigenValues,{},{}", size, duration / iterations as u128);
+    std::io::stdout().flush().unwrap();
 }
 
 fn bench_vector_ops(size: usize) {
@@ -164,14 +193,13 @@ fn bench_vector_ops(size: usize) {
         // Rust: match this
         let res = v1.dot(&v2);
         dot_res += res;
-        unsafe { *v1.get_mut(0, 0).unwrap() += 1e-6; }
+        unsafe {
+            *v1.get_mut(0, 0).unwrap() += 1e-6;
+        }
     }
     let duration = start.elapsed().as_nanos();
-    println!(
-        "VecDot,{},{}",
-        size,
-        duration / iterations as u128
-    );
+    println!("VecDot,{},{}", size, duration / iterations as u128);
+    std::io::stdout().flush().unwrap();
 
     // Norm
     let start = Instant::now();
@@ -183,11 +211,8 @@ fn bench_vector_ops(size: usize) {
         }
     }
     let duration = start.elapsed().as_nanos();
-    println!(
-        "VecNorm,{},{}",
-        size,
-        duration / iterations as u128
-    );
+    println!("VecNorm,{},{}", size, duration / iterations as u128);
+    std::io::stdout().flush().unwrap();
 }
 
 fn bench_matrix_arithmetic(size: usize) {
@@ -197,7 +222,13 @@ fn bench_matrix_arithmetic(size: usize) {
     init_matrix(&mut b);
     let mut c = MatrixX::<f32>::new_dynamic(size, size).unwrap();
 
-    let iterations = if size < 64 { 1000 } else if size < 512 { 1000 } else { 100 };
+    let iterations = if size < 64 {
+        1000
+    } else if size < 512 {
+        1000
+    } else {
+        100
+    };
 
     // Add
     let start = Instant::now();
@@ -214,6 +245,7 @@ fn bench_matrix_arithmetic(size: usize) {
         duration / iterations as u128,
         c.sum()
     );
+    std::io::stdout().flush().unwrap();
 
     // Scale
     init_matrix(&mut a); // Reset
@@ -228,10 +260,11 @@ fn bench_matrix_arithmetic(size: usize) {
         duration / iterations as u128,
         a.sum()
     );
+    std::io::stdout().flush().unwrap();
 }
 
 fn bench_geometry(filter: &str) {
-    use eigen_rs::core::matrix::{FixedStorage, Matrix, Vector3};
+    use eigen_rs::core::matrix::{FixedStorage, Matrix};
     use eigen_rs::core::xpr::MatrixXpr;
     use eigen_rs::geometry::Quaternion;
 
@@ -248,6 +281,7 @@ fn bench_geometry(filter: &str) {
     }
     let duration = start.elapsed().as_nanos();
     println!("Cross3D,3,{},{}", duration / iterations as u128, v1.sum());
+    std::io::stdout().flush().unwrap();
 
     // Quaternion Mul
     let mut q1 = Quaternion::new(1.0, 0.0, 0.0, 0.0);
@@ -260,6 +294,7 @@ fn bench_geometry(filter: &str) {
     let duration = start.elapsed().as_nanos();
     let q_sum = q1.w() + q1.x() + q1.y() + q1.z();
     println!("QuatMul,4,{},{}", duration / iterations as u128, q_sum);
+    std::io::stdout().flush().unwrap();
 
     // QuatRot
     if matches_filter("QuatRot", filter) {
@@ -267,11 +302,16 @@ fn bench_geometry(filter: &str) {
         let mut v_res = Matrix::<f32, FixedStorage<f32, 3, 1, 3>>::zeros();
         let start = Instant::now();
         for _ in 0..iterations {
-             *v_rot.get_mut(0, 0).unwrap() += 1e-6;
-             v_res = &q1 * &v_rot;
+            *v_rot.get_mut(0, 0).unwrap() += 1e-6;
+            v_res = &q1 * &v_rot;
         }
         let duration = start.elapsed().as_nanos();
-        println!("QuatRot,3,{},{}", duration / iterations as u128, v_res.sum());
+        println!(
+            "QuatRot,3,{},{}",
+            duration / iterations as u128,
+            v_res.sum()
+        );
+        std::io::stdout().flush().unwrap();
     }
 }
 
@@ -282,7 +322,13 @@ fn bench_dense_decomp_extra(size: usize) {
         *a.get_mut(i % size, i / size).unwrap() = (i % 17) as f32;
     }
 
-    let iterations = if size < 64 { 100 } else if size < 256 { 10 } else { 1 };
+    let iterations = if size < 64 {
+        100
+    } else if size < 256 {
+        10
+    } else {
+        1
+    };
 
     // LU
     let start = Instant::now();
@@ -291,6 +337,7 @@ fn bench_dense_decomp_extra(size: usize) {
     }
     let duration = start.elapsed().as_nanos();
     println!("LU,{},{}", size, duration / iterations as u128);
+    std::io::stdout().flush().unwrap();
 
     // QR
     let start = Instant::now();
@@ -299,12 +346,11 @@ fn bench_dense_decomp_extra(size: usize) {
     }
     let duration = start.elapsed().as_nanos();
     println!("QR,{},{}", size, duration / iterations as u128);
+    std::io::stdout().flush().unwrap();
 }
 
 fn bench_decompositions_advanced(size: usize, filter: &str) {
-    use eigen_rs::core::decompositions::{
-        GeneralizedEigenSolver, HessenbergDecomposition, RealSchur, Tridiagonalization,
-    };
+    use eigen_rs::core::decompositions::{HessenbergDecomposition, RealSchur, Tridiagonalization};
 
     let mut a = MatrixX::<f32>::new_dynamic(size, size).unwrap();
     // fill
@@ -334,6 +380,7 @@ fn bench_decompositions_advanced(size: usize, filter: &str) {
         }
         let duration = start.elapsed().as_nanos();
         println!("Determinant,{},{}", size, duration / iterations as u128);
+        std::io::stdout().flush().unwrap();
         black_box(det_sum);
     }
 
@@ -345,6 +392,7 @@ fn bench_decompositions_advanced(size: usize, filter: &str) {
         }
         let duration = start.elapsed().as_nanos();
         println!("LDLT,{},{}", size, duration / iterations as u128);
+        std::io::stdout().flush().unwrap();
     }
 
     // 3. Hessenberg
@@ -375,7 +423,11 @@ fn bench_decompositions_advanced(size: usize, filter: &str) {
             let _ = GeneralizedSelfAdjointEigenSolver::new(&sym, &pd, false);
         }
         let duration = start.elapsed().as_nanos();
-        println!("GeneralizedEigen,{},{}", size, duration / iterations as u128);
+        println!(
+            "GeneralizedEigen,{},{}",
+            size,
+            duration / iterations as u128
+        );
     }
 
     // 6. RealSchur
@@ -402,11 +454,11 @@ fn bench_decompositions_advanced(size: usize, filter: &str) {
 
 fn bench_geometry_advanced(filter: &str) {
     use eigen_rs::core::geometry::{AngleAxis, EulerAngles, Scaling, Transform3, Translation};
-    use eigen_rs::core::matrix::{Vector3, Matrix3};
+    use eigen_rs::core::matrix::{Matrix3, Vector3};
     use std::ops::Mul; // For .mul() calls or * syntax
-    
+
     let iterations = 100_000_000;
-    
+
     // Transform
     // C++: Translation * Scaling
     let tr = Translation::new(Vector3::from_array([1.0, 2.0, 3.0]));
@@ -414,9 +466,9 @@ fn bench_geometry_advanced(filter: &str) {
     let t_tr = Transform3::from_translation(&tr);
     let t_sc = Transform3::from_scaling(&sc);
     let t = t_tr.mul(&t_sc);
-    
-    let mut v = Vector3::<f32>::from_array([0.5, 0.5, 0.5]); 
-    
+
+    let mut v = Vector3::<f32>::from_array([0.5, 0.5, 0.5]);
+
     let start = Instant::now();
     for _ in 0..iterations {
         v = t.transform_point(&v);
@@ -434,7 +486,7 @@ fn bench_geometry_advanced(filter: &str) {
         }
         let duration = start.elapsed().as_nanos();
         println!("TransformMul,4,{}", duration / iterations as u128);
-        black_box(t_res.matrix().get(0,0));
+        black_box(t_res.matrix().get(0, 0));
     }
 
     // Translation
@@ -459,13 +511,13 @@ fn bench_geometry_advanced(filter: &str) {
     // AngleAxis -> Matrix
     let aa = AngleAxis::new(0.5, Vector3::from_array([1.0, 0.0, 0.0]));
     let mut rot = Matrix3::<f32>::identity();
-    
+
     let mut v_dummy = 0.0;
     let start = Instant::now();
     for _ in 0..iterations {
         rot = aa.to_rotation_matrix();
-        let val = *rot.get(0, 0).unwrap(); 
-        v_dummy += val * 1e-6; 
+        let val = *rot.get(0, 0).unwrap();
+        v_dummy += val * 1e-6;
     }
     let duration = start.elapsed().as_nanos();
     println!("AngleAxis,3,{}", duration / iterations as u128);
@@ -483,14 +535,13 @@ fn bench_geometry_advanced(filter: &str) {
 fn bench_sparse_advanced(size: usize) {
     use eigen_rs::core::sparse::solvers::{SparseLU, SparseQR};
     use eigen_rs::core::sparse::{SparseMatrix, StorageOrder, Triplet};
-    use eigen_rs::core::storage::Storage;
-    
+
     // Generate sparse matrix
     let mut sp = SparseMatrix::<f32>::new(size, size, StorageOrder::ColMajor);
     let density = 0.05;
     let nnz = (size as f32 * size as f32 * density) as usize;
     let mut triplets = Vec::with_capacity(nnz + size);
-    
+
     for i in 0..nnz {
         let r = (i * 17) % size;
         let c = (i * 23) % size;
@@ -500,15 +551,15 @@ fn bench_sparse_advanced(size: usize) {
         triplets.push(Triplet::new(i, i, 2.0));
     }
     sp.set_from_triplets(triplets);
-    
+
     // new_random not available. Use set random.
     let mut b = MatrixX::<f32>::new_dynamic(size, 1).unwrap();
     for i in 0..size {
         *b.get_mut(i, 0).unwrap() = (i % 100) as f32 / 10.0;
     }
-    
+
     let iterations = if size < 64 { 20 } else { 1 };
-    
+
     // SparseLU
     {
         let mut lu = SparseLU::new();
@@ -521,7 +572,7 @@ fn bench_sparse_advanced(size: usize) {
         let duration = start.elapsed().as_nanos();
         println!("SparseLU,{},{}", size, duration / iterations as u128);
     }
-    
+
     // SparseQR
     {
         let mut qr = SparseQR::new();
@@ -540,16 +591,16 @@ fn bench_sparse_advanced(size: usize) {
         use eigen_rs::core::matrix::MatrixX;
         let mut dense = MatrixX::<f32>::new_dynamic(size, size).unwrap();
         // Make it sparse-ish (same logic as C++)
-        for i in 0..size*size {
+        for i in 0..size * size {
             // "if (rand() % 100 > 5) dense(i%size, i/size) = 0.0f;"
             // This means 5% density (95% zeros).
             let r = i % size;
             let c = i / size;
-             if (i % 100) > 5 {
+            if (i % 100) > 5 {
                 *dense.get_mut(r, c).unwrap() = 0.0;
-             } else {
+            } else {
                 *dense.get_mut(r, c).unwrap() = (i % 10) as f32;
-             }
+            }
         }
 
         let start = Instant::now();
@@ -564,18 +615,23 @@ fn bench_sparse_advanced(size: usize) {
             for c in 0..size {
                 outer_starts.push(nnz);
                 for r in 0..size {
-                     let val = unsafe { *dense.get_unchecked(r, c) };
-                     if val != 0.0 {
-                         values.push(val);
-                         inner_indices.push(r);
-                         nnz += 1;
-                     }
+                    let val = unsafe { *dense.get_unchecked(r, c) };
+                    if val != 0.0 {
+                        values.push(val);
+                        inner_indices.push(r);
+                        nnz += 1;
+                    }
                 }
             }
             outer_starts.push(nnz);
 
             let s = SparseMatrix::<f32>::from_raw(
-                size, size, values, inner_indices, outer_starts, StorageOrder::ColMajor
+                size,
+                size,
+                values,
+                inner_indices,
+                outer_starts,
+                StorageOrder::ColMajor,
             );
             black_box(s.non_zeros());
         }
@@ -589,7 +645,7 @@ fn bench_optimization() {
 }
 fn bench_sparse(size: usize) {
     use eigen_rs::core::sparse::{SparseMatrix, StorageOrder, Triplet};
-    use eigen_rs::core::xpr::MatrixXpr; // Import for sum()
+    // Import for sum()
 
     let mut sp = SparseMatrix::new(size, size, StorageOrder::RowMajor);
     let density = 0.05;
@@ -681,15 +737,15 @@ fn bench_inverse(size: usize) {
 }
 
 fn bench_sparse_iterative(size: usize) {
-    use eigen_rs::core::sparse::{SparseMatrix, StorageOrder, Triplet};
-    use eigen_rs::core::iterative_solvers::{ConjugateGradient, BiCGSTAB, IterativeSolver};
-    use eigen_rs::core::matrix::MatrixX; // Explicit import if needed, though usually available
-    
+    use eigen_rs::core::iterative_solvers::{BiCGSTAB, ConjugateGradient, IterativeSolver};
+    use eigen_rs::core::matrix::MatrixX;
+    use eigen_rs::core::sparse::{SparseMatrix, StorageOrder, Triplet}; // Explicit import if needed, though usually available
+
     // perf_runner uses local helper init_vector
-    
+
     let density = 0.05;
     let nnz = (size as f32 * size as f32 * density) as usize;
-    
+
     // A = B * B^T + 10I
     let mut triplets = Vec::with_capacity(nnz + size);
     for k in 0..nnz {
@@ -704,24 +760,24 @@ fn bench_sparse_iterative(size: usize) {
     for i in 0..size {
         triplets.push(Triplet::new(i, i, 10.0)); // Diagonal
     }
-    
+
     let mut sp = SparseMatrix::<f32>::new(size, size, StorageOrder::RowMajor);
     sp.set_from_triplets(triplets);
-    
+
     let mut b = MatrixX::<f32>::new_dynamic(size, 1).unwrap();
     // init_vector(&mut b); // Helper function in file
     for i in 0..b.size() {
         *b.get_mut(i, 0).unwrap() = (i % 17) as f32 / 10.0;
     }
-    
+
     let iterations = if size < 64 { 20 } else { 5 };
-    
+
     // Conjugate Gradient
     {
         let mut cg = ConjugateGradient::<f32, SparseMatrix<f32>>::new()
             .with_max_iterations(100)
             .with_tolerance(1e-6);
-            
+
         let start = std::time::Instant::now();
         for _ in 0..iterations {
             cg.compute(&sp);
@@ -730,13 +786,13 @@ fn bench_sparse_iterative(size: usize) {
         let duration = start.elapsed().as_nanos();
         println!("SparseCG,{},{}", size, duration / iterations as u128);
     }
-    
+
     // BiCGSTAB
     {
         let mut bicg = BiCGSTAB::<f32, SparseMatrix<f32>>::new()
             .with_max_iterations(100)
             .with_tolerance(1e-6);
-            
+
         let start = std::time::Instant::now();
         for _ in 0..iterations {
             bicg.compute(&sp);
@@ -748,13 +804,13 @@ fn bench_sparse_iterative(size: usize) {
 }
 
 fn bench_sparse_cholesky(size: usize) {
-    use eigen_rs::core::sparse::{SparseMatrix, StorageOrder, Triplet};
-    use eigen_rs::core::sparse::solvers::{SimplicialLLT, SimplicialLDLT};
     use eigen_rs::core::matrix::MatrixX;
-    
+    use eigen_rs::core::sparse::solvers::{SimplicialLDLT, SimplicialLLT};
+    use eigen_rs::core::sparse::{SparseMatrix, StorageOrder, Triplet};
+
     let density = 0.05;
     let nnz = (size as f32 * size as f32 * density) as usize;
-    
+
     // A = B * B^T + 2I
     let mut triplets = Vec::with_capacity(nnz);
     for k in 0..nnz {
@@ -763,18 +819,18 @@ fn bench_sparse_cholesky(size: usize) {
         let v = 0.5; // Avoid huge numbers
         triplets.push(Triplet::new(r, c, v));
     }
-    
+
     let mut b_mat = SparseMatrix::<f32>::new(size, size, StorageOrder::ColMajor);
     b_mat.set_from_triplets(triplets);
-    
+
     // A = B * B^T (Sparse * SparseTranspose)
     // SparseMatrix::mul requires refs.
-    // Transpose returns a new matrix or expression? 
+    // Transpose returns a new matrix or expression?
     // SparseMatrix::transpose() returns SparseMatrix with flipped order.
     // We need same order for multiplication.
     let bt = b_mat.transpose_reordered();
-    let mut a: SparseMatrix<f32> = (&b_mat * &bt).unwrap();
-    
+    let a: SparseMatrix<f32> = (&b_mat * &bt).unwrap();
+
     // Add Identity to diagonal to ensure PD
     let mut i_triplets = Vec::with_capacity(size);
     for i in 0..size {
@@ -782,16 +838,16 @@ fn bench_sparse_cholesky(size: usize) {
     }
     let mut ident = SparseMatrix::<f32>::new(size, size, StorageOrder::ColMajor);
     ident.set_from_triplets(i_triplets);
-    
+
     let sp: SparseMatrix<f32> = (&a + &ident).unwrap();
-    
+
     let mut b = MatrixX::<f32>::new_dynamic(size, 1).unwrap();
     for i in 0..size {
         *b.get_mut(i, 0).unwrap() = (i % 17) as f32 / 10.0;
     }
-    
+
     let iterations = if size < 64 { 20 } else { 5 };
-    
+
     // SimplicialLLT
     {
         let mut llt = SimplicialLLT::<f32>::new();
@@ -803,7 +859,7 @@ fn bench_sparse_cholesky(size: usize) {
         let duration = start.elapsed().as_nanos();
         println!("SimplicialLLT,{},{}", size, duration / iterations as u128);
     }
-    
+
     // SimplicialLDLT
     {
         let mut ldlt = SimplicialLDLT::<f32>::new();
@@ -846,8 +902,8 @@ fn main() {
             }
             i += 2;
         } else if args[i] == "--filter" && i + 1 < args.len() {
-             filter = args[i+1].clone();
-             i += 2;
+            filter = args[i + 1].clone();
+            i += 2;
         } else {
             i += 1;
         }
@@ -872,29 +928,49 @@ fn main() {
     small_sizes.dedup();
 
     for &size in &sizes {
-        if matches_filter("MatMul", &filter) { bench_matmul(size); }
-        if matches_filter("LLT", &filter) { bench_llt(size); }
-        if matches_filter("QR", &filter) || matches_filter("LU", &filter) { bench_dense_decomp_extra(size); }
-        
+        if matches_filter("MatMul", &filter) {
+            bench_matmul(size);
+        }
+        if matches_filter("LLT", &filter) {
+            bench_llt(size);
+        }
+        if matches_filter("QR", &filter) || matches_filter("LU", &filter) {
+            bench_dense_decomp_extra(size);
+        }
+
         // Jacobi SVD (Slow for large N, but useful for comparison)
-        if matches_filter("SVD", &filter) { bench_svd(size); }
-        
+        if matches_filter("SVD", &filter) {
+            bench_svd(size);
+        }
+
         // Pass filter to advanced decompositions (RealSchur, Hessenberg, etc.)
         bench_decompositions_advanced(size, &filter);
-        
-        if matches_filter("MatAdd", &filter) || matches_filter("MatScale", &filter) { bench_matrix_arithmetic(size); }
-        if matches_filter("VecDot", &filter) || matches_filter("VecNorm", &filter) { bench_vector_ops(size); }
-        if matches_filter("SpMV", &filter) || matches_filter("SpMM", &filter) { bench_sparse(size); }
-        if matches_filter("SparseAdvanced", &filter) 
-            || matches_filter("SparseLU", &filter) 
-            || matches_filter("SparseQR", &filter) 
-            || matches_filter("SparseView", &filter) 
-        { 
-            bench_sparse_advanced(size); 
+
+        if matches_filter("MatAdd", &filter) || matches_filter("MatScale", &filter) {
+            bench_matrix_arithmetic(size);
         }
-        if matches_filter("SparseCG", &filter) || matches_filter("SparseBiCGSTAB", &filter) { bench_sparse_iterative(size); }
-        if matches_filter("SimplicialLLT", &filter) || matches_filter("SimplicialLDLT", &filter) { bench_sparse_cholesky(size); }
-        if matches_filter("Inverse", &filter) { bench_inverse(size); }
+        if matches_filter("VecDot", &filter) || matches_filter("VecNorm", &filter) {
+            bench_vector_ops(size);
+        }
+        if matches_filter("SpMV", &filter) || matches_filter("SpMM", &filter) {
+            bench_sparse(size);
+        }
+        if matches_filter("SparseAdvanced", &filter)
+            || matches_filter("SparseLU", &filter)
+            || matches_filter("SparseQR", &filter)
+            || matches_filter("SparseView", &filter)
+        {
+            bench_sparse_advanced(size);
+        }
+        if matches_filter("SparseCG", &filter) || matches_filter("SparseBiCGSTAB", &filter) {
+            bench_sparse_iterative(size);
+        }
+        if matches_filter("SimplicialLLT", &filter) || matches_filter("SimplicialLDLT", &filter) {
+            bench_sparse_cholesky(size);
+        }
+        if matches_filter("Inverse", &filter) {
+            bench_inverse(size);
+        }
     }
 
     // 3. Large Vector Benchmarks (Fixed for now, or could be added to args)
@@ -906,20 +982,24 @@ fn main() {
     }
 
     for &size in &small_sizes {
-        if matches_filter("SVD", &filter) { bench_svd(size); }
-        if matches_filter("Eigenvalues", &filter) { bench_eigenvalues(size); }
+        if matches_filter("SVD", &filter) {
+            bench_svd(size);
+        }
+        if matches_filter("Eigenvalues", &filter) {
+            bench_eigenvalues(size);
+        }
     }
 
-    if matches_filter("Geometry", &filter) 
-        || matches_filter("AngleAxis", &filter) 
-        || matches_filter("EulerAngles", &filter) 
-        || matches_filter("Cross3D", &filter) 
-        || matches_filter("QuatMul", &filter) 
-        || matches_filter("QuatRot", &filter) 
-        || matches_filter("Transform", &filter) 
-        || matches_filter("TransformMul", &filter) 
-        || matches_filter("Translation", &filter) 
-        || matches_filter("Scaling", &filter) 
+    if matches_filter("Geometry", &filter)
+        || matches_filter("AngleAxis", &filter)
+        || matches_filter("EulerAngles", &filter)
+        || matches_filter("Cross3D", &filter)
+        || matches_filter("QuatMul", &filter)
+        || matches_filter("QuatRot", &filter)
+        || matches_filter("Transform", &filter)
+        || matches_filter("TransformMul", &filter)
+        || matches_filter("Translation", &filter)
+        || matches_filter("Scaling", &filter)
     {
         bench_geometry(&filter);
         bench_geometry_advanced(&filter);

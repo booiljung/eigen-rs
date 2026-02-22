@@ -63,6 +63,17 @@ impl<T: Scalar, P: Preconditioner<T>> BiCGSTAB<T, P> {
             return Err("Incompatible dimensions".to_string());
         }
 
+        #[cfg(feature = "cuda")]
+        {
+            if crate::core::tensor::device::cuda::is_cuda_device_active() {
+                use crate::core::sparse::cuda_sparse_bridge::CudaSparseExt;
+                // Attempt to solve on GPU. If it fails (e.g. missing memory, unsupported type), ignore and fall back to CPU.
+                if let Ok(Some(x)) = matrix.try_bicgstab_cuda(b, self.max_iterations, self.tolerance) {
+                    return Ok(x);
+                }
+            }
+        }
+
         self.preconditioner.compute(matrix)?;
 
         let mut x = Matrix::<T, DynamicStorage<T>>::new_dynamic(n, b.cols())?; // Initial x = 0

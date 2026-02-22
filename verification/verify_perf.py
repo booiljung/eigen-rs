@@ -8,6 +8,7 @@ CPP_BENCH_SRC = "benches/cpp_ref/eigen_bench.cpp"
 CPP_BENCH_BIN = "benches/cpp_ref/eigen_bench.bin"
 RUST_BENCH_CMD = ["cargo", "run", "--release", "--example", "perf_runner"]
 import platform
+import argparse
 
 REPORT_DIR = "docs/reports"
 LATEST_REPORT_LINK = "docs/reports/LATEST_PERFORMANCE.md"
@@ -43,6 +44,30 @@ def get_system_info():
         
     return info
 
+def run_and_stream(cmd, env=None):
+    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env, bufsize=1)
+    
+    stdout_lines = []
+    while True:
+        output = process.stdout.readline()
+        if output == '' and process.poll() is not None:
+            break
+        if output:
+            sys.stdout.write(output)
+            sys.stdout.flush()
+            stdout_lines.append(output)
+            
+    rc = process.poll()
+    stderr = process.stderr.read()
+    
+    class Res:
+        pass
+    res = Res()
+    res.returncode = rc
+    res.stdout = "".join(stdout_lines)
+    res.stderr = stderr
+    return res
+
 def compile_cpp():
     print(f"Compiling C++ Benchmark: {CPP_BENCH_SRC}...")
     cmd = ["g++", "-O3", "-march=native", "-I", "eigen-src", CPP_BENCH_SRC, "-o", CPP_BENCH_BIN]
@@ -56,18 +81,23 @@ def compile_cpp():
 def run_cpp(args=[]):
     print(f"Running C++ Benchmark with args {args}...")
     cmd = [f"./{CPP_BENCH_BIN}"] + args
-    res = subprocess.run(cmd, capture_output=True, text=True)
+    res = run_and_stream(cmd)
     if res.returncode != 0:
         print("❌ C++ Benchmark Failed:")
         print(res.stderr)
         return None
     return parse_output(res.stdout)
 
-def run_rust():
-    print("Running Rust Benchmark (Release Mode)...")
+def run_rust(use_cuda=False):
+    print(f"Running Rust Benchmark (Release Mode{' + CUDA' if use_cuda else ''})...")
     env = os.environ.copy()
     env["RUSTFLAGS"] = "-C target-cpu=native"
-    res = subprocess.run(RUST_BENCH_CMD, capture_output=True, text=True, env=env)
+    
+    cmd = RUST_BENCH_CMD.copy()
+    if use_cuda:
+        cmd.extend(["--features", "cuda"])
+        
+    res = subprocess.run(cmd, capture_output=True, text=True, env=env)
     if "DEBUG" in res.stderr:
         print("--- STDERR DEBUG ---")
         print(res.stderr)
@@ -211,6 +241,8 @@ def generate_report(cpp_data, rust_data, is_partial=False):
     else:
         print(f"Partial run detected. NOT updating {LATEST_REPORT_LINK}")
 
+    return all_passed
+
 def main():
     import argparse
     parser = argparse.ArgumentParser()
@@ -219,6 +251,7 @@ def main():
     parser.add_argument("--filter", type=str, help="Filter benchmarks by name", default="")
     parser.add_argument("--sizes", type=str, help="Comma-separated sizes (e.g. 10,20,30)", default="")
     parser.add_argument("--small-sizes", type=str, help="Comma-separated small sizes", default="")
+    parser.add_argument("--cuda", action="store_true", help="Enable CUDA feature flag during Rust execution")
     args = parser.parse_args()
 
     # Pass filter to Rust command if present
@@ -253,7 +286,7 @@ def main():
 
         print("Running C++ Benchmark with Random Sizes...")
         cpp_cmd = [f"./{CPP_BENCH_BIN}", "--sizes", sizes_str, "--small-sizes", small_sizes_str]
-        res = subprocess.run(cpp_cmd, capture_output=True, text=True)
+        res = run_and_stream(cpp_cmd)
         if res.returncode != 0:
             print("❌ C++ Benchmark Failed:")
             print(res.stderr)
@@ -263,8 +296,12 @@ def main():
         print("Running Rust Benchmark with Random Sizes...")
         env = os.environ.copy()
         env["RUSTFLAGS"] = "-C target-cpu=native"
-        rust_cmd = RUST_BENCH_CMD + ["--", "--sizes", sizes_str, "--small-sizes", small_sizes_str] + extra_args
-        res = subprocess.run(rust_cmd, capture_output=True, text=True, env=env)
+        rust_cmd = RUST_BENCH_CMD.copy()
+        if args.cuda:
+            rust_cmd.extend(["--features", "cuda"])
+        rust_cmd.extend(["--", "--sizes", sizes_str, "--small-sizes", small_sizes_str] + extra_args)
+        
+        res = run_and_stream(rust_cmd, env=env)
         if res.returncode != 0:
             print("❌ Rust Benchmark Failed:")
             print(res.stderr)
@@ -292,16 +329,12 @@ def main():
     cpp_data = run_cpp(size_args)
     if cpp_data is None: sys.exit(1)
         
-    # Modified to pass filter
+    # Pass filter to Rust command if present
     print("Running Rust Benchmark (Release Mode)...")
     env = os.environ.copy()
     env["RUSTFLAGS"] = "-C target-cpu=native"
-    # Note: run_rust function in this script hardcodes the call. 
-    # I should update run_rust to accept args or modify it here.
-    # Actually simpler to inline logic or update run_rust signature.
-    # Let's update run_rust function instead.
     
-    rust_data = run_rust_with_args(extra_args + size_args)
+    rust_data = run_rust_with_args(extra_args + size_args, use_cuda=args.cuda)
     if rust_data is None: sys.exit(1)
     
     success = generate_report(cpp_data, rust_data, is_partial=is_partial)
@@ -313,12 +346,15 @@ def main():
         print("❌ Performance Verification FAILED (Some deviations too high)")
         sys.exit(1)
 
-def run_rust_with_args(extra_args):
+def run_rust_with_args(extra_args, use_cuda=False):
     print(f"Running Rust Benchmark (Release Mode) with args {extra_args}...")
     env = os.environ.copy()
     env["RUSTFLAGS"] = "-C target-cpu=native"
-    cmd = RUST_BENCH_CMD + ["--"] + extra_args
-    res = subprocess.run(cmd, capture_output=True, text=True, env=env)
+    cmd = RUST_BENCH_CMD.copy()
+    if use_cuda:
+        cmd.extend(["--features", "cuda"])
+    cmd.extend(["--"] + extra_args)
+    res = run_and_stream(cmd, env=env)
     if "DEBUG" in res.stderr:
         print("--- STDERR DEBUG ---")
         print(res.stderr)

@@ -10,7 +10,8 @@ use crate::core::storage::{DynamicStorage, Storage};
 
 /// Generalized Hessenberg-Triangular reduction.
 /// Generalized Hessenberg-Triangular reduction.
-pub struct GeneralizedHessenbergTriangular<T: Scalar<Real = T> + PartialOrd, S: Storage<Complex<T>>> {
+pub struct GeneralizedHessenbergTriangular<T: Scalar<Real = T> + PartialOrd, S: Storage<Complex<T>>>
+{
     h: Matrix<Complex<T>, DynamicStorage<Complex<T>>>,
     r: Matrix<Complex<T>, DynamicStorage<Complex<T>>>,
     q: Matrix<Complex<T>, DynamicStorage<Complex<T>>>,
@@ -18,7 +19,9 @@ pub struct GeneralizedHessenbergTriangular<T: Scalar<Real = T> + PartialOrd, S: 
     _phantom: std::marker::PhantomData<S>,
 }
 
-impl<T: Scalar<Real = T> + PartialOrd, S: Storage<Complex<T>>> GeneralizedHessenbergTriangular<T, S> {
+impl<T: Scalar<Real = T> + PartialOrd, S: Storage<Complex<T>>>
+    GeneralizedHessenbergTriangular<T, S>
+{
     /// Computes the GHT reduction of the given pair of square complex matrices (A, B).
     pub fn new(a: &Matrix<Complex<T>, S>, b: &Matrix<Complex<T>, S>) -> Result<Self, String> {
         let n = a.rows();

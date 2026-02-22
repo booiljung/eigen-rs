@@ -1,6 +1,6 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use eigen_rs::core::matrix::MatrixX;
-use eigen_rs::core::sparse::solvers::{SimplicialLLT, SparseLU};
+use eigen_rs::core::sparse::solvers::SparseLU;
 use eigen_rs::core::sparse::sparse_matrix::{SparseMatrix, StorageOrder, Triplet};
 #[cfg(feature = "cuda")]
 use eigen_rs::core::sparse::{cuda_ops, CudaSparseStorage};
@@ -23,7 +23,7 @@ fn bench_sparse_spmv(c: &mut Criterion) {
     a.set_from_triplets(triplets);
 
     let x = MatrixX::<f64>::new_dynamic(size, 1).unwrap();
-    let mut y = MatrixX::<f64>::new_dynamic(size, 1).unwrap();
+    let y = MatrixX::<f64>::new_dynamic(size, 1).unwrap();
 
     let mut group = c.benchmark_group("Sparse SpMV");
     group.bench_function("f64_1000x1000_nnz10_cpu", |b| {

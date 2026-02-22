@@ -1,3 +1,5 @@
+use eigen_rs::core::storage::CudaStorage;
+
 #[test]
 #[cfg(feature = "cuda")]
 fn test_cuda_transfer() {

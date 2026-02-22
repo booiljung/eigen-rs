@@ -1,9 +1,10 @@
 #[cfg(feature = "cuda")]
-use eigen_rs::core::matrix::{Matrix, MatrixX};
-mod common;
-#[cfg(feature = "cuda")]
 use eigen_rs::core::storage::cuda::CudaStorage;
-
+#[cfg(feature = "cuda")]
+use eigen_rs::core::tensor::device::cuda::CudaDevice;
+#[cfg(feature = "cuda")]
+use eigen_rs::core::tensor::Tensor;
+mod common;
 #[cfg(feature = "cuda")]
 #[test]
 fn test_cuda_comprehensive_verify() {
@@ -24,31 +25,34 @@ fn test_cuda_comprehensive_verify() {
     }
 
     // Setup CUDA matrices
-    let mut d_a = Matrix::<f32, CudaStorage<f32>>::new_dynamic(size, 1).unwrap();
-    let mut d_b = Matrix::<f32, CudaStorage<f32>>::new_dynamic(size, 1).unwrap();
+    let mut d_a =
+        Tensor::<f32, 1, CudaDevice>::new_with_device([size], CudaDevice::default()).unwrap();
+    let mut d_b =
+        Tensor::<f32, 1, CudaDevice>::new_with_device([size], CudaDevice::default()).unwrap();
 
-    d_a.storage_mut().copy_from_host(&h_a).unwrap();
-    d_b.storage_mut().copy_from_host(&h_b).unwrap();
+    d_a.copy_from_host(&h_a).unwrap();
+    d_b.copy_from_host(&h_b).unwrap();
 
     // Results
-    let mut d_res = Matrix::<f32, CudaStorage<f32>>::new_dynamic(size, 1).unwrap();
+    let mut d_res =
+        Tensor::<f32, 1, CudaDevice>::new_with_device([size], CudaDevice::default()).unwrap();
     let mut h_res = vec![0.0f32; size];
 
     // Compute ADD
     d_res.assign(&(&d_a + &d_b)).unwrap();
-    d_res.storage().copy_to_host(&mut h_res).unwrap();
+    d_res.copy_to_host(&mut h_res).unwrap();
 
     // Store results for ADD to verify later
     let res_add = h_res.clone();
 
     // Compute SUB
     d_res.assign(&(&d_a - &d_b)).unwrap();
-    d_res.storage().copy_to_host(&mut h_res).unwrap();
+    d_res.copy_to_host(&mut h_res).unwrap();
     let res_sub = h_res.clone();
 
     // Compute MUL (Scalar)
     d_res.assign(&(&d_a * 2.0f32)).unwrap();
-    d_res.storage().copy_to_host(&mut h_res).unwrap();
+    d_res.copy_to_host(&mut h_res).unwrap();
     let res_mul = h_res.clone();
 
     // Verify against C++ Output
@@ -99,9 +103,12 @@ fn test_cublas_gemm() {
     }
 
     // CUDA Storage
-    let mut d_a = Matrix::<f32, CudaStorage<f32>>::new_dynamic(size, size).unwrap();
-    let mut d_b = Matrix::<f32, CudaStorage<f32>>::new_dynamic(size, size).unwrap();
-    let mut d_c = Matrix::<f32, CudaStorage<f32>>::new_dynamic(size, size).unwrap();
+    // Keeping `test_cublas_gemm` as Matrix API to preserve specific API regressions
+    use eigen_rs::core::matrix::Matrix;
+
+    let mut d_a = Matrix::<f32, CudaStorage<f32>>::new_cuda(size, size).unwrap();
+    let mut d_b = Matrix::<f32, CudaStorage<f32>>::new_cuda(size, size).unwrap();
+    let mut d_c = Matrix::<f32, CudaStorage<f32>>::new_cuda(size, size).unwrap();
 
     d_a.storage_mut().copy_from_host(&h_a).unwrap();
     d_b.storage_mut().copy_from_host(&h_b).unwrap();

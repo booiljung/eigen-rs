@@ -5,7 +5,7 @@
 //! The problem is transformed to a standard symmetric eigenvalue problem:
 //! $C y = \lambda y$ where $C = L^{-1} A L^{-T}$ and $x = L^{-T} y$.
 
-use crate::core::decompositions::{LLT, SelfAdjointEigenSolver};
+use crate::core::decompositions::{SelfAdjointEigenSolver, LLT};
 use crate::core::matrix::Matrix;
 use crate::core::scalar::Scalar;
 use crate::core::storage::DynamicStorage;
@@ -19,7 +19,8 @@ pub struct GeneralizedSelfAdjointEigenSolver<T: Scalar, S: Storage<T>> {
 }
 
 impl<T: Scalar<Real = T> + num_traits::One + 'static + PartialOrd, S: Storage<T> + 'static>
-    GeneralizedSelfAdjointEigenSolver<T, S> {
+    GeneralizedSelfAdjointEigenSolver<T, S>
+{
     /// Computes the generalized eigenvalues and (optionally) eigenvectors of (A, B).
     /// A must be self-adjoint, B must be positive definite.
     pub fn new(
@@ -42,7 +43,7 @@ impl<T: Scalar<Real = T> + num_traits::One + 'static + PartialOrd, S: Storage<T>
         // Then C = Y L^{-T} => C L^T = Y => C = (Y^T L^{-1})^T => (L Y^T_trans)^T?
         // Easiest semantic way:
         // C = L.solve(A).solve_transpose(L) ? No, solve solves Ax=b.
-        
+
         // Let's implement manually for efficiency.
         // Y = L^{-1} A
         let mut y = Matrix::<T, DynamicStorage<T>>::new_dynamic(n, n)?;
@@ -62,7 +63,7 @@ impl<T: Scalar<Real = T> + num_traits::One + 'static + PartialOrd, S: Storage<T>
         }
         // Solve L C = Y^T (in-place in c)
         llt.solve_inplace_l(&mut c)?;
-        
+
         // Note: C should be symmetric.
         // The result of L^{-1} A L^{-T} is mathematically symmetric if A is symmetric.
         // However, numerical errors might make it slightly non-symmetric.
@@ -77,14 +78,14 @@ impl<T: Scalar<Real = T> + num_traits::One + 'static + PartialOrd, S: Storage<T>
             // Recover eigenvectors x = L^{-T} y
             // eigen_vecs returns y.
             // We need to solve L^T x = y.
-            
+
             let y_vecs = eigen.eigenvectors().unwrap();
             let mut x_vecs = Matrix::<T, DynamicStorage<T>>::new_dynamic(n, n)?;
             x_vecs.assign(y_vecs)?; // Copy y
-            
+
             // Solve L^T x = y (in-place in x_vecs)
             llt.solve_inplace_lt(&mut x_vecs)?;
-            
+
             eigenvectors = Some(x_vecs);
         }
 
@@ -128,17 +129,17 @@ mod tests {
         // Eigenvalues of A with B=I should be standard eigenvalues of A
         // lambda^2 - 6 lambda + 7 = 0 => lambda = (6 +/- sqrt(36-28))/2 = 3 +/- sqrt(2)
         // 3 + 1.414 = 4.414, 3 - 1.414 = 1.586
-        
+
         let solver = GeneralizedSelfAdjointEigenSolver::new(&a, &b, false)?;
         let evals = solver.eigenvalues();
-        
+
         let v1 = *evals.get(0, 0).unwrap();
         let v2 = *evals.get(1, 0).unwrap();
-        
+
         // Sorted? SelfAdjointEigenSolver sorts them.
         assert!((v1 - (3.0 - 2.0f64.sqrt())).abs() < 1e-6);
         assert!((v2 - (3.0 + 2.0f64.sqrt())).abs() < 1e-6);
-        
+
         Ok(())
     }
 
@@ -159,38 +160,38 @@ mod tests {
         // Ax = lambda Bx
         // 10 x1 = lambda 2 x1 => lambda = 5
         // 20 x2 = lambda 5 x2 => lambda = 4
-        
+
         let solver = GeneralizedSelfAdjointEigenSolver::new(&a, &b, true)?;
         let evals = solver.eigenvalues();
 
         let v1 = *evals.get(0, 0).unwrap();
         let v2 = *evals.get(1, 0).unwrap();
-        
+
         assert!((v1 - 4.0).abs() < 1e-6);
         assert!((v2 - 5.0).abs() < 1e-6);
-        
+
         // Eigenvectors
         let evecs = solver.eigenvectors().unwrap();
         // For lambda=4, x2 != 0, x1 = 0. e.g. [0, 1]
         // For lambda=5, x1 != 0, x2 = 0. e.g. [1, 0]
-        
+
         // Check orthogonality B-inner product?
         // <u, B v> = 0 if lambda_u != lambda_v
-        
+
         // Let's just check the equations Ax = lambda Bx
         for k in 0..n {
             let lambda = *evals.get(k, 0).unwrap();
             for i in 0..n {
-                 let mut ax = 0.0;
-                 let mut bx = 0.0;
-                 for j in 0..n {
-                     ax += a.get(i, j).unwrap() * evecs.get(j, k).unwrap();
-                     bx += b.get(i, j).unwrap() * evecs.get(j, k).unwrap();
-                 }
-                 assert!((ax - lambda * bx).abs() < 1e-4, "Ax = lambda Bx failed");
+                let mut ax = 0.0;
+                let mut bx = 0.0;
+                for j in 0..n {
+                    ax += a.get(i, j).unwrap() * evecs.get(j, k).unwrap();
+                    bx += b.get(i, j).unwrap() * evecs.get(j, k).unwrap();
+                }
+                assert!((ax - lambda * bx).abs() < 1e-4, "Ax = lambda Bx failed");
             }
         }
-        
+
         Ok(())
     }
 }

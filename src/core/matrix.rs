@@ -46,16 +46,6 @@ impl<T: PartialEq + Scalar, S1: Storage<T>, S2: Storage<T>> PartialEq<Matrix<T, 
     }
 }
 
-impl<T, S: Storage<T>> crate::core::cuda::CudaDispatcher<T> for Matrix<T, S>
-where
-    T: Scalar,
-    S: Storage<T>,
-{
-    fn as_cuda_storage(&self) -> Option<&crate::core::storage::cuda::CudaStorage<T>> {
-        self.storage().as_cuda_storage()
-    }
-}
-
 impl<T, S: Storage<T>> MatrixXpr<T> for Matrix<T, S>
 where
     T: Scalar,
@@ -191,8 +181,6 @@ impl<T: Scalar, S: Storage<T>> Matrix<T, S> {
         crate::core::decompositions::LDLT::new(self)
     }
 
-
-
     /// Computes the inverse of the matrix.
     pub fn inverse(&self) -> Result<Matrix<T, DynamicStorage<T>>, String>
     where
@@ -245,11 +233,6 @@ impl<T: Scalar, S: Storage<T>> Matrix<T, S> {
     {
         if self.rows() != xpr.rows() || self.cols() != xpr.cols() {
             return Err("Dimension mismatch in assignment".to_string());
-        }
-
-        // Try CUDA acceleration
-        if xpr.try_assign_cuda(self)? {
-            return Ok(());
         }
 
         // Try Vectorized Path (AVX2/FMA) via Scalar Trait specialization
@@ -309,133 +292,6 @@ impl<T: Scalar, S: Storage<T>> Matrix<T, S> {
         });
 
         Ok(())
-    }
-
-    /// Specialized addition for CUDA.
-    #[cfg(feature = "cuda")]
-    pub fn assign_add_cuda<S1, S2>(
-        &mut self,
-        lhs: &Matrix<T, S1>,
-        rhs: &Matrix<T, S2>,
-    ) -> Result<(), String>
-    where
-        T: Scalar + 'static,
-        S1: Storage<T>,
-        S2: Storage<T>,
-    {
-        use crate::core::cuda::get_cuda_context;
-        use crate::core::storage::CudaStorage;
-
-        if std::any::TypeId::of::<S>() != std::any::TypeId::of::<CudaStorage<T>>()
-            || std::any::TypeId::of::<S1>() != std::any::TypeId::of::<CudaStorage<T>>()
-            || std::any::TypeId::of::<S2>() != std::any::TypeId::of::<CudaStorage<T>>()
-        {
-            return Err("CUDA addition requires all matrices to have CudaStorage".to_string());
-        }
-
-        // We know they are CudaStorage now.
-        let ctx = get_cuda_context()?;
-        let n = self.size() as i32;
-
-        // Safely get pointers since we checked TypeId
-        // This is still unsafe because get_ptr is on Storage trait but we are casting conceptually.
-        let a_ptr = lhs.storage().get_ptr(0, 0);
-        let b_ptr = rhs.storage().get_ptr(0, 0);
-        let c_ptr = self.storage_mut().get_ptr(0, 0) as *mut T;
-
-        if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() {
-            unsafe {
-                ctx.launch_add_f32(
-                    a_ptr as *const f32,
-                    b_ptr as *const f32,
-                    c_ptr as *mut f32,
-                    n,
-                )?;
-            }
-            Ok(())
-        } else {
-            Err("CUDA addition only implemented for f32 for now".to_string())
-        }
-    }
-
-    /// Specialized subtraction for CUDA.
-    #[cfg(feature = "cuda")]
-    pub fn assign_sub_cuda<S1, S2>(
-        &mut self,
-        lhs: &Matrix<T, S1>,
-        rhs: &Matrix<T, S2>,
-    ) -> Result<(), String>
-    where
-        T: Scalar + 'static,
-        S1: Storage<T>,
-        S2: Storage<T>,
-    {
-        use crate::core::cuda::get_cuda_context;
-        use crate::core::storage::cuda::CudaStorage;
-
-        if std::any::TypeId::of::<S>() != std::any::TypeId::of::<CudaStorage<T>>()
-            || std::any::TypeId::of::<S1>() != std::any::TypeId::of::<CudaStorage<T>>()
-            || std::any::TypeId::of::<S2>() != std::any::TypeId::of::<CudaStorage<T>>()
-        {
-            return Err("CUDA subtraction requires all matrices to have CudaStorage".to_string());
-        }
-
-        let ctx = get_cuda_context()?;
-        let n = self.size() as i32;
-        let a_ptr = lhs.storage().get_ptr(0, 0);
-        let b_ptr = rhs.storage().get_ptr(0, 0);
-        let c_ptr = self.storage_mut().get_ptr(0, 0) as *mut T;
-
-        if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() {
-            unsafe {
-                ctx.launch_sub_f32(
-                    a_ptr as *const f32,
-                    b_ptr as *const f32,
-                    c_ptr as *mut f32,
-                    n,
-                )?;
-            }
-            Ok(())
-        } else {
-            Err("CUDA subtraction only implemented for f32".to_string())
-        }
-    }
-
-    /// Specialized scalar multiplication for CUDA.
-    #[cfg(feature = "cuda")]
-    pub fn assign_scalar_mul_cuda<S1>(
-        &mut self,
-        lhs: &Matrix<T, S1>,
-        scalar: T,
-    ) -> Result<(), String>
-    where
-        T: Scalar + 'static,
-        S1: Storage<T>,
-    {
-        use crate::core::cuda::get_cuda_context;
-        use crate::core::storage::cuda::CudaStorage;
-
-        if std::any::TypeId::of::<S>() != std::any::TypeId::of::<CudaStorage<T>>()
-            || std::any::TypeId::of::<S1>() != std::any::TypeId::of::<CudaStorage<T>>()
-        {
-            return Err("CUDA scalar mul requires all matrices to have CudaStorage".to_string());
-        }
-
-        let ctx = get_cuda_context()?;
-        let n = self.size() as i32;
-        let a_ptr = lhs.storage().get_ptr(0, 0);
-        let c_ptr = self.storage_mut().get_ptr(0, 0) as *mut T;
-
-        if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() {
-            // Safety: We checked that T is f32
-            let s_f32: f32 = unsafe { *(&scalar as *const T as *const f32) };
-            unsafe {
-                ctx.launch_scalar_mul_f32(a_ptr as *const f32, s_f32, c_ptr as *mut f32, n)?;
-            }
-            Ok(())
-        } else {
-            Err("CUDA scalar mul only implemented for f32".to_string())
-        }
     }
 
     pub fn transpose(&self) -> crate::core::ops::TransposeOp<'_, T, Self>
@@ -526,10 +382,6 @@ impl<T: Scalar, S: Storage<T>> Matrix<T, S> {
         crate::core::ops::gemm::gemm_cm_unoptimized_xpr(product.lhs(), product.rhs(), self)
     }
 
-
-
-
-
     /// LU decomposition using LAPACK.
     #[cfg(feature = "lapack")]
     pub fn lu_lapack(&self) -> Result<crate::core::decompositions::lapack::LapackLU<T>, String>
@@ -580,7 +432,7 @@ impl<T: Scalar, S: Storage<T>> Matrix<T, S> {
         if let Some(res) = T::squared_norm_vectorized(self) {
             return res;
         }
-        
+
         // Sum of squared moduli for complex support
         let mut sum = T::Real::zero();
         for i in 0..self.size() {
@@ -879,7 +731,7 @@ impl<T: Scalar> Matrix<T, DynamicStorage<T>> {
 /// Specialization for CUDA matrices.
 #[cfg(feature = "cuda")]
 impl<T: Scalar> Matrix<T, crate::core::storage::cuda::CudaStorage<T>> {
-    pub fn new_dynamic(rows: usize, cols: usize) -> Result<Self, String> {
+    pub fn new_cuda(rows: usize, cols: usize) -> Result<Self, String> {
         Ok(Self {
             storage: crate::core::storage::cuda::CudaStorage::new(rows, cols)?,
             _phantom: std::marker::PhantomData,

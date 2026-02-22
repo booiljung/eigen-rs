@@ -128,7 +128,6 @@ impl<T: Scalar + PartialOrd> Scalar for Dual<T> {
         Self::constant(T::zero())
     }
 
-
     fn from_usize(v: usize) -> Self {
         Self::constant(T::from_usize(v))
     }

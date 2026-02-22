@@ -1,10 +1,10 @@
 //! Partial Pivoting LU decomposition (PA = LU).
 
 use crate::core::matrix::Matrix;
-use num_traits::Zero;
 use crate::core::scalar::Scalar;
 use crate::core::storage::DynamicStorage;
 use crate::core::storage::Storage;
+use num_traits::Zero;
 
 /// Result of a Partial Pivoting LU decomposition.
 pub struct PartialPivLU<T: Scalar, S: Storage<T>> {
@@ -90,14 +90,15 @@ impl<T: Scalar + num_traits::One, S: Storage<T>> PartialPivLU<T, S> {
             let pivot = unsafe { *mat.get_unchecked(k, k) };
             if pivot != T::from_usize(0) {
                 let inv_pivot = T::one() / pivot;
-                
+
                 // 2. Scale Column k (below diagonal)
                 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
                 {
                     // Runtime check for AVX2/FMA
-                    if (std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() 
+                    if (std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>()
                         || std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>())
-                        && is_x86_feature_detected!("avx2") && is_x86_feature_detected!("fma")
+                        && is_x86_feature_detected!("avx2")
+                        && is_x86_feature_detected!("fma")
                     {
                         unsafe {
                             Self::scale_col_avx(mat, k, inv_pivot);
@@ -121,7 +122,8 @@ impl<T: Scalar + num_traits::One, S: Storage<T>> PartialPivLU<T, S> {
                 {
                     if (std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>()
                         || std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>())
-                        && is_x86_feature_detected!("avx2") && is_x86_feature_detected!("fma")
+                        && is_x86_feature_detected!("avx2")
+                        && is_x86_feature_detected!("fma")
                     {
                         unsafe {
                             Self::panel_update_avx(mat, k, end);
@@ -158,13 +160,13 @@ impl<T: Scalar + num_traits::One, S: Storage<T>> PartialPivLU<T, S> {
                 let rows_stride = rows;
                 // col k starts at k * rows
                 let col_ptr = mut_ptr.add(k * rows_stride);
-                
+
                 // We want elements k+1..rows
                 // Access is contiguous: col_ptr[k+1], col_ptr[k+2] ...
-                
+
                 let val_f32 = *(&val as *const T as *const f32);
                 let val_vec = _mm256_set1_ps(val_f32);
-                
+
                 let mut i = k + 1;
                 while i + 7 < rows {
                     let ptr = col_ptr.add(i);
@@ -177,15 +179,15 @@ impl<T: Scalar + num_traits::One, S: Storage<T>> PartialPivLU<T, S> {
                 }
             }
         } else if tid == TypeId::of::<f64>() {
-             use std::arch::x86_64::*;
+            use std::arch::x86_64::*;
             unsafe {
                 let mut_ptr = mat.storage_mut().data_mut().as_mut_ptr() as *mut f64;
                 let rows_stride = rows;
                 let col_ptr = mut_ptr.add(k * rows_stride);
-                
+
                 let val_f64 = *(&val as *const T as *const f64);
                 let val_vec = _mm256_set1_pd(val_f64);
-                
+
                 let mut i = k + 1;
                 while i + 3 < rows {
                     let ptr = col_ptr.add(i);
@@ -300,7 +302,8 @@ impl<T: Scalar + num_traits::One, S: Storage<T>> PartialPivLU<T, S> {
         {
             if (std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>()
                 || std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>())
-                && is_x86_feature_detected!("avx2") && is_x86_feature_detected!("fma")
+                && is_x86_feature_detected!("avx2")
+                && is_x86_feature_detected!("fma")
             {
                 unsafe {
                     Self::trsm_unit_lower_avx(mat, k, kb, n);
@@ -328,7 +331,12 @@ impl<T: Scalar + num_traits::One, S: Storage<T>> PartialPivLU<T, S> {
 
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     #[target_feature(enable = "avx2", enable = "fma")]
-    unsafe fn trsm_unit_lower_avx(mat: &mut Matrix<T, DynamicStorage<T>>, k: usize, kb: usize, n: usize) {
+    unsafe fn trsm_unit_lower_avx(
+        mat: &mut Matrix<T, DynamicStorage<T>>,
+        k: usize,
+        kb: usize,
+        n: usize,
+    ) {
         let rows = mat.rows();
         use std::any::TypeId;
         let tid = TypeId::of::<T>();
@@ -417,41 +425,42 @@ impl<T: Scalar + num_traits::One, S: Storage<T>> PartialPivLU<T, S> {
         let cols = x.cols();
         let lu_ptr = self.lu.storage().data().as_ptr();
         let x_ptr = x.storage_mut().data_mut().as_mut_ptr();
-        
+
         let block_size = 64;
 
         // Check AVX availability once
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-        let use_avx = (std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() 
-                      || std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>())
-                      && is_x86_feature_detected!("avx2") && is_x86_feature_detected!("fma");
+        let use_avx = (std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>()
+            || std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>())
+            && is_x86_feature_detected!("avx2")
+            && is_x86_feature_detected!("fma");
         #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
         let use_avx = false;
 
         // Iterate backwards
         for k in (0..rows).step_by(block_size).rev() {
             let kb = std::cmp::min(block_size, rows - k); // logic needs care for step_by rev?
-            // rev() of step_by: e.g. 0, 64, 128 (N=200) -> 0, 64, 128. Rev -> 128, 64, 0.
-            // When k=128, kb = min(64, 200-128=72) = 64.
-            // When k=0, kb = 64.
-            // Wait, step_by starts from 0.
-            // If N=200. k=0, 64, 128, 192.
-            // rev: 192, 128, 64, 0.
-            // k=192: kb = min(64, 200-192=8) = 8. Correct.
-            
+                                                          // rev() of step_by: e.g. 0, 64, 128 (N=200) -> 0, 64, 128. Rev -> 128, 64, 0.
+                                                          // When k=128, kb = min(64, 200-128=72) = 64.
+                                                          // When k=0, kb = 64.
+                                                          // Wait, step_by starts from 0.
+                                                          // If N=200. k=0, 64, 128, 192.
+                                                          // rev: 192, 128, 64, 0.
+                                                          // k=192: kb = min(64, 200-192=8) = 8. Correct.
+
             // 1. Solve diagonal block
             unsafe {
                 let l_diag_ptr = lu_ptr.add(k * rows + k);
                 let x_block_ptr = x_ptr.add(k);
-                
+
                 let done = if use_avx {
-                     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-                     {
+                    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+                    {
                         Self::solve_u_avx_ptr(kb, cols, l_diag_ptr, 1, rows, x_block_ptr, 1, rows);
                         true
-                     }
-                     #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
-                     false
+                    }
+                    #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+                    false
                 } else {
                     false
                 };
@@ -480,68 +489,84 @@ impl<T: Scalar + num_traits::One, S: Storage<T>> PartialPivLU<T, S> {
                 let m = k; // rows to update
                 let n_gemm = cols;
                 let k_gemm = kb;
-                
+
                 unsafe {
                     let a_ptr = lu_ptr.add(k * rows); // U(0, k) -> col k start.
-                    // But we want U(0..k, k..k+kb).
-                    // This is block starting at (0, k).
-                    // Pointer to (0, k): lu_ptr.add(k * rows + 0). Correct. (ColMajor: col*rows + row)
-                    
+                                                      // But we want U(0..k, k..k+kb).
+                                                      // This is block starting at (0, k).
+                                                      // Pointer to (0, k): lu_ptr.add(k * rows + 0). Correct. (ColMajor: col*rows + row)
+
                     let b_ptr = x_ptr.add(k); // X block (k..k+kb)
                     let c_ptr = x_ptr; // X top (0..k)
 
-                     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+                    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
                     if use_avx {
-                         let tid = std::any::TypeId::of::<T>();
+                        let tid = std::any::TypeId::of::<T>();
                         #[cfg(target_feature = "avx2")]
                         if tid == std::any::TypeId::of::<f32>() {
-                             use crate::core::ops::gemm::arch::x86::asm_kernel::AsmFmaKernelF32;
-                             use crate::core::ops::gemm::gemm_blocked;
-                             let _ = gemm_blocked::<f32, AsmFmaKernelF32>(
-                                m, k_gemm, n_gemm,
-                                a_ptr as *const f32, 1, rows as isize,
-                                b_ptr as *const f32, 1, rows as isize,
-                                c_ptr as *mut f32, 1, rows as isize,
-                                -1.0, 
-                             );
+                            use crate::core::ops::gemm::arch::x86::asm_kernel::AsmFmaKernelF32;
+                            use crate::core::ops::gemm::gemm_blocked;
+                            let _ = gemm_blocked::<f32, AsmFmaKernelF32>(
+                                m,
+                                k_gemm,
+                                n_gemm,
+                                a_ptr as *const f32,
+                                1,
+                                rows as isize,
+                                b_ptr as *const f32,
+                                1,
+                                rows as isize,
+                                c_ptr as *mut f32,
+                                1,
+                                rows as isize,
+                                -1.0,
+                            );
                         } else if tid == std::any::TypeId::of::<f64>() {
-                             use crate::core::ops::gemm::arch::x86::asm_kernel::AsmFmaKernelF64;
-                             use crate::core::ops::gemm::gemm_blocked;
-                             let _ = gemm_blocked::<f64, AsmFmaKernelF64>(
-                                m, k_gemm, n_gemm,
-                                a_ptr as *const f64, 1, rows as isize,
-                                b_ptr as *const f64, 1, rows as isize,
-                                c_ptr as *mut f64, 1, rows as isize,
-                                -1.0, 
-                             );
+                            use crate::core::ops::gemm::arch::x86::asm_kernel::AsmFmaKernelF64;
+                            use crate::core::ops::gemm::gemm_blocked;
+                            let _ = gemm_blocked::<f64, AsmFmaKernelF64>(
+                                m,
+                                k_gemm,
+                                n_gemm,
+                                a_ptr as *const f64,
+                                1,
+                                rows as isize,
+                                b_ptr as *const f64,
+                                1,
+                                rows as isize,
+                                c_ptr as *mut f64,
+                                1,
+                                rows as isize,
+                                -1.0,
+                            );
                         }
                     } else {
-                         // Generic GEMM Fallback
-                         for j in 0..n_gemm {
-                             let x1_col = b_ptr.add(j * rows);
-                             let x2_col = c_ptr.add(j * rows);
-                             for l in 0..k_gemm { 
-                                 let factor = *x1_col.add(l);
-                                 let u_col = a_ptr.add(l * rows);
-                                 for i in 0..m { 
-                                     *x2_col.add(i) -= *u_col.add(i) * factor;
-                                 }
-                             }
-                         }
+                        // Generic GEMM Fallback
+                        for j in 0..n_gemm {
+                            let x1_col = b_ptr.add(j * rows);
+                            let x2_col = c_ptr.add(j * rows);
+                            for l in 0..k_gemm {
+                                let factor = *x1_col.add(l);
+                                let u_col = a_ptr.add(l * rows);
+                                for i in 0..m {
+                                    *x2_col.add(i) -= *u_col.add(i) * factor;
+                                }
+                            }
+                        }
                     }
-                     #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+                    #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
                     {
-                         for j in 0..n_gemm {
-                             let x1_col = b_ptr.add(j * rows);
-                             let x2_col = c_ptr.add(j * rows);
-                             for l in 0..k_gemm { 
-                                 let factor = *x1_col.add(l);
-                                 let u_col = a_ptr.add(l * rows);
-                                 for i in 0..m { 
-                                     *x2_col.add(i) -= *u_col.add(i) * factor;
-                                 }
-                             }
-                         }
+                        for j in 0..n_gemm {
+                            let x1_col = b_ptr.add(j * rows);
+                            let x2_col = c_ptr.add(j * rows);
+                            for l in 0..k_gemm {
+                                let factor = *x1_col.add(l);
+                                let u_col = a_ptr.add(l * rows);
+                                for i in 0..m {
+                                    *x2_col.add(i) -= *u_col.add(i) * factor;
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -552,14 +577,15 @@ impl<T: Scalar + num_traits::One, S: Storage<T>> PartialPivLU<T, S> {
         let cols = x.cols();
         let lu_ptr = self.lu.storage().data().as_ptr();
         let x_ptr = x.storage_mut().data_mut().as_mut_ptr();
-        
+
         let block_size = 64;
 
         // Check AVX availability once
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-        let use_avx = (std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() 
-                      || std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>())
-                      && is_x86_feature_detected!("avx2") && is_x86_feature_detected!("fma");
+        let use_avx = (std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>()
+            || std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>())
+            && is_x86_feature_detected!("avx2")
+            && is_x86_feature_detected!("fma");
         #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
         let use_avx = false;
 
@@ -571,15 +597,15 @@ impl<T: Scalar + num_traits::One, S: Storage<T>> PartialPivLU<T, S> {
             unsafe {
                 let l_diag_ptr = lu_ptr.add(k * rows + k);
                 let x_block_ptr = x_ptr.add(k); // row k
-                
+
                 let done = if use_avx {
-                     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-                     {
+                    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+                    {
                         Self::solve_l_avx_ptr(kb, cols, l_diag_ptr, 1, rows, x_block_ptr, 1, rows);
                         true
-                     }
-                     #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
-                     false
+                    }
+                    #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+                    false
                 } else {
                     false
                 };
@@ -588,11 +614,12 @@ impl<T: Scalar + num_traits::One, S: Storage<T>> PartialPivLU<T, S> {
                     // Scalar fallback for diagonal block
                     for j in 0..cols {
                         let col_ptr = x_block_ptr.add(j * rows);
-                        for i in 0..kb { // relative row in block
+                        for i in 0..kb {
+                            // relative row in block
                             let factor = *col_ptr.add(i);
                             // Subtract L column from remaining elements in block
-                            let l_col = l_diag_ptr.add(i * rows); 
-                            for ii in i+1..kb {
+                            let l_col = l_diag_ptr.add(i * rows);
+                            for ii in i + 1..kb {
                                 *col_ptr.add(ii) -= *l_col.add(ii) * factor;
                             }
                         }
@@ -606,73 +633,91 @@ impl<T: Scalar + num_traits::One, S: Storage<T>> PartialPivLU<T, S> {
                 let m = rows - (k + kb);
                 let n_gemm = cols;
                 let k_gemm = kb;
-                
+
                 unsafe {
                     let a_ptr = lu_ptr.add(k * rows + (k + kb)); // L21
                     let b_ptr = x_ptr.add(k); // X1 (block we just solved)
                     let c_ptr = x_ptr.add(k + kb); // X2 (target)
 
                     // Dispatch GEMM
-                     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+                    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
                     if use_avx {
                         // specialized AVX GEMM
-                         let tid = std::any::TypeId::of::<T>();
+                        let tid = std::any::TypeId::of::<T>();
                         #[cfg(target_feature = "avx2")]
                         if tid == std::any::TypeId::of::<f32>() {
-                             use crate::core::ops::gemm::arch::x86::asm_kernel::AsmFmaKernelF32;
-                             use crate::core::ops::gemm::gemm_blocked;
-                             let _ = gemm_blocked::<f32, AsmFmaKernelF32>(
-                                m, k_gemm, n_gemm,
-                                a_ptr as *const f32, 1, rows as isize,
-                                b_ptr as *const f32, 1, rows as isize,
-                                c_ptr as *mut f32, 1, rows as isize,
-                                -1.0, 
-                             );
+                            use crate::core::ops::gemm::arch::x86::asm_kernel::AsmFmaKernelF32;
+                            use crate::core::ops::gemm::gemm_blocked;
+                            let _ = gemm_blocked::<f32, AsmFmaKernelF32>(
+                                m,
+                                k_gemm,
+                                n_gemm,
+                                a_ptr as *const f32,
+                                1,
+                                rows as isize,
+                                b_ptr as *const f32,
+                                1,
+                                rows as isize,
+                                c_ptr as *mut f32,
+                                1,
+                                rows as isize,
+                                -1.0,
+                            );
                         } else if tid == std::any::TypeId::of::<f64>() {
-                             use crate::core::ops::gemm::arch::x86::asm_kernel::AsmFmaKernelF64;
-                             use crate::core::ops::gemm::gemm_blocked;
-                             let _ = gemm_blocked::<f64, AsmFmaKernelF64>(
-                                m, k_gemm, n_gemm,
-                                a_ptr as *const f64, 1, rows as isize,
-                                b_ptr as *const f64, 1, rows as isize,
-                                c_ptr as *mut f64, 1, rows as isize,
-                                -1.0, 
-                             );
+                            use crate::core::ops::gemm::arch::x86::asm_kernel::AsmFmaKernelF64;
+                            use crate::core::ops::gemm::gemm_blocked;
+                            let _ = gemm_blocked::<f64, AsmFmaKernelF64>(
+                                m,
+                                k_gemm,
+                                n_gemm,
+                                a_ptr as *const f64,
+                                1,
+                                rows as isize,
+                                b_ptr as *const f64,
+                                1,
+                                rows as isize,
+                                c_ptr as *mut f64,
+                                1,
+                                rows as isize,
+                                -1.0,
+                            );
                         }
                     } else {
                         // Generic GEMM Fallback
-                         // Use simple loop for now to avoid importing generic kernel machinery if complex
-                         // Or implement simple blocked loop here
-                         // X2 -= L21 * X1
-                         // L21: m x k_gemm
-                         // X1: k_gemm x n_gemm
-                         // X2: m x n_gemm
-                         // For cache locality, block over n_gemm?
-                         for j in 0..n_gemm {
-                             let x1_col = b_ptr.add(j * rows);
-                             let x2_col = c_ptr.add(j * rows);
-                             for l in 0..k_gemm { // cols of L21
-                                 let factor = *x1_col.add(l);
-                                 let l_col = a_ptr.add(l * rows);
-                                 for i in 0..m { // rows of L21
-                                     *x2_col.add(i) -= *l_col.add(i) * factor;
-                                 }
-                             }
-                         }
+                        // Use simple loop for now to avoid importing generic kernel machinery if complex
+                        // Or implement simple blocked loop here
+                        // X2 -= L21 * X1
+                        // L21: m x k_gemm
+                        // X1: k_gemm x n_gemm
+                        // X2: m x n_gemm
+                        // For cache locality, block over n_gemm?
+                        for j in 0..n_gemm {
+                            let x1_col = b_ptr.add(j * rows);
+                            let x2_col = c_ptr.add(j * rows);
+                            for l in 0..k_gemm {
+                                // cols of L21
+                                let factor = *x1_col.add(l);
+                                let l_col = a_ptr.add(l * rows);
+                                for i in 0..m {
+                                    // rows of L21
+                                    *x2_col.add(i) -= *l_col.add(i) * factor;
+                                }
+                            }
+                        }
                     }
-                     #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+                    #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
                     {
-                         for j in 0..n_gemm {
-                             let x1_col = b_ptr.add(j * rows);
-                             let x2_col = c_ptr.add(j * rows);
-                             for l in 0..k_gemm { 
-                                 let factor = *x1_col.add(l);
-                                 let l_col = a_ptr.add(l * rows);
-                                 for i in 0..m { 
-                                     *x2_col.add(i) -= *l_col.add(i) * factor;
-                                 }
-                             }
-                         }
+                        for j in 0..n_gemm {
+                            let x1_col = b_ptr.add(j * rows);
+                            let x2_col = c_ptr.add(j * rows);
+                            for l in 0..k_gemm {
+                                let factor = *x1_col.add(l);
+                                let l_col = a_ptr.add(l * rows);
+                                for i in 0..m {
+                                    *x2_col.add(i) -= *l_col.add(i) * factor;
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -807,8 +852,6 @@ impl<T: Scalar + num_traits::One, S: Storage<T>> PartialPivLU<T, S> {
         Ok(x)
     }
 
-
-
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     #[target_feature(enable = "avx2", enable = "fma")]
     unsafe fn solve_l_avx_ptr(
@@ -828,7 +871,7 @@ impl<T: Scalar + num_traits::One, S: Storage<T>> PartialPivLU<T, S> {
             use std::arch::x86_64::*;
             let lu_ptr = lu_ptr as *const f32;
             let x_ptr = x_ptr as *mut f32;
-            
+
             // Block over j (columns of x)
             let mut j = 0;
             while j + 8 <= cols {
@@ -948,21 +991,21 @@ impl<T: Scalar + num_traits::One, S: Storage<T>> PartialPivLU<T, S> {
                 let x_col = x_ptr.add(j * cs_x);
                 // Forward L
                 for k in 0..rows {
-                     let factor = *x_col.add(k * rs_x);
-                     let factor_vec = _mm256_set1_pd(factor);
-                     let lu_col = lu_ptr.add(k * cs_lu);
-                     
-                     let mut i = k + 1;
-                     while i + 3 < rows {
-                         let l_vec = _mm256_loadu_pd(lu_col.add(i));
-                         let mut x_vec = _mm256_loadu_pd(x_col.add(i));
-                         x_vec = _mm256_fnmadd_pd(l_vec, factor_vec, x_vec);
-                         _mm256_storeu_pd(x_col.add(i), x_vec);
-                         i += 4;
-                     }
-                     for ii in i..rows {
-                         *x_col.add(ii) -= (*lu_col.add(ii)) * factor;
-                     }
+                    let factor = *x_col.add(k * rs_x);
+                    let factor_vec = _mm256_set1_pd(factor);
+                    let lu_col = lu_ptr.add(k * cs_lu);
+
+                    let mut i = k + 1;
+                    while i + 3 < rows {
+                        let l_vec = _mm256_loadu_pd(lu_col.add(i));
+                        let mut x_vec = _mm256_loadu_pd(x_col.add(i));
+                        x_vec = _mm256_fnmadd_pd(l_vec, factor_vec, x_vec);
+                        _mm256_storeu_pd(x_col.add(i), x_vec);
+                        i += 4;
+                    }
+                    for ii in i..rows {
+                        *x_col.add(ii) -= (*lu_col.add(ii)) * factor;
+                    }
                 }
             }
         }
@@ -980,7 +1023,7 @@ impl<T: Scalar + num_traits::One, S: Storage<T>> PartialPivLU<T, S> {
         rs_x: usize,
         cs_x: usize,
     ) {
-         use std::any::TypeId;
+        use std::any::TypeId;
         let tid = TypeId::of::<T>();
 
         if tid == TypeId::of::<f32>() {
@@ -1069,7 +1112,7 @@ impl<T: Scalar + num_traits::One, S: Storage<T>> PartialPivLU<T, S> {
                         i += 8;
                     }
                     for ii in i..k {
-                         let u_val = *lu_col.add(ii);
+                        let u_val = *lu_col.add(ii);
                         *x_ptr0.add(ii) -= u_val * f0;
                         *x_ptr1.add(ii) -= u_val * f1;
                         *x_ptr2.add(ii) -= u_val * f2;
@@ -1086,7 +1129,7 @@ impl<T: Scalar + num_traits::One, S: Storage<T>> PartialPivLU<T, S> {
             // Remainder loop
             for j_rem in j..cols {
                 let x_col = x_ptr.add(j_rem * cs_x);
-                 // Backward U
+                // Backward U
                 for k in (0..rows).rev() {
                     let pivot = *lu_ptr.add(k * cs_lu + k);
                     *x_col.add(k) /= pivot;
@@ -1102,37 +1145,36 @@ impl<T: Scalar + num_traits::One, S: Storage<T>> PartialPivLU<T, S> {
                         i += 8;
                     }
                     for ii in i..k {
-                         *x_col.add(ii) -= (*lu_col.add(ii)) * factor;
+                        *x_col.add(ii) -= (*lu_col.add(ii)) * factor;
                     }
                 }
             }
-        
         } else if tid == TypeId::of::<f64>() {
             use std::arch::x86_64::*;
             let lu_ptr = lu_ptr as *const f64;
             let x_ptr = x_ptr as *mut f64;
 
             for j in 0..cols {
-                 let x_col = x_ptr.add(j * cs_x);
-                  // Backward U
+                let x_col = x_ptr.add(j * cs_x);
+                // Backward U
                 for k in (0..rows).rev() {
-                     let pivot = *lu_ptr.add(k * cs_lu + k);
-                     *x_col.add(k) /= pivot;
-                     let factor = *x_col.add(k);
-                     let factor_vec = _mm256_set1_pd(factor);
-                     let lu_col = lu_ptr.add(k * cs_lu);
-                     
-                     let mut i = 0;
-                     while i + 3 < k {
-                         let u_vec = _mm256_loadu_pd(lu_col.add(i));
-                         let mut x_vec = _mm256_loadu_pd(x_col.add(i));
-                         x_vec = _mm256_fnmadd_pd(u_vec, factor_vec, x_vec);
-                         _mm256_storeu_pd(x_col.add(i), x_vec);
-                         i += 4;
-                     }
-                     for ii in i..k {
-                         *x_col.add(ii) -= (*lu_col.add(ii)) * factor;
-                     }
+                    let pivot = *lu_ptr.add(k * cs_lu + k);
+                    *x_col.add(k) /= pivot;
+                    let factor = *x_col.add(k);
+                    let factor_vec = _mm256_set1_pd(factor);
+                    let lu_col = lu_ptr.add(k * cs_lu);
+
+                    let mut i = 0;
+                    while i + 3 < k {
+                        let u_vec = _mm256_loadu_pd(lu_col.add(i));
+                        let mut x_vec = _mm256_loadu_pd(x_col.add(i));
+                        x_vec = _mm256_fnmadd_pd(u_vec, factor_vec, x_vec);
+                        _mm256_storeu_pd(x_col.add(i), x_vec);
+                        i += 4;
+                    }
+                    for ii in i..k {
+                        *x_col.add(ii) -= (*lu_col.add(ii)) * factor;
+                    }
                 }
             }
         }

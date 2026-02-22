@@ -1,9 +1,9 @@
 //! Householder QR decomposition (A = QR).
 
 use crate::core::matrix::Matrix;
-use num_traits::Zero;
 use crate::core::scalar::Scalar;
 use crate::core::storage::{DynamicStorage, Storage};
+use num_traits::Zero;
 
 /// Result of a Householder QR decomposition.
 ///
@@ -24,6 +24,27 @@ impl<T: Scalar, S: Storage<T>> HouseholderQR<T, S> {
         let cols = matrix.cols();
         let size = std::cmp::min(rows, cols);
 
+        #[cfg(feature = "cuda")]
+        if crate::core::tensor::device::cuda::is_cuda_device_active() {
+            use crate::core::decompositions::cuda_bridge::CudaDecompositionExt;
+            match matrix.try_qr_cuda() {
+                Ok(Some((cuda_qr, cuda_h_coeffs))) => {
+                    return Ok(Self {
+                        qr: cuda_qr,
+                        h_coeffs: cuda_h_coeffs,
+                        _phantom: std::marker::PhantomData,
+                    });
+                }
+                Ok(None) => {} // Handle CPU fallback naturally
+                Err(e) => {
+                    eprintln!(
+                        "eigen-rs [cuda]: QR computation failed, falling back to CPU: {}",
+                        e
+                    );
+                }
+            }
+        }
+
         let mut qr = Matrix::<T, DynamicStorage<T>>::new_dynamic(rows, cols)?;
         qr.assign(matrix)?;
 
@@ -36,9 +57,9 @@ impl<T: Scalar, S: Storage<T>> HouseholderQR<T, S> {
 
         // Force Unblocked execution
         if false && cols >= BLOCK_SIZE * 2 {
-             Self::compute_blocked(&mut qr, &mut h_coeffs, BLOCK_SIZE);
+            Self::compute_blocked(&mut qr, &mut h_coeffs, BLOCK_SIZE);
         } else {
-             Self::compute_unblocked(&mut qr, &mut h_coeffs, 0, size);
+            Self::compute_unblocked(&mut qr, &mut h_coeffs, 0, size);
         }
 
         Ok(Self {
@@ -52,7 +73,7 @@ impl<T: Scalar, S: Storage<T>> HouseholderQR<T, S> {
         qr: &mut Matrix<T, DynamicStorage<T>>,
         h_coeffs: &mut [T],
         start_col: usize,
-        end_col: usize
+        end_col: usize,
     ) {
         let rows = qr.rows();
         let cols = qr.cols();
@@ -130,7 +151,7 @@ impl<T: Scalar, S: Storage<T>> HouseholderQR<T, S> {
     fn compute_blocked(
         qr: &mut Matrix<T, DynamicStorage<T>>,
         h_coeffs: &mut [T],
-        block_size: usize
+        block_size: usize,
     ) {
         let rows = qr.rows();
         let cols = qr.cols();
@@ -163,17 +184,17 @@ impl<T: Scalar, S: Storage<T>> HouseholderQR<T, S> {
                         } else if i == global_j {
                             T::from_usize(1)
                         } else {
-                             *qr.get(i, global_j).unwrap()
+                            *qr.get(i, global_j).unwrap()
                         };
                         y_mat[i + j * rows] = val; // Col-Major
                     }
                 }
-                
+
                 // Target: A_trail (rows x (cols - end_k)) starting at (0, end_k)
                 // We actually only need to update rows >= k. But Householder vectors start at k.
                 // Y is zero for rows < k. So we can update starting at row k.
                 // A_trail_sub = A[k:rows, end_k:cols]
-                
+
                 // Blocked update: A_trail -= Y * T^T * Y^T * A_trail
                 Self::apply_block_update(qr, &t_mat, k, end_k, rows, cols, &y_mat);
             }
@@ -188,11 +209,11 @@ impl<T: Scalar, S: Storage<T>> HouseholderQR<T, S> {
         qr: &mut Matrix<T, DynamicStorage<T>>,
         h_coeffs: &mut [T],
         start_col: usize,
-        end_col: usize
+        end_col: usize,
     ) {
         let rows = qr.rows();
-        let cols = qr.cols(); // Global cols needed for stride calculation if AVX? 
-        // Actually for panel, we only update columns up to `end_col`.
+        let cols = qr.cols(); // Global cols needed for stride calculation if AVX?
+                              // Actually for panel, we only update columns up to `end_col`.
 
         for k in start_col..end_col {
             // ... same norm logic ...
@@ -206,7 +227,11 @@ impl<T: Scalar, S: Storage<T>> HouseholderQR<T, S> {
 
             if norm != T::Real::zero() {
                 let v0 = *qr.get(k, k).unwrap();
-                let sigma = if v0.real() >= T::Real::zero() { T::from_real(norm) } else { T::from_real(-norm) };
+                let sigma = if v0.real() >= T::Real::zero() {
+                    T::from_real(norm)
+                } else {
+                    T::from_real(-norm)
+                };
                 let v0_new = v0 + sigma;
                 let tau = v0_new / sigma;
                 h_coeffs[k] = tau;
@@ -218,17 +243,17 @@ impl<T: Scalar, S: Storage<T>> HouseholderQR<T, S> {
 
                 // Update only columns within the panel [k+1, end_col)
                 // Use AVX if available
-                 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+                #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
                 {
                     if is_x86_feature_detected!("fma") {
                         // We need a version of apply which limits the columns.
-                        // The existing apply_householder_avx takes `cols`. 
+                        // The existing apply_householder_avx takes `cols`.
                         // If we pass `end_col`, it will work only on valid range.
                         Self::apply_householder_avx(qr, k, tau, rows, end_col);
                         continue;
                     }
                 }
-                
+
                 // Scalar Fallback
                 for j in k + 1..end_col {
                     let mut dot = *qr.get(k, j).unwrap();
@@ -256,7 +281,7 @@ impl<T: Scalar, S: Storage<T>> HouseholderQR<T, S> {
         h_coeffs: &[T],
         k_start: usize,
         bs: usize,
-        t_mat: &mut [T]
+        t_mat: &mut [T],
     ) {
         // T(i, i) = tau[i]
         // T(i, j) = -tau[i] * (v[i]^T * v[j] * T(j, j) + ...)
@@ -265,26 +290,26 @@ impl<T: Scalar, S: Storage<T>> HouseholderQR<T, S> {
         // For i = 1..bs-1:
         //   T(0..i, i) = -tau[i] * T(0..i, 0..i) * (v[i]^T * V(0..rows, 0..i))^T ... tricky.
         // Let's use the explicit loop structure from LAPACK DLARFT.
-        
+
         // T is bs x bs.
         let rows = qr.rows();
-        
+
         for i in 0..bs {
             let tau = h_coeffs[k_start + i];
             if tau == T::default() {
                 // T row/col i is zero
                 continue;
             }
-            
+
             // T(i, i) = tau
             t_mat[i + i * bs] = tau;
-            
+
             // For j = 0..i
             // T(j, i) = -tau * (V(:, i)^T * V(:, j)) * ... wait.
             // Actually: T(0:i, i) = -tau * T(0:i, 0:i) * (V(:, 0:i)^T * v_i)
-            
+
             // 1. Compute w = V(:, 0:i)^T * v_i
-            // V is implicitly unit lower trapezoidal. 
+            // V is implicitly unit lower trapezoidal.
             // V_j is column k_start + j.
             // v_i is column k_start + i.
             // dot product range: start from row k_start + i + 1? No, from k_start + max(i, j)?
@@ -293,42 +318,42 @@ impl<T: Scalar, S: Storage<T>> HouseholderQR<T, S> {
             // v 1
             // v v 1
             // ...
-            
+
             // w is length i.
             for j in 0..i {
                 let mut sum = T::default();
                 // v_j starts at row k_start + j + 1 (with implicit 1 at k_start + j)
                 // v_i starts at row k_start + i + 1 (with implicit 1 at k_start + i)
-                
+
                 // intersection starts at row k_start + i.
-                // At row k_start + j: v_j=1, v_i=0 (since i > j). 
+                // At row k_start + j: v_j=1, v_i=0 (since i > j).
                 // Actually v_i is 0 for rows < k_start + i.
                 // So dot product is only for rows >= k_start + i.
-                
+
                 // At row k_start + i: v_j has value, v_i is 1.
                 // sum += v_j[k_start+i] * 1
                 if k_start + i < rows {
                     sum += *qr.get(k_start + i, k_start + j).unwrap();
                 }
-                
+
                 // Remaining rows
                 for r in (k_start + i + 1)..rows {
                     sum += (*qr.get(r, k_start + j).unwrap()) * (*qr.get(r, k_start + i).unwrap());
                 }
-                
+
                 t_mat[j + i * bs] = sum;
             }
-            
+
             // 2. T(0:i, i) = -tau * T(0:i, 0:i) * w
             // We can compute this utilizing the existing triangular T structure.
             // vector z = -tau * w
             // T_col_i = T_prev * z
-            
+
             // Implement GEMV-like T * z logic
             for j in 0..i {
                 t_mat[j + i * bs] *= -tau;
             }
-            
+
             // Now multiply by T(0:i, 0:i) which is upper triangular
             // We overwrite column i.
             // Work backwards or use buffer? Use buffer (scalar is cheap).
@@ -337,7 +362,7 @@ impl<T: Scalar, S: Storage<T>> HouseholderQR<T, S> {
                 let mut acc = T::default();
                 for c in r..i {
                     // T is upper triangular, so only c >= r matters
-                     acc += t_mat[r + c * bs] * t_mat[c + i * bs];
+                    acc += t_mat[r + c * bs] * t_mat[c + i * bs];
                 }
                 col_res[r] = acc;
             }
@@ -364,87 +389,95 @@ impl<T: Scalar, S: Storage<T>> HouseholderQR<T, S> {
         end_k: usize,
         rows: usize,
         cols: usize,
-        y_mat: &[T] 
+        y_mat: &[T],
     ) {
-         use crate::core::ops::gemm::gemm_dispatch_pointers;
+        use crate::core::ops::gemm::gemm_dispatch_pointers;
 
-         let bs = end_k - k;
-         let trail_cols = cols - end_k;
-         
-         if trail_cols == 0 { return; }
+        let bs = end_k - k;
+        let trail_cols = cols - end_k;
 
-         // 1. W = Y^T * A_trail
-         // Y is (rows x bs) Col-Major: Y(i, j) at `i + j * rows`.
-         // We want Y^T (bs x rows). Y^T(j, i) = Y(i, j).
-         // To view `y_mat` as Y^T:
-         // Element (r, c) of Y^T is Y(c, r).
-         // Y is stored with stride rs=1 (step in c), cs=rows (step in r).
-         // So Y(c, r) is at address `c * 1 + r * rows`.
-         // For Y^T, we want element (r, c) = Y(c, r).
-         // Address = `c * 1 + r * rows`.
-         // Stride required: `r * rs_yt + c * cs_yt`.
-         // MATCHING: rs_yt = rows, cs_yt = 1.
-         // So we pass `y_mat` with rs=rows, cs=1 to treat it as Transposed Y.
-         
-         let mut w = vec![T::default(); bs * trail_cols];
-         
-         unsafe {
-             // A_ptr points to A(0, end_k)
-             let a_ptr = qr.storage().data().as_ptr().add(end_k * rows);
-             
-             let _ = gemm_dispatch_pointers(
-                 bs, trail_cols, rows, // m=bs, n=trail_cols, k=rows
-                 y_mat.as_ptr(),
-                 rows as isize, 1, // A (Y^T): rs=rows, cs=1
-                 
-                 a_ptr, 
-                 1, rows as isize, // B (A_trail): rs=1, cs=rows
-                 
-                 w.as_mut_ptr(),
-                 1, bs as isize // C (W): rs=1, cs=bs
-             );
-         }
-         
-         // 2. W = -T^T * W
-         // T is upper triangular (bs x bs).
-         // W is (bs x trail_cols).
-         // We compute W_new = -1.0 * T^T * W_old.
-         
-         let w_copy = w.clone();
-         for c in 0..trail_cols {
-             for r in 0..bs {
-                 let mut sum = T::default();
-                 // Row r of T^T is Col r of T.
-                 // Elements T(k, r) for k <= r.
-                 for k in 0..=r {
-                      let t_val = t_mat[k + r * bs]; // T(k, r)
-                      let w_val = w_copy[k + c * bs];
-                      sum += t_val * w_val;
-                 }
-                 w[r + c * bs] = -sum; // Apply negation
-             }
-         }
-         
-         // 3. A_trail += Y * W
-         // Y: (rows x bs). rs=1, cs=rows.
-         // W: (bs x trail_cols). rs=1, cs=bs.
-         // A_trail: (rows x trail_cols). rs=1, cs=rows.
-         
-         unsafe {
-             let a_ptr = qr.storage_mut().data_mut().as_mut_ptr().add(end_k * rows);
-             
-             let _ = gemm_dispatch_pointers(
-                 rows, trail_cols, bs,
-                 y_mat.as_ptr(),
-                 1, rows as isize, // Y
-                 
-                 w.as_ptr(),
-                 1, bs as isize, // W
-                 
-                 a_ptr,
-                 1, rows as isize // C += A * B
-             );
-         }
+        if trail_cols == 0 {
+            return;
+        }
+
+        // 1. W = Y^T * A_trail
+        // Y is (rows x bs) Col-Major: Y(i, j) at `i + j * rows`.
+        // We want Y^T (bs x rows). Y^T(j, i) = Y(i, j).
+        // To view `y_mat` as Y^T:
+        // Element (r, c) of Y^T is Y(c, r).
+        // Y is stored with stride rs=1 (step in c), cs=rows (step in r).
+        // So Y(c, r) is at address `c * 1 + r * rows`.
+        // For Y^T, we want element (r, c) = Y(c, r).
+        // Address = `c * 1 + r * rows`.
+        // Stride required: `r * rs_yt + c * cs_yt`.
+        // MATCHING: rs_yt = rows, cs_yt = 1.
+        // So we pass `y_mat` with rs=rows, cs=1 to treat it as Transposed Y.
+
+        let mut w = vec![T::default(); bs * trail_cols];
+
+        unsafe {
+            // A_ptr points to A(0, end_k)
+            let a_ptr = qr.storage().data().as_ptr().add(end_k * rows);
+
+            let _ = gemm_dispatch_pointers(
+                bs,
+                trail_cols,
+                rows, // m=bs, n=trail_cols, k=rows
+                y_mat.as_ptr(),
+                rows as isize,
+                1, // A (Y^T): rs=rows, cs=1
+                a_ptr,
+                1,
+                rows as isize, // B (A_trail): rs=1, cs=rows
+                w.as_mut_ptr(),
+                1,
+                bs as isize, // C (W): rs=1, cs=bs
+            );
+        }
+
+        // 2. W = -T^T * W
+        // T is upper triangular (bs x bs).
+        // W is (bs x trail_cols).
+        // We compute W_new = -1.0 * T^T * W_old.
+
+        let w_copy = w.clone();
+        for c in 0..trail_cols {
+            for r in 0..bs {
+                let mut sum = T::default();
+                // Row r of T^T is Col r of T.
+                // Elements T(k, r) for k <= r.
+                for k in 0..=r {
+                    let t_val = t_mat[k + r * bs]; // T(k, r)
+                    let w_val = w_copy[k + c * bs];
+                    sum += t_val * w_val;
+                }
+                w[r + c * bs] = -sum; // Apply negation
+            }
+        }
+
+        // 3. A_trail += Y * W
+        // Y: (rows x bs). rs=1, cs=rows.
+        // W: (bs x trail_cols). rs=1, cs=bs.
+        // A_trail: (rows x trail_cols). rs=1, cs=rows.
+
+        unsafe {
+            let a_ptr = qr.storage_mut().data_mut().as_mut_ptr().add(end_k * rows);
+
+            let _ = gemm_dispatch_pointers(
+                rows,
+                trail_cols,
+                bs,
+                y_mat.as_ptr(),
+                1,
+                rows as isize, // Y
+                w.as_ptr(),
+                1,
+                bs as isize, // W
+                a_ptr,
+                1,
+                rows as isize, // C += A * B
+            );
+        }
     }
 
     /// Returns the upper triangular matrix R.

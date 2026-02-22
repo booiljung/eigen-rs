@@ -5,7 +5,7 @@ use crate::core::scalar::Scalar;
 
 /// Trait representing a generic matrix expression.
 /// All expressions and concrete matrices implement this trait.
-pub trait MatrixXpr<T: Scalar>: crate::core::cuda::CudaDispatcher<T> + Sync {
+pub trait MatrixXpr<T: Scalar>: Sync {
     fn rows(&self) -> usize;
     fn cols(&self) -> usize;
 

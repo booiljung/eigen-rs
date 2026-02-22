@@ -79,6 +79,163 @@ where
     T: Scalar + Copy + Default + num_traits::One + Send + Sync,
     K: GemmKernel<Elem = T>,
 {
+    // --- CUDA OFF-LOAD INTEGRATION ---
+    #[cfg(feature = "cuda")]
+    {
+        // Minimal threshold for Host-to-Device transfer ROI
+        if m >= 512 && n >= 512 && k >= 512 {
+            let is_f32 = std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>();
+            let is_f64 = std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>();
+
+            if is_f32 || is_f64 {
+                let handled = crate::core::tensor::device::cublas::CUBLAS_HANDLE.with(|h| {
+                    if let Some(handle) = h {
+                        if let Some(api) = crate::core::tensor::device::cublas::get_cublas() {
+                            unsafe {
+                                // 1. Allocate GPU VRAM buffers via CudaStorage using transmuted slices
+                                // We transmute the generic T slices to specific types if they are F32/F64
+                                // to bypass explicit `cust::memory::DeviceCopy` requirements inside the gemm file.
+                                
+                                if is_f32 {
+                                    let mut a_col = vec![0.0f32; m * k];
+                                    let mut b_col = vec![0.0f32; k * n];
+                                    let mut c_col = vec![0.0f32; m * n];
+                                    
+                                    for col in 0..k {
+                                        for row in 0..m {
+                                            a_col[row + col * m] = *(a.offset((row as isize) * rs_a + (col as isize) * cs_a) as *const f32);
+                                        }
+                                    }
+                                    for col in 0..n {
+                                        for row in 0..k {
+                                            b_col[row + col * k] = *(b.offset((row as isize) * rs_b + (col as isize) * cs_b) as *const f32);
+                                        }
+                                    }
+
+                                    let d_a = crate::core::tensor::device::cudart::cuda_malloc(m * k).ok()?;
+                                    let d_b = crate::core::tensor::device::cudart::cuda_malloc(k * n).ok()?;
+                                    let d_c = crate::core::tensor::device::cudart::cuda_malloc(m * n).ok()?;
+                                    
+                                    crate::core::tensor::device::cudart::cuda_memcpy_h2d(d_a, a_col.as_ptr() as *const _, m * k * 4).ok()?;
+                                    crate::core::tensor::device::cudart::cuda_memcpy_h2d(d_b, b_col.as_ptr() as *const _, k * n * 4).ok()?;
+
+                                    let alpha_f32: f32 = *( &alpha as *const T as *const f32 );
+                                    let beta_f32: f32 = 1.0; // c += a * b
+
+                                    let ptr_a = d_a as *const f32;
+                                    let ptr_b = d_b as *const f32;
+                                    let ptr_c = d_c as *mut f32;
+
+                                    let lda = m as i32;
+                                    let ldb = k as i32;
+                                    let ldc = m as i32;
+
+                                    let status = (api.cublasSgemm_v2)(
+                                        *handle,
+                                        crate::core::tensor::device::cublas::CUBLAS_OP_N, crate::core::tensor::device::cublas::CUBLAS_OP_N,
+                                        m as i32, n as i32, k as i32,
+                                        &alpha_f32,
+                                        ptr_a, lda,
+                                        ptr_b, ldb,
+                                        &beta_f32,
+                                        ptr_c, ldc,
+                                    );
+                                    
+                                    if status == crate::core::tensor::device::cublas::CUBLAS_STATUS_SUCCESS {
+                                        crate::core::tensor::device::cudart::cuda_device_synchronize().ok()?;
+                                        crate::core::tensor::device::cudart::cuda_memcpy_d2h(c_col.as_mut_ptr() as *mut _, d_c, m * n * 4).ok()?;
+                                        
+                                        // Map back
+                                        for col in 0..n {
+                                            for row in 0..m {
+                                                let c_out = c.offset((row as isize) * rs_c + (col as isize) * cs_c);
+                                                *c_out = (*c_out) + *( &c_col[row + col * m] as *const f32 as *const T );
+                                            }
+                                        }
+                                        
+                                        crate::core::tensor::device::cudart::cuda_free(d_a).ok()?;
+                                        crate::core::tensor::device::cudart::cuda_free(d_b).ok()?;
+                                        crate::core::tensor::device::cudart::cuda_free(d_c).ok()?;
+                                        
+                                        return Some(true);
+                                    }
+                                } else {
+                                    // is_f64
+                                    let mut a_col = vec![0.0f64; m * k];
+                                    let mut b_col = vec![0.0f64; k * n];
+                                    let mut c_col = vec![0.0f64; m * n];
+                                    
+                                    for col in 0..k {
+                                        for row in 0..m {
+                                            a_col[row + col * m] = *(a.offset((row as isize) * rs_a + (col as isize) * cs_a) as *const f64);
+                                        }
+                                    }
+                                    for col in 0..n {
+                                        for row in 0..k {
+                                            b_col[row + col * k] = *(b.offset((row as isize) * rs_b + (col as isize) * cs_b) as *const f64);
+                                        }
+                                    }
+
+                                    let d_a = crate::core::tensor::device::cudart::cuda_malloc(m * k).ok()?;
+                                    let d_b = crate::core::tensor::device::cudart::cuda_malloc(k * n).ok()?;
+                                    let d_c = crate::core::tensor::device::cudart::cuda_malloc(m * n).ok()?;
+                                    
+                                    crate::core::tensor::device::cudart::cuda_memcpy_h2d(d_a, a_col.as_ptr() as *const _, m * k * 8).ok()?;
+                                    crate::core::tensor::device::cudart::cuda_memcpy_h2d(d_b, b_col.as_ptr() as *const _, k * n * 8).ok()?;
+
+                                    let alpha_f64: f64 = *( &alpha as *const T as *const f64 );
+                                    let beta_f64: f64 = 1.0;
+
+                                    let ptr_a = d_a as *const f64;
+                                    let ptr_b = d_b as *const f64;
+                                    let ptr_c = d_c as *mut f64;
+
+                                    let lda = m as i32;
+                                    let ldb = k as i32;
+                                    let ldc = m as i32;
+
+                                    let status = (api.cublasDgemm_v2)(
+                                        *handle,
+                                        crate::core::tensor::device::cublas::CUBLAS_OP_N, crate::core::tensor::device::cublas::CUBLAS_OP_N,
+                                        m as i32, n as i32, k as i32,
+                                        &alpha_f64,
+                                        ptr_a, lda,
+                                        ptr_b, ldb,
+                                        &beta_f64,
+                                        ptr_c, ldc,
+                                    );
+                                    
+                                    if status == crate::core::tensor::device::cublas::CUBLAS_STATUS_SUCCESS {
+                                        crate::core::tensor::device::cudart::cuda_device_synchronize().ok()?;
+                                        crate::core::tensor::device::cudart::cuda_memcpy_d2h(c_col.as_mut_ptr() as *mut _, d_c, m * n * 8).ok()?;
+                                        
+                                        for col in 0..n {
+                                            for row in 0..m {
+                                                let c_out = c.offset((row as isize) * rs_c + (col as isize) * cs_c);
+                                                *c_out = (*c_out) + *( &c_col[row + col * m] as *const f64 as *const T );
+                                            }
+                                        }
+                                        
+                                        crate::core::tensor::device::cudart::cuda_free(d_a).ok()?;
+                                        crate::core::tensor::device::cudart::cuda_free(d_b).ok()?;
+                                        crate::core::tensor::device::cudart::cuda_free(d_c).ok()?;
+                                        
+                                        return Some(true);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Some(false)
+                });
+
+                if handled == Some(true) {
+                    return Ok(());
+                }
+            }
+        }
+    }
+
     // Sizes for packing buffers
     let mc_rounded = MC.div_ceil(K::MR) * K::MR;
     let packed_a_len = mc_rounded * KC;
@@ -105,7 +262,9 @@ where
     if n <= NC && num_threads > 1 {
         dynamic_nc = std::cmp::max(K::NR, (n + num_threads - 1) / num_threads);
         dynamic_nc = (dynamic_nc / K::NR) * K::NR;
-        if dynamic_nc == 0 { dynamic_nc = K::NR; }
+        if dynamic_nc == 0 {
+            dynamic_nc = K::NR;
+        }
     }
 
     let jc_intervals: Vec<usize> = (0..n).step_by(dynamic_nc).collect();
@@ -123,7 +282,7 @@ where
         let a = a_addr as *const T;
         let b = b_addr as *const T;
         let c = c_addr as *mut T;
-        
+
         with_gemm_workspace(required_cap, |ws_ptr| {
             // Partition workspace
             // A | B | TMP
@@ -137,7 +296,8 @@ where
                 let kc_eff = std::cmp::min(k - pc, KC);
 
                 // Pack B
-                let b_sub_pointer = unsafe { b.offset((pc as isize) * rs_b + (jc as isize) * cs_b) };
+                let b_sub_pointer =
+                    unsafe { b.offset((pc as isize) * rs_b + (jc as isize) * cs_b) };
                 unsafe {
                     K::pack_rhs(kc_eff, nc_eff, b_sub_pointer, rs_b, cs_b, ptr_b);
                 }
@@ -146,7 +306,8 @@ where
                     let mc_eff = std::cmp::min(m - ic, MC);
 
                     // Pack A
-                    let a_sub_pointer = unsafe { a.offset((ic as isize) * rs_a + (pc as isize) * cs_a) };
+                    let a_sub_pointer =
+                        unsafe { a.offset((ic as isize) * rs_a + (pc as isize) * cs_a) };
                     unsafe {
                         K::pack_lhs(kc_eff, mc_eff, a_sub_pointer, rs_a, cs_a, ptr_a);
                     }
@@ -161,17 +322,44 @@ where
                             let b_ptr_k = unsafe { ptr_b.add(jr * kc_eff) };
 
                             if mr_curr == K::MR && nr_curr == K::NR {
-                                let c_ptr = unsafe { c.offset((ic as isize + ir as isize) * rs_c + (jc as isize + jr as isize) * cs_c) };
+                                let c_ptr = unsafe {
+                                    c.offset(
+                                        (ic as isize + ir as isize) * rs_c
+                                            + (jc as isize + jr as isize) * cs_c,
+                                    )
+                                };
                                 unsafe {
-                                    K::microkernel(kc_eff, alpha, a_ptr_k, b_ptr_k, T::one(), c_ptr, rs_c, cs_c);
+                                    K::microkernel(
+                                        kc_eff,
+                                        alpha,
+                                        a_ptr_k,
+                                        b_ptr_k,
+                                        T::one(),
+                                        c_ptr,
+                                        rs_c,
+                                        cs_c,
+                                    );
                                 }
                             } else {
                                 unsafe {
-                                    K::microkernel(kc_eff, alpha, a_ptr_k, b_ptr_k, T::default(), ptr_tmp, 1, K::MR as isize);
+                                    K::microkernel(
+                                        kc_eff,
+                                        alpha,
+                                        a_ptr_k,
+                                        b_ptr_k,
+                                        T::default(),
+                                        ptr_tmp,
+                                        1,
+                                        K::MR as isize,
+                                    );
                                     for j in 0..nr_curr {
                                         for i in 0..mr_curr {
                                             let val = *ptr_tmp.add(j * K::MR + i);
-                                            let c_out = c.offset((ic as isize + ir as isize + i as isize) * rs_c + (jc as isize + jr as isize + j as isize) * cs_c);
+                                            let c_out = c.offset(
+                                                (ic as isize + ir as isize + i as isize) * rs_c
+                                                    + (jc as isize + jr as isize + j as isize)
+                                                        * cs_c,
+                                            );
                                             *c_out += val;
                                         }
                                     }
@@ -268,14 +456,22 @@ where
         let c_ptr = c.storage_mut().data_mut().as_mut_ptr();
         let rs_c = 1;
         let cs_c = c.rows() as isize;
-        
+
         unsafe {
             gemm_small_unsafe(
-                m, k, n,
-                a_ptr, rs_a, cs_a,
-                b_ptr, rs_b, cs_b,
-                c_ptr, rs_c, cs_c,
-                T::from_usize(1)
+                m,
+                k,
+                n,
+                a_ptr,
+                rs_a,
+                cs_a,
+                b_ptr,
+                rs_b,
+                cs_b,
+                c_ptr,
+                rs_c,
+                cs_c,
+                T::from_usize(1),
             );
         }
         return Ok(());
@@ -390,11 +586,19 @@ pub unsafe fn gemm_dispatch_pointers<T: Scalar + Copy + Default>(
     // Use scalar fallback for small matrices to avoid packing/workspace overhead.
     if m <= 8 && n <= 8 && k <= 8 {
         gemm_small_unsafe(
-            m, k, n,
-            a_ptr, rs_a, cs_a,
-            b_ptr, rs_b, cs_b,
-            c_ptr, rs_c, cs_c,
-            T::from_usize(1) // Assuming alpha=1 for dispatch
+            m,
+            k,
+            n,
+            a_ptr,
+            rs_a,
+            cs_a,
+            b_ptr,
+            rs_b,
+            cs_b,
+            c_ptr,
+            rs_c,
+            cs_c,
+            T::from_usize(1), // Assuming alpha=1 for dispatch
         );
         return Ok(true); // Handled
     }
@@ -469,7 +673,8 @@ pub unsafe fn gemm_small_unsafe<T: Scalar + Copy + Default>(
         let b_col = b_ptr.offset(j as isize * cs_b);
         let c_col = c_ptr.offset(j as isize * cs_c);
 
-        for l in 0..k { // l used for k index to avoid confusion with k size
+        for l in 0..k {
+            // l used for k index to avoid confusion with k size
             let b_val = *b_col.offset(l as isize * rs_b) * alpha;
             let a_col = a_ptr.offset(l as isize * cs_a);
 

@@ -67,12 +67,12 @@ fn test_tensor_broadcasting() {
 #[test]
 fn test_tensor_device_creation() {
     use eigen_rs::core::tensor::device::CpuDevice;
-    
+
     // Explicit device creation
     let t = Tensor::<f32, 2, CpuDevice>::new_with_device([2, 2], CpuDevice::default()).unwrap();
     assert_eq!(t.dims(), [2, 2]);
     assert_eq!(t.size(), 4);
-    
+
     // Implicit (default generic)
     let t2 = Tensor::<f32, 2>::new([2, 2]).unwrap();
     assert_eq!(t2.dims(), [2, 2]);
@@ -82,17 +82,21 @@ fn test_tensor_device_creation() {
 fn test_tensor_multi_dim_contraction() {
     // 2x2x2
     let mut t1 = Tensor::<f32, 3>::new([2, 2, 2]).unwrap();
-    for x in t1.data_mut() { *x = 1.0; }
-    
+    for x in t1.data_mut().unwrap().iter_mut() {
+        *x = 1.0;
+    }
+
     let mut t2 = Tensor::<f32, 3>::new([2, 2, 2]).unwrap();
-    for x in t2.data_mut() { *x = 2.0; }
-    
+    for x in t2.data_mut().unwrap().iter_mut() {
+        *x = 2.0;
+    }
+
     // Contract (1, 0) and (2, 1)
     let dims = [(1, 0), (2, 1)];
     let t3: Tensor<f32, 2> = t1.contract_dims(&t2, &dims);
-    
+
     assert_eq!(t3.dims(), [2, 2]);
-    for x in t3.data() {
+    for x in t3.data().unwrap().iter() {
         assert_eq!(*x, 8.0);
     }
 }
@@ -105,16 +109,16 @@ fn test_tensor_permute_reshape() {
     let mut idx = 0.0;
     // Col-major fill in memory naturally via get_mut
     for j in 0..3 {
-       for i in 0..2 {
-           *t.get_mut([i, j]).unwrap() = idx;
-           idx += 1.0;
-       }
+        for i in 0..2 {
+            *t.get_mut([i, j]).unwrap() = idx;
+            idx += 1.0;
+        }
     }
     // Data: [0, 1, 2, 3, 4, 5]
     // Matrix:
     // 0 2 4
     // 1 3 5
-    
+
     // 1. Reshape to 3x2
     // Strided reshape (linear copy)
     // New Memory: [0, 1, 2, 3, 4, 5]
@@ -124,10 +128,10 @@ fn test_tensor_permute_reshape() {
     // 2 5
     let t_reshaped = t.reshape([3, 2]).unwrap();
     assert_eq!(t_reshaped.dims(), [3, 2]);
-    assert_eq!(t_reshaped.data(), &[0.0, 1.0, 2.0, 3.0, 4.0, 5.0]);
+    assert_eq!(t_reshaped.data().unwrap(), &[0.0, 1.0, 2.0, 3.0, 4.0, 5.0]);
     assert_eq!(*t_reshaped.get([1, 0]).unwrap(), 1.0);
     assert_eq!(*t_reshaped.get([0, 1]).unwrap(), 3.0);
-    
+
     // 2. Permute (Transpose)
     // Swap dim 0 and 1.
     // Original: 2x3. New: 3x2.

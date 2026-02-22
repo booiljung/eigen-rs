@@ -1,8 +1,8 @@
 //! LLT Cholesky decomposition ($A = LL^T$).
 //! Best suited for symmetric/Hermitian positive definite matrices.
 
-use num_traits::Zero;
 use crate::core::matrix::Matrix;
+use num_traits::Zero;
 
 use crate::core::scalar::Scalar;
 use crate::core::storage::DynamicStorage;
@@ -22,6 +22,17 @@ impl<T: Scalar + num_traits::One + 'static, S: Storage<T> + 'static> LLT<T, S> {
         let cols = matrix.cols();
         if rows != cols {
             return Err("LLT decomposition requires a square matrix".to_string());
+        }
+
+        #[cfg(feature = "cuda")]
+        {
+            use crate::core::decompositions::cuda_bridge::CudaDecompositionExt;
+            if let Ok(Some(l_cuda)) = matrix.try_llt_cuda() {
+                return Ok(Self {
+                    l: l_cuda,
+                    _phantom: std::marker::PhantomData,
+                });
+            }
         }
 
         let mut l = Matrix::<T, DynamicStorage<T>>::new_dynamic(rows, cols)?;
@@ -110,6 +121,7 @@ impl<T: Scalar + num_traits::One + 'static, S: Storage<T> + 'static> LLT<T, S> {
 
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     #[target_feature(enable = "avx2", enable = "fma")]
+    #[allow(dead_code)]
     unsafe fn llt_unblocked_f32_avx(
         mat: &mut Matrix<T, DynamicStorage<T>>,
         offset: usize,
@@ -255,8 +267,8 @@ impl<T: Scalar + num_traits::One + 'static, S: Storage<T> + 'static> LLT<T, S> {
                 // Subtract knowns
                 for l in 0..j {
                     let global_l = k + l;
-                    val -=
-                        (*mat.get(i, global_l).unwrap()) * mat.get(global_j, global_l).unwrap().conj();
+                    val -= (*mat.get(i, global_l).unwrap())
+                        * mat.get(global_j, global_l).unwrap().conj();
                 }
 
                 // Divide by diagonal L^T(j, j) = L(j, j)
@@ -268,6 +280,7 @@ impl<T: Scalar + num_traits::One + 'static, S: Storage<T> + 'static> LLT<T, S> {
 
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     #[target_feature(enable = "avx2", enable = "fma")]
+    #[allow(dead_code)]
     unsafe fn trsm_right_transpose_f32_avx(
         mat: &mut Matrix<T, DynamicStorage<T>>,
         k: usize,
@@ -547,7 +560,7 @@ impl<T: Scalar + num_traits::One + 'static, S: Storage<T> + 'static> LLT<T, S> {
         if mat.rows() != rows {
             return Err("Dimension mismatch in LLT solve_inplace_l".to_string());
         }
-        
+
         // Block size for TRSM
         const BLOCK_SIZE: usize = 32;
         let cols = mat.cols(); // Number of RHS vectors
@@ -561,7 +574,7 @@ impl<T: Scalar + num_traits::One + 'static, S: Storage<T> + 'static> LLT<T, S> {
         //   For k = 0 to rows step bs:
         //     Let L_diag = L(k:k+bs, k:k+bs)
         //     Let X_curr = X(k:k+bs, :)
-        //     
+        //
         //     // Update current block with results from previous blocks
         //     // X_curr -= L(k:k+bs, 0:k) * X(0:k, :)
         //     if k > 0 {
@@ -573,12 +586,12 @@ impl<T: Scalar + num_traits::One + 'static, S: Storage<T> + 'static> LLT<T, S> {
 
         for k in (0..rows).step_by(BLOCK_SIZE) {
             let kb = std::cmp::min(rows - k, BLOCK_SIZE);
-            
+
             // 1. GEMM Update: X(k:k+kb, :) -= L(k:k+kb, 0:k) * X(0:k, :)
             if k > 0 {
                 Self::gemm_update_l(mat, &self.l, k, kb, cols);
             }
-            
+
             // 2. TRSM Diagonal: Solve L(k:k+kb, k:k+kb) * X(k:k+kb, :) = X(k:k+kb, :)
             Self::trsm_lower_diag(mat, &self.l, k, kb, cols);
         }
@@ -604,7 +617,7 @@ impl<T: Scalar + num_traits::One + 'static, S: Storage<T> + 'static> LLT<T, S> {
         //      L^T = [ L_11^T  L_21^T ]
         //            [   0     L_22^T ]
         //      Equation: L^T X = B
-        //      
+        //
         //      Consider block partition:
         //      [ L_11^T  L_21^T ] [ X_1 ] = [ B_1 ]
         //      [   0     L_22^T ] [ X_2 ] = [ B_2 ]
@@ -612,19 +625,19 @@ impl<T: Scalar + num_traits::One + 'static, S: Storage<T> + 'static> LLT<T, S> {
         //      Solve L_22^T X_2 = B_2  (Last block first)
         //      Then L_11^T X_1 + L_21^T X_2 = B_1
         //      => L_11^T X_1 = B_1 - L_21^T X_2
-        
+
         // Iterate k from end to start
         let mut k = rows;
         while k > 0 {
             let kb = if k >= BLOCK_SIZE { BLOCK_SIZE } else { k };
             let start_row = k - kb; // k is exclusive end, start_row is inclusive start
-            
+
             // 1. GEMM Update: X(start:end, :) -= L(end:rows, start:end)^T * X(end:rows, :)
             //    L(end:rows, start:end) is the block below the diagonal block we are solving.
             if k < rows {
                 Self::gemm_update_lt(mat, &self.l, start_row, kb, cols, rows);
             }
-            
+
             // 2. TRSM Diagonal: Solve L(start:end, start:end)^T * X(start:end, :) = X(start:end, :)
             Self::trsm_upper_diag(mat, &self.l, start_row, kb, cols);
 
@@ -635,69 +648,95 @@ impl<T: Scalar + num_traits::One + 'static, S: Storage<T> + 'static> LLT<T, S> {
     }
 
     // Helper: X(k:k+kb, :) -= L(k:k+kb, 0:k) * X(0:k, :)
-    fn gemm_update_l(mat: &mut Matrix<T, DynamicStorage<T>>, l_mat: &Matrix<T, DynamicStorage<T>>, k: usize, kb: usize, cols: usize) {
+    fn gemm_update_l(
+        mat: &mut Matrix<T, DynamicStorage<T>>,
+        l_mat: &Matrix<T, DynamicStorage<T>>,
+        k: usize,
+        kb: usize,
+        cols: usize,
+    ) {
         use crate::core::ops::gemm::gemm_blocked;
 
         // X_block (k:k+kb, :) is m x n = kb x cols
         // L_panel (k:k+kb, 0:k) is m x k = kb x k
         // X_prev  (0:k, :)      is k x n = k x cols
         // C = C - A * B
-        
+
         // If k is small, maybe naive loop is better? Let's check.
         // But for consistency we use gemm.
-        
+
         let m = kb;
         let n = cols;
         let k_dim = k;
-        
-        if k_dim == 0 { return; }
+
+        if k_dim == 0 {
+            return;
+        }
 
         let l_ptr = l_mat.get(k, 0).unwrap() as *const T;
         let x_prev_ptr = mat.get(0, 0).unwrap() as *const T;
         let x_curr_ptr = mat.get_mut(k, 0).unwrap() as *mut T;
-        
-        let rs_l = 1; let cs_l = l_mat.rows() as isize;
-        let rs_x = 1; let cs_x = mat.rows() as isize;
-        
-         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+
+        let rs_l = 1;
+        let cs_l = l_mat.rows() as isize;
+        let rs_x = 1;
+        let cs_x = mat.rows() as isize;
+
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
-             // F32 implementation
+            // F32 implementation
             #[cfg(target_feature = "avx2")]
             if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() {
-                 use crate::core::ops::gemm::arch::x86::asm_kernel::AsmFmaKernelF32;
-                 let alpha: f32 = -1.0;
-                  unsafe {
+                use crate::core::ops::gemm::arch::x86::asm_kernel::AsmFmaKernelF32;
+                let alpha: f32 = -1.0;
+                unsafe {
                     let _ = gemm_blocked::<f32, AsmFmaKernelF32>(
-                        m, n, k_dim,
-                        l_ptr as *const f32, rs_l, cs_l,
-                        x_prev_ptr as *const f32, rs_x, cs_x,
-                        x_curr_ptr as *mut f32, rs_x, cs_x,
-                        alpha
+                        m,
+                        n,
+                        k_dim,
+                        l_ptr as *const f32,
+                        rs_l,
+                        cs_l,
+                        x_prev_ptr as *const f32,
+                        rs_x,
+                        cs_x,
+                        x_curr_ptr as *mut f32,
+                        rs_x,
+                        cs_x,
+                        alpha,
                     );
-                 }
-                 return;
+                }
+                return;
             }
-            
+
             // F64 implementation
             #[cfg(target_feature = "avx2")]
             if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>() {
-                 use crate::core::ops::gemm::arch::x86::asm_kernel::AsmFmaKernelF64;
-                 let alpha: f64 = -1.0;
-                  unsafe {
+                use crate::core::ops::gemm::arch::x86::asm_kernel::AsmFmaKernelF64;
+                let alpha: f64 = -1.0;
+                unsafe {
                     let _ = gemm_blocked::<f64, AsmFmaKernelF64>(
-                        m, n, k_dim,
-                        l_ptr as *const f64, rs_l, cs_l,
-                        x_prev_ptr as *const f64, rs_x, cs_x,
-                        x_curr_ptr as *mut f64, rs_x, cs_x,
-                        alpha
+                        m,
+                        n,
+                        k_dim,
+                        l_ptr as *const f64,
+                        rs_l,
+                        cs_l,
+                        x_prev_ptr as *const f64,
+                        rs_x,
+                        cs_x,
+                        x_curr_ptr as *mut f64,
+                        rs_x,
+                        cs_x,
+                        alpha,
                     );
-                 }
-                 return;
+                }
+                return;
             }
         }
-        
+
         // Fallback
-         for i in 0..m {
+        for i in 0..m {
             for j in 0..n {
                 let mut sum = T::default();
                 for p in 0..k_dim {
@@ -707,82 +746,110 @@ impl<T: Scalar + num_traits::One + 'static, S: Storage<T> + 'static> LLT<T, S> {
             }
         }
     }
-    
+
     // Helper: X(start:end, :) -= L(end:rows, start:end)^T * X(end:rows, :)
     // L_block = L(end:rows, start:end) size (rows-end) x kb
     // X_below = X(end:rows, :)         size (rows-end) x cols
     // X_curr  = X(start:end, :)        size kb x cols
     // X_curr -= L_block^T * X_below
-    fn gemm_update_lt(mat: &mut Matrix<T, DynamicStorage<T>>, l_mat: &Matrix<T, DynamicStorage<T>>, start: usize, kb: usize, cols: usize, rows_total: usize) {
+    fn gemm_update_lt(
+        mat: &mut Matrix<T, DynamicStorage<T>>,
+        l_mat: &Matrix<T, DynamicStorage<T>>,
+        start: usize,
+        kb: usize,
+        cols: usize,
+        rows_total: usize,
+    ) {
         use crate::core::ops::gemm::gemm_blocked;
-        
+
         let end = start + kb;
         let m = kb;
         let n = cols;
         let k_dim = rows_total - end;
-        
-        if k_dim == 0 { return; }
+
+        if k_dim == 0 {
+            return;
+        }
 
         // L_block starts at (end, start)
         let l_ptr = l_mat.get(end, start).unwrap() as *const T;
         let x_below_ptr = mat.get(end, 0).unwrap() as *const T;
         let x_curr_ptr = mat.get_mut(start, 0).unwrap() as *mut T;
-        
-        let rs_l = 1; let cs_l = l_mat.rows() as isize;
-        let rs_x = 1; let cs_x = mat.rows() as isize;
 
-         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        let rs_l = 1;
+        let cs_l = l_mat.rows() as isize;
+        let rs_x = 1;
+        let cs_x = mat.rows() as isize;
+
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
-             // F32 implementation
+            // F32 implementation
             #[cfg(target_feature = "avx2")]
             if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() {
-                 use crate::core::ops::gemm::arch::x86::asm_kernel::AsmFmaKernelF32;
-                 let alpha: f32 = -1.0;
-                 // Note: First operand is L^T. 
-                 // gemm(A, B) -> A is L^T. 
-                 // Pass L as A with swapped strides to simulate transpose?
-                 // gemm supports row/col strides.
-                 // A (L^T) has shape (kb x k_dim). L has (k_dim x kb).
-                 // L(i, j) = ptr[j * rows + i].
-                 // L^T(i, j) = L(j, i) = ptr[i * rows + j].
-                 // So for L^T, stride_row = rows, stride_col = 1.
-                  unsafe {
+                use crate::core::ops::gemm::arch::x86::asm_kernel::AsmFmaKernelF32;
+                let alpha: f32 = -1.0;
+                // Note: First operand is L^T.
+                // gemm(A, B) -> A is L^T.
+                // Pass L as A with swapped strides to simulate transpose?
+                // gemm supports row/col strides.
+                // A (L^T) has shape (kb x k_dim). L has (k_dim x kb).
+                // L(i, j) = ptr[j * rows + i].
+                // L^T(i, j) = L(j, i) = ptr[i * rows + j].
+                // So for L^T, stride_row = rows, stride_col = 1.
+                unsafe {
                     let _ = gemm_blocked::<f32, AsmFmaKernelF32>(
-                        m, n, k_dim,
-                        l_ptr as *const f32, cs_l, rs_l, // Swapped strides for L^T
-                        x_below_ptr as *const f32, rs_x, cs_x,
-                        x_curr_ptr as *mut f32, rs_x, cs_x,
-                        alpha
+                        m,
+                        n,
+                        k_dim,
+                        l_ptr as *const f32,
+                        cs_l,
+                        rs_l, // Swapped strides for L^T
+                        x_below_ptr as *const f32,
+                        rs_x,
+                        cs_x,
+                        x_curr_ptr as *mut f32,
+                        rs_x,
+                        cs_x,
+                        alpha,
                     );
-                 }
-                 return;
+                }
+                return;
             }
-            
+
             // F64 implementation
             #[cfg(target_feature = "avx2")]
             if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>() {
-                 use crate::core::ops::gemm::arch::x86::asm_kernel::AsmFmaKernelF64;
-                 let alpha: f64 = -1.0;
-                  unsafe {
+                use crate::core::ops::gemm::arch::x86::asm_kernel::AsmFmaKernelF64;
+                let alpha: f64 = -1.0;
+                unsafe {
                     let _ = gemm_blocked::<f64, AsmFmaKernelF64>(
-                        m, n, k_dim,
-                        l_ptr as *const f64, cs_l, rs_l, // Swapped strides for L^T
-                        x_below_ptr as *const f64, rs_x, cs_x,
-                        x_curr_ptr as *mut f64, rs_x, cs_x,
-                        alpha
+                        m,
+                        n,
+                        k_dim,
+                        l_ptr as *const f64,
+                        cs_l,
+                        rs_l, // Swapped strides for L^T
+                        x_below_ptr as *const f64,
+                        rs_x,
+                        cs_x,
+                        x_curr_ptr as *mut f64,
+                        rs_x,
+                        cs_x,
+                        alpha,
                     );
-                 }
-                 return;
+                }
+                return;
             }
         }
-        
+
         // Fallback
         for i in 0..m {
             for j in 0..n {
                 let mut sum = T::default();
                 for p in 0..k_dim {
                     // L^T (start+i, end+p) = L(end+p, start+i)
-                    sum += l_mat.get(end + p, start + i).unwrap().conj() * *mat.get(end + p, j).unwrap();
+                    sum += l_mat.get(end + p, start + i).unwrap().conj()
+                        * *mat.get(end + p, j).unwrap();
                 }
                 *mat.get_mut(start + i, j).unwrap() -= sum;
             }
@@ -790,40 +857,52 @@ impl<T: Scalar + num_traits::One + 'static, S: Storage<T> + 'static> LLT<T, S> {
     }
 
     // Solve L(k:k+kb, k:k+kb) * X(k:k+kb, :) = X ...
-    fn trsm_lower_diag(mat: &mut Matrix<T, DynamicStorage<T>>, l_mat: &Matrix<T, DynamicStorage<T>>, k: usize, kb: usize, cols: usize) {
+    fn trsm_lower_diag(
+        mat: &mut Matrix<T, DynamicStorage<T>>,
+        l_mat: &Matrix<T, DynamicStorage<T>>,
+        k: usize,
+        kb: usize,
+        cols: usize,
+    ) {
         // Naive for now inside the block (small 32xN)
         // Optimized can be added later if needed.
         for i in 0..kb {
-             let r = k + i;
-             let l_ii = *l_mat.get(r, r).unwrap();
-             let inv_l_ii = T::one() / l_ii;
-             
-             for j in 0..cols {
-                 let mut val = *mat.get(r, j).unwrap();
-                 for p in 0..i {
-                     val -= *l_mat.get(r, k + p).unwrap() * *mat.get(k + p, j).unwrap();
-                 }
-                 *mat.get_mut(r, j).unwrap() = val * inv_l_ii;
-             }
+            let r = k + i;
+            let l_ii = *l_mat.get(r, r).unwrap();
+            let inv_l_ii = T::one() / l_ii;
+
+            for j in 0..cols {
+                let mut val = *mat.get(r, j).unwrap();
+                for p in 0..i {
+                    val -= *l_mat.get(r, k + p).unwrap() * *mat.get(k + p, j).unwrap();
+                }
+                *mat.get_mut(r, j).unwrap() = val * inv_l_ii;
+            }
         }
     }
-    
+
     // Solve L^T * X = X
-    fn trsm_upper_diag(mat: &mut Matrix<T, DynamicStorage<T>>, l_mat: &Matrix<T, DynamicStorage<T>>, k: usize, kb: usize, cols: usize) {
+    fn trsm_upper_diag(
+        mat: &mut Matrix<T, DynamicStorage<T>>,
+        l_mat: &Matrix<T, DynamicStorage<T>>,
+        k: usize,
+        kb: usize,
+        cols: usize,
+    ) {
         // Naive for now inside the block
-         for i in (0..kb).rev() {
-             let r = k + i;
-             let l_ii = *l_mat.get(r, r).unwrap(); // L(r,r) = L^T(r,r)
-             let inv_l_ii = T::one() / l_ii;
-             
-             for j in 0..cols {
-                 let mut val = *mat.get(r, j).unwrap();
-                 for p in i + 1..kb {
-                     // L^T(r, k+p) = L(k+p, r)
-                     val -= l_mat.get(k + p, r).unwrap().conj() * *mat.get(k + p, j).unwrap();
-                 }
-                 *mat.get_mut(r, j).unwrap() = val * inv_l_ii;
-             }
+        for i in (0..kb).rev() {
+            let r = k + i;
+            let l_ii = *l_mat.get(r, r).unwrap(); // L(r,r) = L^T(r,r)
+            let inv_l_ii = T::one() / l_ii;
+
+            for j in 0..cols {
+                let mut val = *mat.get(r, j).unwrap();
+                for p in i + 1..kb {
+                    // L^T(r, k+p) = L(k+p, r)
+                    val -= l_mat.get(k + p, r).unwrap().conj() * *mat.get(k + p, j).unwrap();
+                }
+                *mat.get_mut(r, j).unwrap() = val * inv_l_ii;
+            }
         }
     }
 }

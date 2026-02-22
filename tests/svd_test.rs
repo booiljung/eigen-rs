@@ -209,11 +209,11 @@ fn test_bdcsvd_orthogonality() {
 fn test_bdcsvd_large() {
     let n = 64;
     let mut m = MatrixX::<f64>::new_dynamic(n, n).unwrap();
-    
+
     // Fill with some data that isn't too symmetric or singular
     for i in 0..n {
         for j in 0..n {
-            let val = ((i as f64).sin() * (j as f64).cos()) + if i==j { 2.0 } else { 0.0 };
+            let val = ((i as f64).sin() * (j as f64).cos()) + if i == j { 2.0 } else { 0.0 };
             *m.get_mut(i, j).unwrap() = val;
         }
     }
@@ -228,38 +228,53 @@ fn test_bdcsvd_large() {
     let ut = u.transpose();
     let mut utu = MatrixX::<f64>::new_dynamic(n, n).unwrap();
     utu.assign_product(&(&ut * u)).unwrap();
-    
+
     // Check diagonal elements are 1 and off-diagonal 0
     let mut max_err = 0.0;
     for i in 0..n {
         for j in 0..n {
             let expected = if i == j { 1.0 } else { 0.0 };
             let err = (utu.get(i, j).unwrap() - expected).abs();
-            if err > max_err { max_err = err; }
+            if err > max_err {
+                max_err = err;
+            }
         }
     }
-    assert!(max_err < 1e-8, "U orthogonality failed, max error: {}", max_err);
-    
+    assert!(
+        max_err < 1e-8,
+        "U orthogonality failed, max error: {}",
+        max_err
+    );
+
     // Verify reconstruction
     let mut sigma = MatrixX::<f64>::new_dynamic(n, n).unwrap();
     for i in 0..n {
-         *sigma.get_mut(i, i).unwrap() = s[i];
+        *sigma.get_mut(i, i).unwrap() = s[i];
     }
-    
+
     let vt = v.transpose();
     let mut us = MatrixX::<f64>::new_dynamic(n, n).unwrap();
     us.assign_product(&(u * &sigma)).unwrap();
-    
+
     let mut m_recon = MatrixX::<f64>::new_dynamic(n, n).unwrap();
     m_recon.assign_product(&(&us * &vt)).unwrap();
-    
+
     let mut max_recon_err = 0.0;
     for i in 0..n {
         for j in 0..n {
             let err = (m_recon.get(i, j).unwrap() - m.get(i, j).unwrap()).abs();
-            if err > max_recon_err { max_recon_err = err; }
+            if err > max_recon_err {
+                max_recon_err = err;
+            }
         }
     }
-    println!("BDCSVD Large (N=64) Reconstruction Error: {}", max_recon_err);
-    assert!(max_recon_err < 1e-8, "Reconstruction failed, max error: {}", max_recon_err);
+    println!(
+        "BDCSVD Large (N=64) Reconstruction Error: {}",
+        max_recon_err
+    );
+    assert!(
+        max_recon_err < 1e-8,
+        "Reconstruction failed, max error: {}",
+        max_recon_err
+    );
 }

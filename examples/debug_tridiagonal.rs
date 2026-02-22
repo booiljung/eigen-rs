@@ -7,12 +7,9 @@ fn main() {
     let mut a = Matrix::<f64, DynamicStorage<f64>>::new_dynamic(n, n).unwrap();
     // Symmetric matrix
     let val = vec![
-        4.0, 1.0, -2.0, 2.0,
-        1.0, 2.0, 0.0, 1.0,
-        -2.0, 0.0, 3.0, -2.0,
-        2.0, 1.0, -2.0, -1.0
+        4.0, 1.0, -2.0, 2.0, 1.0, 2.0, 0.0, 1.0, -2.0, 0.0, 3.0, -2.0, 2.0, 1.0, -2.0, -1.0,
     ];
-    
+
     for i in 0..n {
         for j in 0..n {
             *a.get_mut(i, j).unwrap() = val[i * n + j];
@@ -32,7 +29,7 @@ fn main() {
     print_mat(&q);
 
     let qt = q.transpose();
-    
+
     let mut q_qt_res = Matrix::<f64, DynamicStorage<f64>>::new_dynamic(n, n).unwrap();
     q_qt_res.assign_product(&(&q * &qt)).unwrap();
     println!("Q * Q^T (Identity?):");
@@ -42,7 +39,7 @@ fn main() {
     t_qt_res.assign_product(&(&t * &qt)).unwrap();
     println!("T * Q^T:");
     print_mat(&t_qt_res);
-    
+
     let mut recon = Matrix::<f64, DynamicStorage<f64>>::new_dynamic(n, n).unwrap();
     recon.assign_product(&(&q * &t_qt_res)).unwrap();
 
@@ -56,12 +53,18 @@ fn main() {
     debug_res.assign_product(&(&q * &ident)).unwrap();
     println!("Q * I:");
     print_mat(&debug_res);
-    
+
     // Check if Q * I == Q
     for i in 0..n {
         for j in 0..n {
             if (debug_res.get(i, j).unwrap() - q.get(i, j).unwrap()).abs() > 1e-10 {
-                println!("GEMM Fail: (Q*I)({}, {}) = {}, Expected {}", i, j, debug_res.get(i, j).unwrap(), q.get(i, j).unwrap());
+                println!(
+                    "GEMM Fail: (Q*I)({}, {}) = {}, Expected {}",
+                    i,
+                    j,
+                    debug_res.get(i, j).unwrap(),
+                    q.get(i, j).unwrap()
+                );
             }
         }
     }
@@ -71,7 +74,14 @@ fn main() {
         for j in 0..n {
             let diff = (recon.get(i, j).unwrap() - a.get(i, j).unwrap()).abs();
             if diff > 1e-10 {
-                println!("Mismatch at ({}, {}): A={}, Recon={}, Diff={}", i, j, a.get(i, j).unwrap(), recon.get(i, j).unwrap(), diff);
+                println!(
+                    "Mismatch at ({}, {}): A={}, Recon={}, Diff={}",
+                    i,
+                    j,
+                    a.get(i, j).unwrap(),
+                    recon.get(i, j).unwrap(),
+                    diff
+                );
             }
         }
     }

@@ -129,106 +129,106 @@ impl<T: Scalar<Real = T> + PartialOrd + 'static, S: Storage<T> + 'static> Jacobi
                 invalid_cols.push(i);
             }
         }
-        
+
         // Gram-Schmidt Completion for Null Space
         if !invalid_cols.is_empty() {
-             for &bad_idx in &invalid_cols {
-                 // Current vector v is u[:, bad_idx] (which is e_{bad_idx})
-                 // Orthogonalize against all valid_cols
-                 for &good_idx in &valid_cols {
-                     let mut dot = T::from_usize(0);
-                     for r in 0..m {
-                         dot += *u.get(r, bad_idx).unwrap() * *u.get(r, good_idx).unwrap();
-                     }
-                     for r in 0..m {
-                         let val = *u.get(r, bad_idx).unwrap() - dot * *u.get(r, good_idx).unwrap();
-                         *u.get_mut(r, bad_idx).unwrap() = val;
-                     }
-                 }
-                 
-                 // Orthogonalize against previously fixed invalid_cols
-                 // Note: invalid_cols is iterated in order. We can just iterate valid_cols U (fixed invalid)
-                 // Wait, we need to add bad_idx to valid_cols after fixing?
-                 // Let's simpler: just iterate all PROCESSED columns.
-             }
-             
-             // The above loop is tricky because we need to ortho against *modified* bad columns too.
-             // Let's rewrite cleaner:
-             
-             // 1. We have a set of Basis Vectors = { u[good] }
-             // 2. We have Candidates = { u[bad] }
-             // 3. For each candidate C:
-             //      C = C - sum( proj(C, B) ) for B in Basis
-             //      C = normalize(C)
-             //      Basis.add(C)
-             
-             let mut basis_indices = valid_cols.clone();
-             for &bad_idx in &invalid_cols {
-                  let mut success = false;
-                  let mut attempt = 0;
-                  
-                  // Reset the column to e_bad_idx initially (it might have been modified by previous operations if we didn't track properly, 
-                  // but here we are just reading it. Actually, u was initialized to I, but rotated.
-                  // Wait, u was rotated! So u[:, bad_idx] is NOT e_bad_idx. It is some vector resulting from rotations.
-                  // But since s_val ~ 0, A * V[:, bad_idx] ~ 0.
-                  // The column in u corresponding to this is u[:, bad_idx] which is technically part of the accumulated rotation?
-                  // No, for One-Sided Jacobi, U is computed as A * V * S^-1.
-                  // U was initialized to I, but line 121 *overwrites* it: *u.get_mut(k, i) = ...
-                  // The loop only overwrites for s_val > eps.
-                  // So for s_val <= eps, the column u[:, bad_idx] is indeed the generic "Identity" column from initialization (line 30).
-                  // BUT, u was initialized to I at the very beginning of 'new'.
-                  // Then 'apply_rotation' was called on 'a' and 'v'.
-                  // 'u' was NEVER rotated in this One-Sided implementation!
-                  // So u[:, bad_idx] IS e_{bad_idx}. Confirmed.
-                  
-                  while !success && attempt < 10 {
-                      // If attempt > 0, randomize the vector
-                      if attempt > 0 {
-                           for r in 0..m {
-                               // Simple pseudo-random generator
-                               let val = ((r + bad_idx + attempt) * 123456789) % 100;
-                               *u.get_mut(r, bad_idx).unwrap() = T::from_f64(val as f64 / 100.0);
-                           }
-                      }
-                  
-                      // 1. Orthogonalize
-                      for &basis_idx in &basis_indices {
-                          let mut dot = T::from_usize(0);
-                          for r in 0..m {
-                               dot += *u.get(r, bad_idx).unwrap() * *u.get(r, basis_idx).unwrap();
-                          }
-                          for r in 0..m {
-                               let sub = dot * *u.get(r, basis_idx).unwrap();
-                               let val = *u.get(r, bad_idx).unwrap() - sub;
-                               *u.get_mut(r, bad_idx).unwrap() = val;
-                          }
-                      }
-                      
-                      // 2. Normalize
-                      let mut norm = T::from_usize(0);
-                      for r in 0..m {
-                           let val = *u.get(r, bad_idx).unwrap();
-                           norm += val * val;
-                      }
-                      let n_val = norm.sqrt();
-                      
-                      if n_val > eps {
-                           for r in 0..m {
-                                *u.get_mut(r, bad_idx).unwrap() /= n_val;
-                           }
-                           success = true;
-                      } else {
-                           attempt += 1;
-                      }
-                  }
-                  
-                  if !success {
-                       // Silently fail to complete basis.
-                  }
-                  
-                  // 3. Add to basis
-                  basis_indices.push(bad_idx);
-             }
+            for &bad_idx in &invalid_cols {
+                // Current vector v is u[:, bad_idx] (which is e_{bad_idx})
+                // Orthogonalize against all valid_cols
+                for &good_idx in &valid_cols {
+                    let mut dot = T::from_usize(0);
+                    for r in 0..m {
+                        dot += *u.get(r, bad_idx).unwrap() * *u.get(r, good_idx).unwrap();
+                    }
+                    for r in 0..m {
+                        let val = *u.get(r, bad_idx).unwrap() - dot * *u.get(r, good_idx).unwrap();
+                        *u.get_mut(r, bad_idx).unwrap() = val;
+                    }
+                }
+
+                // Orthogonalize against previously fixed invalid_cols
+                // Note: invalid_cols is iterated in order. We can just iterate valid_cols U (fixed invalid)
+                // Wait, we need to add bad_idx to valid_cols after fixing?
+                // Let's simpler: just iterate all PROCESSED columns.
+            }
+
+            // The above loop is tricky because we need to ortho against *modified* bad columns too.
+            // Let's rewrite cleaner:
+
+            // 1. We have a set of Basis Vectors = { u[good] }
+            // 2. We have Candidates = { u[bad] }
+            // 3. For each candidate C:
+            //      C = C - sum( proj(C, B) ) for B in Basis
+            //      C = normalize(C)
+            //      Basis.add(C)
+
+            let mut basis_indices = valid_cols.clone();
+            for &bad_idx in &invalid_cols {
+                let mut success = false;
+                let mut attempt = 0;
+
+                // Reset the column to e_bad_idx initially (it might have been modified by previous operations if we didn't track properly,
+                // but here we are just reading it. Actually, u was initialized to I, but rotated.
+                // Wait, u was rotated! So u[:, bad_idx] is NOT e_bad_idx. It is some vector resulting from rotations.
+                // But since s_val ~ 0, A * V[:, bad_idx] ~ 0.
+                // The column in u corresponding to this is u[:, bad_idx] which is technically part of the accumulated rotation?
+                // No, for One-Sided Jacobi, U is computed as A * V * S^-1.
+                // U was initialized to I, but line 121 *overwrites* it: *u.get_mut(k, i) = ...
+                // The loop only overwrites for s_val > eps.
+                // So for s_val <= eps, the column u[:, bad_idx] is indeed the generic "Identity" column from initialization (line 30).
+                // BUT, u was initialized to I at the very beginning of 'new'.
+                // Then 'apply_rotation' was called on 'a' and 'v'.
+                // 'u' was NEVER rotated in this One-Sided implementation!
+                // So u[:, bad_idx] IS e_{bad_idx}. Confirmed.
+
+                while !success && attempt < 10 {
+                    // If attempt > 0, randomize the vector
+                    if attempt > 0 {
+                        for r in 0..m {
+                            // Simple pseudo-random generator
+                            let val = ((r + bad_idx + attempt) * 123456789) % 100;
+                            *u.get_mut(r, bad_idx).unwrap() = T::from_f64(val as f64 / 100.0);
+                        }
+                    }
+
+                    // 1. Orthogonalize
+                    for &basis_idx in &basis_indices {
+                        let mut dot = T::from_usize(0);
+                        for r in 0..m {
+                            dot += *u.get(r, bad_idx).unwrap() * *u.get(r, basis_idx).unwrap();
+                        }
+                        for r in 0..m {
+                            let sub = dot * *u.get(r, basis_idx).unwrap();
+                            let val = *u.get(r, bad_idx).unwrap() - sub;
+                            *u.get_mut(r, bad_idx).unwrap() = val;
+                        }
+                    }
+
+                    // 2. Normalize
+                    let mut norm = T::from_usize(0);
+                    for r in 0..m {
+                        let val = *u.get(r, bad_idx).unwrap();
+                        norm += val * val;
+                    }
+                    let n_val = norm.sqrt();
+
+                    if n_val > eps {
+                        for r in 0..m {
+                            *u.get_mut(r, bad_idx).unwrap() /= n_val;
+                        }
+                        success = true;
+                    } else {
+                        attempt += 1;
+                    }
+                }
+
+                if !success {
+                    // Silently fail to complete basis.
+                }
+
+                // 3. Add to basis
+                basis_indices.push(bad_idx);
+            }
         }
 
         // Sort singular values in descending order
@@ -261,7 +261,6 @@ impl<T: Scalar<Real = T> + PartialOrd + 'static, S: Storage<T> + 'static> Jacobi
                 *sorted_v.get_mut(k, i).unwrap() = *v.get(k, orig_idx).unwrap();
             }
         }
-        
 
         Ok(Self {
             u: sorted_u,
@@ -385,5 +384,3 @@ impl<T: Scalar<Real = T> + PartialOrd + 'static, S: Storage<T> + 'static> Jacobi
         }
     }
 }
-
-

@@ -1,7 +1,6 @@
-use eigen_rs::core::matrix::Matrix;
 use eigen_rs::core::decompositions::qr::HouseholderQR;
+use eigen_rs::core::matrix::Matrix;
 use num_complex::Complex;
-use eigen_rs::core::storage::DynamicStorage;
 
 fn main() {
     println!("Verifying Complex QR...");
@@ -17,7 +16,7 @@ fn main() {
 
     // Inspect QR internals
     println!("(Debug print from library should appear below if added)");
-    
+
     let qr = HouseholderQR::new(&a).unwrap();
     let b = Matrix::<Complex<f64>, _>::new_dynamic(2, 1).unwrap();
     let mut b_ones = b.clone();
@@ -36,7 +35,7 @@ fn main() {
     for i in 0..2 {
         println!("  Row {}: {}", i, *ax_mat.get(i, 0).unwrap());
     }
-    
+
     // Manual check: A x = b
     // [[1, i], [i, 1]] [x0, x1] = [1, 1]
     // x0 + i x1 = 1
@@ -45,10 +44,10 @@ fn main() {
     // x0 + i + x0 = 1 => 2 x0 = 1 - i => x0 = 0.5 - 0.5i
     // x1 = 1 - i(0.5 - 0.5i) = 1 - 0.5i - 0.5 = 0.5 - 0.5i
     // So target x is [0.5-0.5i, 0.5-0.5i].
-    
+
     let target_x0 = Complex::new(0.5, -0.5);
     println!("Target x: {}, {}", target_x0, target_x0);
-    
+
     // Or just iterate
     println!("Residual components check:");
     for i in 0..2 {

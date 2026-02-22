@@ -49,35 +49,38 @@ impl<T: Scalar, S: Storage<T>> HessenbergDecomposition<T, S> {
 
         for (i, h_coeff) in h_coeffs.iter_mut().enumerate().take(n - 2) {
             let v_len = n - (i + 1);
-            
+
             // 1. Compute Householder reflection for column i starting from i+1
             // Try vectorized first
             let mut computed_vectorized = false;
-            
+
             #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
             unsafe {
-                 if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>() && is_x86_feature_detected!("fma") {
+                if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>()
+                    && is_x86_feature_detected!("fma")
+                {
                     let mat_ptr: *mut Matrix<T, DynamicStorage<T>> = mat_a;
-                    let mat_f64: &mut Matrix<f64, DynamicStorage<f64>> = std::mem::transmute(mat_ptr);
-                    
+                    let mat_f64: &mut Matrix<f64, DynamicStorage<f64>> =
+                        std::mem::transmute(mat_ptr);
+
                     let v_slice_f64: &mut [f64] = std::mem::transmute(&mut v_buf_alloc[0..v_len]);
-                    
+
                     // Compute Householder vector
                     let (tau_val, beta_val) = crate::core::decompositions::hessenberg_utils::compute_householder_vectorized_f64(
                         mat_f64, i, v_slice_f64
                     );
-                    
+
                     let tau: T = std::mem::transmute_copy(&tau_val);
                     *h_coeff = tau;
-                    
+
                     // Restore beta (sub-diagonal element)
                     *mat_a.get_mut(i + 1, i).unwrap() = std::mem::transmute_copy(&beta_val);
 
                     if tau_val != 0.0 {
-                         let inputs_f64: &[f64] = v_slice_f64;
-                         let w_slice_f64: &mut [f64] = std::mem::transmute(&mut w_buf_alloc[0..n]); // w needs up to n size? Apply right uses rows_end=n
+                        let inputs_f64: &[f64] = v_slice_f64;
+                        let w_slice_f64: &mut [f64] = std::mem::transmute(&mut w_buf_alloc[0..n]); // w needs up to n size? Apply right uses rows_end=n
 
-                         crate::core::decompositions::hessenberg_utils::apply_householder_on_the_left_vectorized_f64(
+                        crate::core::decompositions::hessenberg_utils::apply_householder_on_the_left_vectorized_f64(
                             mat_f64, inputs_f64, tau_val, i + 1, i + 1, n
                         );
                         // Right update: affects columns i+1..n? No, right update affects all rows, columns i+1..n?
@@ -89,25 +92,28 @@ impl<T: Scalar, S: Storage<T>> HessenbergDecomposition<T, S> {
                         );
                     }
                     computed_vectorized = true;
-                 } else if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() && is_x86_feature_detected!("fma") {
+                } else if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>()
+                    && is_x86_feature_detected!("fma")
+                {
                     let mat_ptr: *mut Matrix<T, DynamicStorage<T>> = mat_a;
-                    let mat_f32: &mut Matrix<f32, DynamicStorage<f32>> = std::mem::transmute(mat_ptr);
-                    
+                    let mat_f32: &mut Matrix<f32, DynamicStorage<f32>> =
+                        std::mem::transmute(mat_ptr);
+
                     let v_slice_f32: &mut [f32] = std::mem::transmute(&mut v_buf_alloc[0..v_len]);
-                    
+
                     let (tau_val, beta_val) = crate::core::decompositions::hessenberg_utils::compute_householder_vectorized_f32(
                         mat_f32, i, v_slice_f32
                     );
-                    
+
                     let tau: T = std::mem::transmute_copy(&tau_val);
                     *h_coeff = tau;
                     *mat_a.get_mut(i + 1, i).unwrap() = std::mem::transmute_copy(&beta_val);
 
                     if tau_val != 0.0 {
-                         let inputs_f32: &[f32] = v_slice_f32;
-                         let w_slice_f32: &mut [f32] = std::mem::transmute(&mut w_buf_alloc[0..n]);
+                        let inputs_f32: &[f32] = v_slice_f32;
+                        let w_slice_f32: &mut [f32] = std::mem::transmute(&mut w_buf_alloc[0..n]);
 
-                         crate::core::decompositions::hessenberg_utils::apply_householder_on_the_left_vectorized_f32(
+                        crate::core::decompositions::hessenberg_utils::apply_householder_on_the_left_vectorized_f32(
                             mat_f32, inputs_f32, tau_val, i + 1, i + 1, n
                         );
                         crate::core::decompositions::hessenberg_utils::apply_householder_on_the_right_vectorized_f32(
@@ -115,7 +121,7 @@ impl<T: Scalar, S: Storage<T>> HessenbergDecomposition<T, S> {
                         );
                     }
                     computed_vectorized = true;
-                 }
+                }
             }
 
             if !computed_vectorized {
@@ -153,11 +159,11 @@ impl<T: Scalar, S: Storage<T>> HessenbergDecomposition<T, S> {
                     }
                     let v_slice = &v_buf_alloc[0..v_len];
 
-                   // 2. Apply reflection from the left: A = (I - tau v v^T) A
+                    // 2. Apply reflection from the left: A = (I - tau v v^T) A
                     for j in i + 1..n {
                         let mut dot = T::default();
                         for k in 0..v_len {
-                             dot += v_slice[k].conj() * *mat_a.get(i + 1 + k, j).unwrap();
+                            dot += v_slice[k].conj() * *mat_a.get(i + 1 + k, j).unwrap();
                         }
 
                         let factor = tau * dot;

@@ -1,32 +1,33 @@
-//! CUDA Device implementation using `cust`.
+//! CUDA Device implementation using `cudart` dynamic linkage.
 
 use crate::core::scalar::Scalar;
 use crate::core::tensor::device::{Device, DeviceStorage};
 
 #[cfg(feature = "cuda")]
-use cust::memory::DeviceBuffer;
-#[cfg(feature = "cuda")]
-use cust::prelude::*;
-
-use std::sync::{Arc, Mutex};
+use std::ffi::c_void;
 
 /// CUDA Device implementation.
-/// 
-/// Manages a CUDA context lazy-loaded or globally shared.
-/// For simplicity in this initial version, we assume a single context per thread or global.
-/// `cust` requires a Context to be active. 
+///
+/// Operates as a logical target for tensors that want to reside in GPU memory.
 #[derive(Clone, Debug)]
 pub struct CudaDevice {
-    // In a real app, we might need to hold a context handle to keep it alive.
-    // For now, we assume the user or a global init manages the context, 
-    // or we create one lazily. 
-    // `cust::quick_init()` enables a context on the current thread.
+    #[allow(dead_code)]
     device_id: u32,
+}
+
+#[cfg(feature = "cuda")]
+pub fn is_cuda_device_active() -> bool {
+    if let Some(api) = crate::core::tensor::device::cudart::get_cudart() {
+        let mut count = 0;
+        if unsafe { (api.cudaGetDeviceCount)(&mut count) } == 0 {
+            return count > 0;
+        }
+    }
+    false
 }
 
 impl Default for CudaDevice {
     fn default() -> Self {
-        // Attempt fast init if possible, or just default to device 0
         Self { device_id: 0 }
     }
 }
@@ -42,32 +43,30 @@ impl Device for CudaDevice {
 /// Storage in CUDA Device Memory.
 pub struct CudaStorage<T: Scalar> {
     #[cfg(feature = "cuda")]
-    buffer: DeviceBuffer<T>,
-    #[cfg(not(feature = "cuda"))]
+    ptr: *mut c_void,
     _marker: std::marker::PhantomData<T>,
     size: usize,
 }
 
 #[cfg(feature = "cuda")]
+impl<T: Scalar> Drop for CudaStorage<T> {
+    fn drop(&mut self) {
+        if !self.ptr.is_null() {
+            let _ = crate::core::tensor::device::cudart::cuda_free(self.ptr);
+            self.ptr = std::ptr::null_mut();
+        }
+    }
+}
+
+#[cfg(feature = "cuda")]
 impl<T: Scalar> DeviceStorage<T> for CudaStorage<T> {
     fn new(size: usize) -> Result<Self, String> {
-        // Ensure context is active. 
-        // In a library, this is tricky. We'll assume the user has initialized CUDA 
-        // or we try to initialize it.
-        // For robustness, let's catch the error if no context.
-        
-        // Safety: DeviceBuffer::zeroed requires T to be Zeroable. 
-        // Scalar trait usually implies simple numeric types, which are Zeroable.
-        // However, `cust` enforces `DeviceCopy` for its types.
-        // We might need to restrict T. For now, assume f32/f64 which are DeviceCopy.
-        
-        // Note: Creating a DeviceBuffer requires an active CUDA context.
-        let buffer = unsafe {
-            DeviceBuffer::zeroed(size).map_err(|e| format!("CUDA Alloc Failed: {:?}", e))?
-        };
-        
+        let bytes = size * std::mem::size_of::<T>();
+        let ptr = crate::core::tensor::device::cudart::cuda_malloc(bytes)?;
+
         Ok(Self {
-            buffer,
+            ptr,
+            _marker: std::marker::PhantomData,
             size,
         })
     }
@@ -79,6 +78,30 @@ impl<T: Scalar> DeviceStorage<T> for CudaStorage<T> {
     fn as_mut_slice(&mut self) -> Option<&mut [T]> {
         None
     }
+
+    fn copy_from_host(&mut self, src: &[T]) -> Result<(), String> {
+        if src.len() != self.size {
+            return Err("Size mismatch".into());
+        }
+        let bytes = self.size * std::mem::size_of::<T>();
+        crate::core::tensor::device::cudart::cuda_memcpy_h2d(
+            self.ptr,
+            src.as_ptr() as *const _,
+            bytes,
+        )
+    }
+
+    fn copy_to_host(&self, dest: &mut [T]) -> Result<(), String> {
+        if dest.len() != self.size {
+            return Err("Size mismatch".into());
+        }
+        let bytes = self.size * std::mem::size_of::<T>();
+        crate::core::tensor::device::cudart::cuda_memcpy_d2h(
+            dest.as_mut_ptr() as *mut _,
+            self.ptr,
+            bytes,
+        )
+    }
 }
 
 #[cfg(not(feature = "cuda"))]
@@ -86,30 +109,35 @@ impl<T: Scalar> DeviceStorage<T> for CudaStorage<T> {
     fn new(_size: usize) -> Result<Self, String> {
         Err("CUDA feature not enabled".to_string())
     }
-    fn as_slice(&self) -> Option<&[T]> { None }
-    fn as_mut_slice(&mut self) -> Option<&mut [T]> { None }
+    fn as_slice(&self) -> Option<&[T]> {
+        None
+    }
+    fn as_mut_slice(&mut self) -> Option<&mut [T]> {
+        None
+    }
+    fn copy_from_host(&mut self, _src: &[T]) -> Result<(), String> {
+        Err("CUDA feature not enabled".to_string())
+    }
+    fn copy_to_host(&self, _dest: &mut [T]) -> Result<(), String> {
+        Err("CUDA feature not enabled".to_string())
+    }
 }
 
-// Additional helpers for CudaStorage that are not in the generic DeviceStorage trait
 #[cfg(feature = "cuda")]
-impl<T: Scalar + cust::memory::DeviceCopy> CudaStorage<T> {
-    pub fn copy_from_host(&mut self, source: &[T]) -> Result<(), String> {
-        self.buffer.copy_from(source).map_err(|e| format!("CUDA CopyH2D Failed: {:?}", e))
-    }
-
-    pub fn copy_to_host(&self, dest: &mut [T]) -> Result<(), String> {
-        self.buffer.copy_to(dest).map_err(|e| format!("CUDA CopyD2H Failed: {:?}", e))
-    }
-
+impl<T: Scalar> CudaStorage<T> {
     pub fn copy_device_to_device(&mut self, src: &CudaStorage<T>) -> Result<(), String> {
         if self.size != src.size {
-            return Err(format!("Size mismatch in D2D copy: {} vs {}", self.size, src.size));
+            return Err("Size mismatch".into());
         }
-        self.buffer.copy_from(&src.buffer).map_err(|e| format!("CUDA CopyD2D Failed: {:?}", e))
+        Err("CUDA D2D copy not yet supported via dynamic bridge".into())
+    }
+
+    pub fn as_device_ptr(&self) -> *mut c_void {
+        self.ptr
     }
 }
 
-// Manual implementation of AsMut/AsRef which will panic, ensuring safety at runtime 
+// Manual implementation of AsMut/AsRef which will panic, ensuring safety at runtime
 // if user tries to treat it as CPU memory.
 // Ideally, we refactor DeviceStorage to not require AsMut<[T]> but for now checking runtime panic.
 impl<T: Scalar> AsRef<[T]> for CudaStorage<T> {
@@ -123,320 +151,324 @@ impl<T: Scalar> AsMut<[T]> for CudaStorage<T> {
         panic!("CudaStorage cannot be used as &mut [T]");
     }
 }
-// Include the PTX code generated by build.rs
-// Note: We use include_str! assuming the file is valid UTF-8, which PTX usually is.
-static PTX_SRC: &str = include_str!(concat!(env!("OUT_DIR"), "/kernels.ptx"));
 
 impl CudaDevice {
-    /// Helper to get or load the module. 
-    /// In a real implementation, this should be cached in the Device or Context.
-    /// For now, we load it effectively on-demand (relying on cust to handle repeated loads or just taking the hit).
     #[cfg(feature = "cuda")]
-    fn get_module(&self) -> Result<cust::module::Module, cust::error::CudaError> {
-        // Module::from_ptx loads the module into the current context.
-        cust::module::Module::from_ptx(PTX_SRC, &[])
-    }
-
-    /// Generic 1D element-wise kernel launch helper
-    #[cfg(feature = "cuda")]
-    fn launch_elementwise_1d<T: Scalar + cust::memory::DeviceCopy>(
-        &self, 
-        kernel_name: &str, 
-        n: usize, 
-        args: &[&dyn cust::function::Argument]
+    pub fn assign<T: Scalar>(
+        &self,
+        _out: &mut CudaStorage<T>,
+        _inp: &CudaStorage<T>,
     ) -> Result<(), String> {
-        let module = self.get_module().map_err(|e| format!("Module Load Failed: {:?}", e))?;
-        let func = module.get_function(kernel_name).map_err(|e| format!("Func Load Failed: {:?}", e))?;
-        
-        // 1D Grid/Block logic
-        let block_size = 256;
-        let grid_size = ((n as u32) + block_size - 1) / block_size;
-        
-        let stream = cust::stream::Stream::new(cust::stream::StreamFlags::NON_BLOCKING, None)
-            .map_err(|e| format!("Stream Create Failed: {:?}", e))?;
-
-        unsafe {
-            cust::launch!(
-                func<<<grid_size, block_size, 0, &stream>>>(args)
-            ).map_err(|e| format!("Launch Failed: {:?}", e))?;
-        }
-        
-        // Synchronize for safety in this early phase
-        stream.synchronize().map_err(|e| format!("Sync Failed: {:?}", e))?;
-        Ok(())
+        Err("Elemental assign on CUDA not supported without PTX module".into())
     }
 
     #[cfg(feature = "cuda")]
-    pub fn assign<T: Scalar + cust::memory::DeviceCopy>(&self, out: &mut CudaStorage<T>, inp: &CudaStorage<T>) -> Result<(), String> {
-        let kernel_name = if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() {
-            "assign_kernel_f32"
-        } else if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>() {
-            "assign_kernel_f64"
-        } else {
-             return Err("Unsupported type for CUDA assign".into());
-        };
-        
-        let n = out.size;
-        let n_i32 = n as i32;
-        let out_ptr = out.buffer.as_device_ptr();
-        let inp_ptr = inp.buffer.as_device_ptr();
-        
-        let args: &[&dyn cust::function::Argument] = &[&out_ptr.as_ptr(), &inp_ptr.as_ptr(), &n_i32];
-        self.launch_elementwise_1d(kernel_name, n, args)
-    }
-
-    #[cfg(feature = "cuda")]
-    pub fn add<T: Scalar + cust::memory::DeviceCopy>(&self, out: &mut CudaStorage<T>, a: &CudaStorage<T>, b: &CudaStorage<T>) -> Result<(), String> {
-        let kernel_name = if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() {
-            "add_kernel_f32"
-        } else if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>() {
-            "add_kernel_f64"
-        } else {
-             return Err("Unsupported type for CUDA add".into());
-        };
-        
-        let n = out.size;
-        let n_i32 = n as i32;
-        let out_ptr = out.buffer.as_device_ptr();
-        let a_ptr = a.buffer.as_device_ptr();
-        let b_ptr = b.buffer.as_device_ptr();
-        
-        let args: &[&dyn cust::function::Argument] = &[&a_ptr.as_ptr(), &b_ptr.as_ptr(), &out_ptr.as_ptr(), &n_i32];
-        self.launch_elementwise_1d(kernel_name, n, args)
-    }
-
-    #[cfg(feature = "cuda")]
-    pub fn sub<T: Scalar + cust::memory::DeviceCopy>(&self, out: &mut CudaStorage<T>, a: &CudaStorage<T>, b: &CudaStorage<T>) -> Result<(), String> {
-        let kernel_name = if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() {
-            "sub_kernel_f32"
-        } else if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>() {
-            "sub_kernel_f64"
-        } else {
-             return Err("Unsupported type for CUDA sub".into());
-        };
-        
-        let n = out.size;
-        let n_i32 = n as i32;
-        let out_ptr = out.buffer.as_device_ptr();
-        let a_ptr = a.buffer.as_device_ptr();
-        let b_ptr = b.buffer.as_device_ptr();
-        
-        let args: &[&dyn cust::function::Argument] = &[&a_ptr.as_ptr(), &b_ptr.as_ptr(), &out_ptr.as_ptr(), &n_i32];
-        self.launch_elementwise_1d(kernel_name, n, args)
-    }
-
-    #[cfg(feature = "cuda")]
-    pub fn mul<T: Scalar + cust::memory::DeviceCopy>(&self, out: &mut CudaStorage<T>, a: &CudaStorage<T>, b: &CudaStorage<T>) -> Result<(), String> {
-        let kernel_name = if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() {
-            "mul_kernel_f32"
-        } else if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>() {
-            "mul_kernel_f64"
-        } else {
-             return Err("Unsupported type for CUDA mul".into());
-        };
-        
-        let n = out.size;
-        let n_i32 = n as i32;
-        let out_ptr = out.buffer.as_device_ptr();
-        let a_ptr = a.buffer.as_device_ptr();
-        let b_ptr = b.buffer.as_device_ptr();
-        
-        let args: &[&dyn cust::function::Argument] = &[&a_ptr.as_ptr(), &b_ptr.as_ptr(), &out_ptr.as_ptr(), &n_i32];
-        self.launch_elementwise_1d(kernel_name, n, args)
-    }
-    
-    #[cfg(feature = "cuda")]
-    pub fn matmul<T: Scalar + cust::memory::DeviceCopy>(
-        &self, 
-        c: &mut CudaStorage<T>, 
-        a: &CudaStorage<T>, 
+    pub fn add<T: Scalar>(
+        &self,
+        out: &mut CudaStorage<T>,
+        a: &CudaStorage<T>,
         b: &CudaStorage<T>,
-        m: usize, n: usize, k: usize
     ) -> Result<(), String> {
+        let size = a.size;
+        if size != out.size || size != b.size {
+            return Err("CUDA add size mismatch".to_string());
+        }
+        crate::core::tensor::device::cudart::cuda_memcpy_d2d(
+            out.as_device_ptr(),
+            b.as_device_ptr() as *const _,
+            size * std::mem::size_of::<T>(),
+        )?;
+
+        let handle_opt = crate::core::tensor::device::cublas::CUBLAS_HANDLE.with(|f| *f);
+        let handle = handle_opt.ok_or("cuBLAS handle not initialized")?;
+        let api_opt = crate::core::tensor::device::cublas::get_cublas();
+        let api = api_opt.ok_or("cuBLAS library not loaded")?;
+
         let is_f32 = std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>();
-        let is_f64 = std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>();
 
-        if is_f32 || is_f64 {
-            let handled_cublas = super::cublas::CUBLAS_HANDLE.with(|h| {
-                if let Some(handle) = h {
-                    if let Some(api) = super::cublas::get_cublas() {
-                        let alpha_f32: f32 = 1.0;
-                        let beta_f32: f32 = 0.0;
-                        let alpha_f64: f64 = 1.0;
-                        let beta_f64: f64 = 0.0;
-
-                        let lda = m as i32;
-                        let ldb = k as i32;
-                        let ldc = m as i32;
-                        
-                        let ptr_a = a.buffer.as_device_ptr().as_ptr() as *const f32;
-                        let ptr_b = b.buffer.as_device_ptr().as_ptr() as *const f32;
-                        let ptr_c = c.buffer.as_device_ptr().as_ptr() as *mut f32;
-
-                        unsafe {
-                            if is_f32 {
-                                let status = (api.cublasSgemm_v2)(
-                                    *handle,
-                                    super::cublas::CUBLAS_OP_N, super::cublas::CUBLAS_OP_N,
-                                    m as i32, n as i32, k as i32,
-                                    &alpha_f32,
-                                    ptr_a, lda,
-                                    ptr_b, ldb,
-                                    &beta_f32,
-                                    ptr_c, ldc,
-                                );
-                                return if status == super::cublas::CUBLAS_STATUS_SUCCESS { Ok(true) } else { Err(format!("cuBLAS sgemm failed: {}", status)) };
-                            } else {
-                                let ptr_a_64 = a.buffer.as_device_ptr().as_ptr() as *const f64;
-                                let ptr_b_64 = b.buffer.as_device_ptr().as_ptr() as *const f64;
-                                let ptr_c_64 = c.buffer.as_device_ptr().as_ptr() as *mut f64;
-                                let status = (api.cublasDgemm_v2)(
-                                    *handle,
-                                    super::cublas::CUBLAS_OP_N, super::cublas::CUBLAS_OP_N,
-                                    m as i32, n as i32, k as i32,
-                                    &alpha_f64,
-                                    ptr_a_64, lda,
-                                    ptr_b_64, ldb,
-                                    &beta_f64,
-                                    ptr_c_64, ldc,
-                                );
-                                return if status == super::cublas::CUBLAS_STATUS_SUCCESS { Ok(true) } else { Err(format!("cuBLAS dgemm failed: {}", status)) };
-                            }
-                        }
-                    }
-                }
-                Ok(false)
-            });
-
-            match handled_cublas {
-                Ok(true) => return Ok(()),
-                Err(e) => return Err(e),
-                Ok(false) => {}
+        if is_f32 {
+            let alpha = 1.0f32;
+            let status = unsafe {
+                (api.cublasSaxpy_v2)(
+                    handle,
+                    size as i32,
+                    &alpha as *const f32,
+                    a.as_device_ptr() as *const f32,
+                    1,
+                    out.as_device_ptr() as *mut f32,
+                    1,
+                )
+            };
+            if status != crate::core::tensor::device::cublas::CUBLAS_STATUS_SUCCESS {
+                return Err(format!("cublasSaxpy failed: {}", status));
+            }
+        } else {
+            let alpha = 1.0f64;
+            let status = unsafe {
+                (api.cublasDaxpy_v2)(
+                    handle,
+                    size as i32,
+                    &alpha as *const f64,
+                    a.as_device_ptr() as *const f64,
+                    1,
+                    out.as_device_ptr() as *mut f64,
+                    1,
+                )
+            };
+            if status != crate::core::tensor::device::cublas::CUBLAS_STATUS_SUCCESS {
+                return Err(format!("cublasDaxpy failed: {}", status));
             }
         }
-
-         let kernel_name = if is_f32 {
-            "matmul_kernel_f32"
-        } else if is_f64 {
-            "matmul_kernel_f64"
-        } else {
-             return Err("Unsupported type for CUDA matmul".into());
-        };
-        
-        /*
-        Params: A, B, C, M, N, K
-        Grid: (N, M) -> x=col, y=row.
-        */
-        
-        let module = self.get_module().map_err(|e| format!("Module Load Failed: {:?}", e))?;
-        let func = module.get_function(kernel_name).map_err(|e| format!("Func Load Failed: {:?}", e))?;
-        
-        let block_dim_x = 16;
-        let block_dim_y = 16;
-        let grid_dim_x = (n as u32 + block_dim_x - 1) / block_dim_x;
-        let grid_dim_y = (m as u32 + block_dim_y - 1) / block_dim_y;
-        
-        let stream = cust::stream::Stream::new(cust::stream::StreamFlags::NON_BLOCKING, None).unwrap();
-        
-        let m_i32 = m as i32;
-        let n_i32 = n as i32;
-        let k_i32 = k as i32;
-        
-        let c_ptr = c.buffer.as_device_ptr();
-        let a_ptr = a.buffer.as_device_ptr();
-        let b_ptr = b.buffer.as_device_ptr();
-        
-        let args: &[&dyn cust::function::Argument] = &[
-            &a_ptr.as_ptr(), &b_ptr.as_ptr(), &c_ptr.as_ptr(),
-            &m_i32, &n_i32, &k_i32
-        ];
-
-        unsafe {
-            cust::launch!(
-                func<<<
-                    (grid_dim_x, grid_dim_y, 1), 
-                    (block_dim_x, block_dim_y, 1), 
-                    0, &stream
-                >>>(args)
-            ).map_err(|e| format!("Launch Failed: {:?}", e))?;
-        }
-        stream.synchronize().unwrap();
         Ok(())
     }
 
     #[cfg(feature = "cuda")]
-    pub fn permute<T: Scalar + cust::memory::DeviceCopy>(
+    pub fn sub<T: Scalar>(
+        &self,
+        out: &mut CudaStorage<T>,
+        a: &CudaStorage<T>,
+        b: &CudaStorage<T>,
+    ) -> Result<(), String> {
+        let size = a.size;
+        if size != out.size || size != b.size {
+            return Err("CUDA sub size mismatch".to_string());
+        }
+        crate::core::tensor::device::cudart::cuda_memcpy_d2d(
+            out.as_device_ptr(),
+            a.as_device_ptr() as *const _,
+            size * std::mem::size_of::<T>(),
+        )?;
+
+        let handle_opt = crate::core::tensor::device::cublas::CUBLAS_HANDLE.with(|f| *f);
+        let handle = handle_opt.ok_or("cuBLAS handle not initialized")?;
+        let api_opt = crate::core::tensor::device::cublas::get_cublas();
+        let api = api_opt.ok_or("cuBLAS library not loaded")?;
+
+        let is_f32 = std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>();
+
+        if is_f32 {
+            let alpha = -1.0f32;
+            let status = unsafe {
+                (api.cublasSaxpy_v2)(
+                    handle,
+                    size as i32,
+                    &alpha as *const f32,
+                    b.as_device_ptr() as *const f32,
+                    1,
+                    out.as_device_ptr() as *mut f32,
+                    1,
+                )
+            };
+            if status != crate::core::tensor::device::cublas::CUBLAS_STATUS_SUCCESS {
+                return Err(format!("cublasSaxpy failed: {}", status));
+            }
+        } else {
+            let alpha = -1.0f64;
+            let status = unsafe {
+                (api.cublasDaxpy_v2)(
+                    handle,
+                    size as i32,
+                    &alpha as *const f64,
+                    b.as_device_ptr() as *const f64,
+                    1,
+                    out.as_device_ptr() as *mut f64,
+                    1,
+                )
+            };
+            if status != crate::core::tensor::device::cublas::CUBLAS_STATUS_SUCCESS {
+                return Err(format!("cublasDaxpy failed: {}", status));
+            }
+        }
+        Ok(())
+    }
+
+    #[cfg(feature = "cuda")]
+    pub fn mul_scalar<T: Scalar>(
         &self,
         out: &mut CudaStorage<T>,
         inp: &CudaStorage<T>,
-        rank: usize,
-        out_dims: &[usize],
-        out_strides: &[usize], // Not strictly used by kernel if using modulo, but good for completeness/future.
-        in_strides: &[usize],
-        perm: &[usize],
+        scalar: T,
     ) -> Result<(), String> {
-        let kernel_name = if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() {
-            "permute_kernel_f32"
-        } else if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>() {
-            "permute_kernel_f64"
+        let size = inp.size;
+        if size != out.size {
+            return Err("CUDA mul_scalar size mismatch".to_string());
+        }
+        crate::core::tensor::device::cudart::cuda_memcpy_d2d(
+            out.as_device_ptr(),
+            inp.as_device_ptr() as *const _,
+            size * std::mem::size_of::<T>(),
+        )?;
+
+        let handle_opt = crate::core::tensor::device::cublas::CUBLAS_HANDLE.with(|f| *f);
+        let handle = handle_opt.ok_or("cuBLAS handle not initialized")?;
+        let api_opt = crate::core::tensor::device::cublas::get_cublas();
+        let api = api_opt.ok_or("cuBLAS library not loaded")?;
+
+        let is_f32 = std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>();
+
+        if is_f32 {
+            let val: f32 = unsafe { std::mem::transmute_copy(&scalar) };
+            let status = unsafe {
+                (api.cublasSscal_v2)(
+                    handle,
+                    size as i32,
+                    &val as *const f32,
+                    out.as_device_ptr() as *mut f32,
+                    1,
+                )
+            };
+            if status != crate::core::tensor::device::cublas::CUBLAS_STATUS_SUCCESS {
+                return Err(format!("cublasSscal failed: {}", status));
+            }
         } else {
-             return Err("Unsupported type for CUDA permute".into());
-        };
-
-        // Validate sizes
-        if out.size != inp.size {
-             return Err("Size mismatch in permute".into());
+            let val: f64 = unsafe { std::mem::transmute_copy(&scalar) };
+            let status = unsafe {
+                (api.cublasDscal_v2)(
+                    handle,
+                    size as i32,
+                    &val as *const f64,
+                    out.as_device_ptr() as *mut f64,
+                    1,
+                )
+            };
+            if status != crate::core::tensor::device::cublas::CUBLAS_STATUS_SUCCESS {
+                return Err(format!("cublasDscal failed: {}", status));
+            }
         }
-
-        let module = self.get_module().map_err(|e| format!("Module Load Failed: {:?}", e))?;
-        let func = module.get_function(kernel_name).map_err(|e| format!("Func Load Failed: {:?}", e))?;
-
-        // Allocate and copy metadata to Device
-        // We use i32 for kernel simplicity. Cast usize -> i32.
-        let to_i32_vec = |s: &[usize]| -> Vec<i32> { s.iter().map(|&x| x as i32).collect() };
-        
-        let d_out_dims = DeviceBuffer::from_slice(&to_i32_vec(out_dims)).map_err(|e| format!("Alloc dims Failed: {:?}", e))?;
-        // Kernel doesn't use out_strides? I wrote kernel to check.
-        // Kernel: permute_kernel_f32(out, inp, size, rank, out_dims, in_strides, perm)
-        // Oops, I didn't include out_strides in the kernel signature I cat'ed!
-        // Checks kernel code I just wrote:
-        // extern "C" __global__ void permute_kernel_f32(..., const int* out_dims, const int* in_strides, const int* perm)
-        // Correct. I removed out_strides from kernel logic in thought process.
-
-        let d_in_strides = DeviceBuffer::from_slice(&to_i32_vec(in_strides)).map_err(|e| format!("Alloc strides Failed: {:?}", e))?;
-        let d_perm = DeviceBuffer::from_slice(&to_i32_vec(perm)).map_err(|e| format!("Alloc perm Failed: {:?}", e))?;
-
-        let size = out.size;
-        let size_i32 = size as i32;
-        let rank_i32 = rank as i32;
-        
-        // Pointers
-        let out_ptr = out.buffer.as_device_ptr();
-        let inp_ptr = inp.buffer.as_device_ptr();
-        let dims_ptr = d_out_dims.as_device_ptr();
-        let strides_ptr = d_in_strides.as_device_ptr();
-        let perm_ptr = d_perm.as_device_ptr();
-
-        // Launch
-        let block_size = 256;
-        let grid_size = ((size as u32) + block_size - 1) / block_size;
-        let stream = cust::stream::Stream::new(cust::stream::StreamFlags::NON_BLOCKING, None).unwrap();
-
-        let args: &[&dyn cust::function::Argument] = &[
-            &out_ptr.as_ptr(), &inp_ptr.as_ptr(),
-            &size_i32, &rank_i32,
-            &dims_ptr.as_ptr(), &strides_ptr.as_ptr(), &perm_ptr.as_ptr()
-        ];
-        
-        unsafe {
-            cust::launch!(
-                func<<<grid_size, block_size, 0, &stream>>>(args)
-            ).map_err(|e| format!("Launch Failed: {:?}", e))?;
-        }
-        
-        stream.synchronize().unwrap();
-        // d_ buffers dropped here, which is safe after sync.
-        
         Ok(())
+    }
+
+    #[cfg(feature = "cuda")]
+    pub fn matmul<T: Scalar>(
+        &self,
+        _c: &mut CudaStorage<T>,
+        _a: &CudaStorage<T>,
+        _b: &CudaStorage<T>,
+        _m: usize,
+        _n: usize,
+        _k: usize,
+    ) -> Result<(), String> {
+        // We offload matmul to cuBLAS directly inside gemm_blocked instead of elemental kernels
+        Err("matmul on CudaDevice natively via kernel is unsupported. Use global cuBLAS hook in gemm_blocked.".into())
+    }
+
+    #[cfg(feature = "cuda")]
+    pub fn permute<T: Scalar>(
+        &self,
+        _out: &mut CudaStorage<T>,
+        _inp: &CudaStorage<T>,
+        _rank: usize,
+        _out_dims: &[usize],
+        _out_strides: &[usize],
+        _in_strides: &[usize],
+        _perm: &[usize],
+    ) -> Result<(), String> {
+        Err("Elemental permute on CUDA not supported without PTX module".into())
+    }
+
+    #[cfg(feature = "cuda")]
+    pub fn dot<T: Scalar>(
+        &self,
+        a: &CudaStorage<T>,
+        b: &CudaStorage<T>,
+    ) -> Result<T, String> {
+        let size = a.size;
+        if size != b.size {
+            return Err("CUDA dot size mismatch".to_string());
+        }
+
+        let handle_opt = crate::core::tensor::device::cublas::CUBLAS_HANDLE.with(|f| *f);
+        let handle = handle_opt.ok_or("cuBLAS handle not initialized")?;
+        let api_opt = crate::core::tensor::device::cublas::get_cublas();
+        let api = api_opt.ok_or("cuBLAS library not loaded")?;
+
+        let is_f32 = std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>();
+
+        if is_f32 {
+            let mut result = 0.0f32;
+            let status = unsafe {
+                (api.cublasSdot_v2)(
+                    handle,
+                    size as i32,
+                    a.as_device_ptr() as *const f32,
+                    1,
+                    b.as_device_ptr() as *const f32,
+                    1,
+                    &mut result as *mut f32,
+                )
+            };
+            if status != crate::core::tensor::device::cublas::CUBLAS_STATUS_SUCCESS {
+                return Err(format!("cublasSdot failed: {}", status));
+            }
+            Ok(T::from_f64(result as f64))
+        } else if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>() {
+            let mut result = 0.0f64;
+            let status = unsafe {
+                (api.cublasDdot_v2)(
+                    handle,
+                    size as i32,
+                    a.as_device_ptr() as *const f64,
+                    1,
+                    b.as_device_ptr() as *const f64,
+                    1,
+                    &mut result as *mut f64,
+                )
+            };
+            if status != crate::core::tensor::device::cublas::CUBLAS_STATUS_SUCCESS {
+                return Err(format!("cublasDdot failed: {}", status));
+            }
+            Ok(T::from_f64(result))
+        } else {
+            Err("CUDA dot unsupported type".to_string())
+        }
+    }
+
+    #[cfg(feature = "cuda")]
+    pub fn norm<T: Scalar>(
+        &self,
+        a: &CudaStorage<T>,
+    ) -> Result<T, String> {
+        let size = a.size;
+
+        let handle_opt = crate::core::tensor::device::cublas::CUBLAS_HANDLE.with(|f| *f);
+        let handle = handle_opt.ok_or("cuBLAS handle not initialized")?;
+        let api_opt = crate::core::tensor::device::cublas::get_cublas();
+        let api = api_opt.ok_or("cuBLAS library not loaded")?;
+
+        let is_f32 = std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>();
+
+        if is_f32 {
+            let mut result = 0.0f32;
+            let status = unsafe {
+                (api.cublasSnrm2_v2)(
+                    handle,
+                    size as i32,
+                    a.as_device_ptr() as *const f32,
+                    1,
+                    &mut result as *mut f32,
+                )
+            };
+            if status != crate::core::tensor::device::cublas::CUBLAS_STATUS_SUCCESS {
+                return Err(format!("cublasSnrm2 failed: {}", status));
+            }
+            Ok(T::from_f64(result as f64))
+        } else if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>() {
+            let mut result = 0.0f64;
+            let status = unsafe {
+                (api.cublasDnrm2_v2)(
+                    handle,
+                    size as i32,
+                    a.as_device_ptr() as *const f64,
+                    1,
+                    &mut result as *mut f64,
+                )
+            };
+            if status != crate::core::tensor::device::cublas::CUBLAS_STATUS_SUCCESS {
+                return Err(format!("cublasDnrm2 failed: {}", status));
+            }
+            Ok(T::from_f64(result))
+        } else {
+            Err("CUDA norm unsupported type".to_string())
+        }
     }
 }

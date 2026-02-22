@@ -52,31 +52,33 @@ impl Permutation {
     pub fn permute_symmetric<T: Scalar>(&self, matrix: &SparseMatrix<T>) -> SparseMatrix<T> {
         let n = matrix.rows();
         let mut triplets = Vec::with_capacity(matrix.non_zeros());
-        
+
         let inv_p = &self.inv_indices;
-        
+
         use crate::core::sparse::iterators::InnerIterator;
         use crate::core::sparse::sparse_matrix::Triplet;
-        
+
         let outer_size = matrix.outer_size();
         for k in 0..outer_size {
             let mut it = InnerIterator::new(matrix, k);
             while it.is_valid() {
                 let val = it.value();
-                let (r, c) = if matrix.order() == crate::core::sparse::sparse_matrix::StorageOrder::RowMajor {
+                let (r, c) = if matrix.order()
+                    == crate::core::sparse::sparse_matrix::StorageOrder::RowMajor
+                {
                     (k, it.index())
                 } else {
                     (it.index(), k)
                 };
-                
+
                 let new_r = inv_p[r];
                 let new_c = inv_p[c];
-                
+
                 triplets.push(Triplet::new(new_r, new_c, val));
                 it.next();
             }
         }
-        
+
         let mut res = SparseMatrix::new(n, n, matrix.order());
         res.set_from_triplets(triplets);
         res

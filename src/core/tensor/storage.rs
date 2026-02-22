@@ -60,7 +60,9 @@ impl<T: Scalar, const RANK: usize, D: Device> TensorStorage<T, RANK, D> {
     }
 
     pub fn data_mut(&mut self) -> &mut [T] {
-        self.data.as_mut_slice().expect("Storage is not CPU-accessible")
+        self.data
+            .as_mut_slice()
+            .expect("Storage is not CPU-accessible")
     }
 
     pub fn data_opt(&self) -> Option<&[T]> {
@@ -74,7 +76,7 @@ impl<T: Scalar, const RANK: usize, D: Device> TensorStorage<T, RANK, D> {
     pub fn inner_storage(&self) -> &D::Storage<T> {
         &self.data
     }
-    
+
     pub fn inner_storage_mut(&mut self) -> &mut D::Storage<T> {
         &mut self.data
     }

@@ -74,15 +74,6 @@ where
     // We explicitly don't implement optimized packet_eval here, falling back to scalar.
 }
 
-impl<'a, T, L, R> crate::core::cuda::CudaDispatcher<T> for KroneckerProduct<'a, T, L, R>
-where
-    T: Scalar,
-    L: MatrixXpr<T>,
-    R: MatrixXpr<T>,
-{
-    // Default implementation returns false (fallback to CPU)
-}
-
 /// Computes the Kronecker product of two matrices.
 pub fn kronecker_product<'a, T, L, R>(lhs: &'a L, rhs: &'a R) -> KroneckerProduct<'a, T, L, R>
 where
