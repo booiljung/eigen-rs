@@ -59,7 +59,7 @@ pub struct CholmodLLT<T: Scalar> {
     #[cfg(feature = "suitesparse")]
     factor: *mut sys::cholmod_factor,
     #[cfg(feature = "suitesparse")]
-    common: Box<sys::cholmod_common>,
+    common: *mut sys::cholmod_common,
     _marker: std::marker::PhantomData<T>,
 }
 
@@ -69,7 +69,7 @@ impl<T: Scalar> CholmodLLT<T> {
             #[cfg(feature = "suitesparse")]
             factor: std::ptr::null_mut(),
             #[cfg(feature = "suitesparse")]
-            common: unsafe { std::mem::zeroed() }, // Simplified for template
+            common: std::ptr::null_mut(),
             _marker: std::marker::PhantomData,
         }
     }

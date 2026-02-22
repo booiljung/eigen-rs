@@ -16,6 +16,9 @@ pub mod ops;
 pub mod ordering;
 pub mod solvers;
 pub mod sparse_matrix;
+pub mod coo;
+pub mod bsr;
+pub mod ell;
 
 #[cfg(feature = "cuda")]
 pub mod cuda_sparse_bridge;
@@ -24,3 +27,6 @@ pub use cuda_storage::CudaSparseStorage;
 pub use iterators::InnerIterator;
 pub use ordering::{NaturalOrdering, Ordering, Permutation};
 pub use sparse_matrix::{SparseMatrix, StorageOrder, Triplet};
+pub use coo::CooMatrix;
+pub use bsr::BsrMatrix;
+pub use ell::EllMatrix;

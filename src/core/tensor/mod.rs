@@ -17,6 +17,7 @@ pub mod ops;
 pub mod storage;
 pub mod xpr;
 pub mod nn;
+pub mod candle_interop;
 
 pub use storage::TensorStorage;
 pub use xpr::TensorXpr;

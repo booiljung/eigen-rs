@@ -3,6 +3,7 @@
 use crate::core::matrix::MatrixX;
 use crate::core::scalar::Scalar;
 
+pub mod auto_tune;
 pub mod autodiff;
 pub mod hybrid;
 pub mod levenberg_marquardt;

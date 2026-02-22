@@ -4,6 +4,7 @@ pub mod complex;
 pub mod decompositions;
 pub mod geometry;
 pub mod iterative_solvers;
+pub mod jit;
 pub mod matrix;
 pub mod nn;
 pub mod ops;

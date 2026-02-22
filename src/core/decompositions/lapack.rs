@@ -253,7 +253,7 @@ impl<T: Scalar> LapackQR<T> {
 
     pub fn solve<S: Storage<T>>(
         &self,
-        _b: &Matrix<T, S>,
+        b: &Matrix<T, S>,
     ) -> Result<Matrix<T, DynamicStorage<T>>, String> {
         if !self.is_initialized {
             return Err("LapackQR not initialized".to_string());

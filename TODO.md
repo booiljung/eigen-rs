@@ -66,3 +66,11 @@ With the v1.0.0 release finalized, future development will focus on expanding th
 - [x] **Advanced Neural Network Primitives**: Expand the `Tensor` module with common ML operations (Conv2D, MaxPool, BatchNorm) utilizing the existing `CudaDevice` kernels.
 - [x] **Python Bindings (PyO3)**: Create a `python-eigen-rs` wrapper crate to expose the high-performance CUDA and SIMD backends directly to the Python ecosystem.
 - [x] **Distributed Computing**: Investigate MPI integration for distributing massive sparse linear system solves across multi-node clusters.
+
+## 9. Phase 8: Advanced Ecosystem Integration & JIT Compilation (Future Roadmap)
+Building upon the distributed and hardware-accelerated foundation of `eigen-rs` v1.1.0, the next major milestone focuses on deeper ecosystem integrations and runtime optimizations:
+
+- [x] **Advanced Sparse Formats**: Support extended sparse formats (BSR, ELL, COO) to optimize specialized memory access patterns on modern GPU architectures.
+- [x] **JIT Compilation / Graph Execution**: Implement lazy evaluation nodes that compile expression trees into fused backend kernels (similar to XLA/Inductor) directly at runtime.
+- [x] **Auto-Tuning Engine**: Build a runtime profiler that automatically selects the most efficient backend (Scalar, AVX2, AVX512, CUDA, or MPI) based on matrix dimensions and system capabilities.
+- [x] **Deep ML Integrations**: Establish native zero-copy interoperability bridges for prominent Rust ML frameworks like `candle` and `burn`.

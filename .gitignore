@@ -28,9 +28,10 @@ tmp/
 *.bin
 
 # Verification & Test Logs
-docs/reports/performance_*.md
+docs/reports/**/performance_*.md
 *out.txt
 *.out
+*.err
 check.log
 check.json
 
