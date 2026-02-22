@@ -1,11 +1,6 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion, Throughput};
-<<<<<<< HEAD
 use eigen_rs::core::decompositions::lu::PartialPivLU;
 use eigen_rs::core::matrix::Matrix;
-=======
-use eigen_rs::core::matrix::Matrix;
-use eigen_rs::core::decompositions::lu::PartialPivLU;
->>>>>>> refs/remotes/origin/develop
 
 fn benchmark_lu(c: &mut Criterion) {
     let mut group = c.benchmark_group("LU_Optimization");
@@ -14,16 +9,10 @@ fn benchmark_lu(c: &mut Criterion) {
     for size in [4, 8, 12, 16, 24, 32].iter() {
         let n = *size;
         group.throughput(Throughput::Elements((n * n) as u64));
-<<<<<<< HEAD
 
         // Generate random matrix
         let mut mat =
             Matrix::<f64, eigen_rs::core::storage::DynamicStorage<f64>>::new_dynamic(n, n).unwrap();
-=======
-        
-        // Generate random matrix
-        let mut mat = Matrix::<f64, eigen_rs::core::storage::DynamicStorage<f64>>::new_dynamic(n, n).unwrap();
->>>>>>> refs/remotes/origin/develop
         // Simple LCG for deterministic "random" numbers
         let mut state: u64 = 42;
         for i in 0..n {
@@ -33,11 +22,6 @@ fn benchmark_lu(c: &mut Criterion) {
                 *mat.get_mut(i, j).unwrap() = val;
             }
         }
-<<<<<<< HEAD
-
-=======
-        
->>>>>>> refs/remotes/origin/develop
         group.bench_function(format!("PartialPivLU_N{}", n), |b| {
             b.iter(|| {
                 let res = PartialPivLU::new(black_box(&mat));
@@ -46,19 +30,14 @@ fn benchmark_lu(c: &mut Criterion) {
         });
 
         // Also bench MatMul to see GEMM overhead
-<<<<<<< HEAD
         let mut mat_b =
             Matrix::<f64, eigen_rs::core::storage::DynamicStorage<f64>>::new_dynamic(n, n).unwrap();
-=======
-        let mut mat_b = Matrix::<f64, eigen_rs::core::storage::DynamicStorage<f64>>::new_dynamic(n, n).unwrap();
->>>>>>> refs/remotes/origin/develop
         // fill b
         for i in 0..n {
             for j in 0..n {
                 *mat_b.get_mut(i, j).unwrap() = 1.0;
             }
         }
-<<<<<<< HEAD
 
         group.bench_function(format!("MatMul_N{}", n), |b| {
             b.iter(|| {
@@ -69,18 +48,6 @@ fn benchmark_lu(c: &mut Criterion) {
                 black_box(res);
             })
         });
-=======
-        
-        group.bench_function(format!("MatMul_N{}", n), |b| {
-             b.iter(|| {
-                 let mut res = Matrix::<f64, eigen_rs::core::storage::DynamicStorage<f64>>::new_dynamic(n, n).unwrap();
-                 res.assign(&(&mat * &mat_b)).unwrap();
-                 black_box(res);
-             })
-        });
-
-
->>>>>>> refs/remotes/origin/develop
     }
     group.finish();
 }

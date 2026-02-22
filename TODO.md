@@ -30,7 +30,6 @@ Leverage the newly implemented `CudaDevice` to run actual operations on GPU.
 - [x] **Geometry Module Optimization**:
     -   [x] Vectorize `Quaternion` multiplication and `Transform` applications. (Done Phase 40)
 
-<<<<<<< HEAD
 ## 4. Phase 3: Hardware Acceleration & Remaining Baseline Parity (Done Phase 41)
 - [x] **MatMul (Small Matrix)**: Optimize GEMM for small matrix sizes like 16x16 (currently 3.38x slower). Investigate loop unrolling, SIMD invocation overhead, or missing block size thresholds. -> **Done**: *1.72x* via dedicated 4x8 register-blocked YMM micro-kernel bypassing packing.
 - [x] **SpMV (Sparse Matrix-Vector)**: Optimize Sparse-Dense vector multiplication (currently 2.77x slower). Matrix iteration might be causing bounds-checking overhead or cache misses. -> **Done**: *1.00x (Parity)* via `mul_dense_into` (Zero-Cost expression template pattern replacing forced allocations).
@@ -75,10 +74,3 @@ Building upon the distributed and hardware-accelerated foundation of `eigen-rs` 
 - [x] **JIT Compilation / Graph Execution**: Implement lazy evaluation nodes that compile expression trees into fused backend kernels (similar to XLA/Inductor) directly at runtime.
 - [x] **Auto-Tuning Engine**: Build a runtime profiler that automatically selects the most efficient backend (Scalar, AVX2, AVX512, CUDA, or MPI) based on matrix dimensions and system capabilities.
 - [x] **Deep ML Integrations**: Establish native zero-copy interoperability bridges for prominent Rust ML frameworks like `candle` and `burn`.
-=======
-## 4. Next Project Steps (Post-LU Optimization)
-- [ ] **Commit Changes**: Commit the recent `PartialPivLU` optimizations and the unified roadmap documentation.
-- [ ] **SparseView Optimization (High Priority)**: Investigate and optimize `SparseView` performance, which currently exceeds the 1.5x threshold (max ratio 1.87x).
-- [ ] **Complete BDCSVD (Medium Priority)**: Implement the Divide & Conquer SVD (`BDCSVD`) which is currently marked as pending in `Decompositions.md`.
-- [ ] **Add Missing Benchmarks (Medium Priority)**: Expand `benches/repro_lu.rs` or create new benchmarks to cover operations shown as `MISSING` in reports (e.g., `AngleAxis`, `GeneralizedEigen`, `Inverse`, `LDLT`, `LLT`).
->>>>>>> refs/remotes/origin/develop

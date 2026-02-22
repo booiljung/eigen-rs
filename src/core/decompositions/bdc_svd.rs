@@ -382,11 +382,6 @@ impl<T: Scalar<Real = T> + PartialOrd + 'static, S: Storage<T> + 'static> BDCSVD
                 }
             }
         });
-<<<<<<< HEAD
-
-=======
-        
->>>>>>> refs/remotes/origin/develop
         let d_sorted: Vec<T> = p.iter().map(|&i| d_merged[i]).collect();
         let z_sorted: Vec<T> = p.iter().map(|&i| z[i]).collect();
         // Deflation
