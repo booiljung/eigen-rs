@@ -24,8 +24,12 @@ fn main() {
     assert_eq!(t1.get([1, 1]), Some(&4.0));
 
     // 2. Create another tensor explicitly with CpuDevice
+<<<<<<< HEAD
     let mut t2 =
         Tensor::<f32, 2, CpuDevice>::new_with_device([2, 2], CpuDevice::default()).unwrap();
+=======
+    let mut t2 = Tensor::<f32, 2, CpuDevice>::new_with_device([2, 2], CpuDevice::default()).unwrap();
+>>>>>>> refs/remotes/origin/develop
     let data2 = t2.data_mut().unwrap();
     data2[0] = 1.0; // (0,0)
     data2[1] = 0.0; // (1,0)

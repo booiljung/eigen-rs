@@ -456,6 +456,7 @@ where
         let c_ptr = c.storage_mut().data_mut().as_mut_ptr();
         let rs_c = 1;
         let cs_c = c.rows() as isize;
+<<<<<<< HEAD
 
         unsafe {
             gemm_small_unsafe(
@@ -472,6 +473,16 @@ where
                 rs_c,
                 cs_c,
                 T::from_usize(1),
+=======
+        
+        unsafe {
+            gemm_small_unsafe(
+                m, k, n,
+                a_ptr, rs_a, cs_a,
+                b_ptr, rs_b, cs_b,
+                c_ptr, rs_c, cs_c,
+                T::from_usize(1)
+>>>>>>> refs/remotes/origin/develop
             );
         }
         return Ok(());
@@ -586,6 +597,7 @@ pub unsafe fn gemm_dispatch_pointers<T: Scalar + Copy + Default>(
     // Use scalar fallback for small matrices to avoid packing/workspace overhead.
     if m <= 8 && n <= 8 && k <= 8 {
         gemm_small_unsafe(
+<<<<<<< HEAD
             m,
             k,
             n,
@@ -599,6 +611,13 @@ pub unsafe fn gemm_dispatch_pointers<T: Scalar + Copy + Default>(
             rs_c,
             cs_c,
             T::from_usize(1), // Assuming alpha=1 for dispatch
+=======
+            m, k, n,
+            a_ptr, rs_a, cs_a,
+            b_ptr, rs_b, cs_b,
+            c_ptr, rs_c, cs_c,
+            T::from_usize(1) // Assuming alpha=1 for dispatch
+>>>>>>> refs/remotes/origin/develop
         );
         return Ok(true); // Handled
     }
@@ -673,8 +692,12 @@ pub unsafe fn gemm_small_unsafe<T: Scalar + Copy + Default>(
         let b_col = b_ptr.offset(j as isize * cs_b);
         let c_col = c_ptr.offset(j as isize * cs_c);
 
+<<<<<<< HEAD
         for l in 0..k {
             // l used for k index to avoid confusion with k size
+=======
+        for l in 0..k { // l used for k index to avoid confusion with k size
+>>>>>>> refs/remotes/origin/develop
             let b_val = *b_col.offset(l as isize * rs_b) * alpha;
             let a_col = a_ptr.offset(l as isize * cs_a);
 
