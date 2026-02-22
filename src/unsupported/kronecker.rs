@@ -14,7 +14,7 @@ where
 {
     lhs: &'a L,
     rhs: &'a R,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
 }
 
 impl<'a, T, L, R> KroneckerProduct<'a, T, L, R>
@@ -27,7 +27,7 @@ where
         Self {
             lhs,
             rhs,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
         }
     }
 }

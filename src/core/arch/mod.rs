@@ -733,5 +733,8 @@ pub mod x86 {
     }
 }
 
+#[cfg(target_arch = "x86_64")]
 pub mod special_functions;
-pub use special_functions::sse_f32; // Expose module if needed, or just let it be used internally
+
+#[cfg(target_arch = "x86_64")]
+pub use special_functions::sse_f32;

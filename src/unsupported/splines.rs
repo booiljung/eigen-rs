@@ -21,7 +21,7 @@ pub struct Spline<T: Scalar> {
     degree: usize,
 }
 
-impl<T: Scalar + 'static + std::cmp::PartialOrd> Default for Spline<T> {
+impl<T: Scalar + 'static + core::cmp::PartialOrd> Default for Spline<T> {
     fn default() -> Self {
         Self {
             knots: Vec::new(),
@@ -31,7 +31,7 @@ impl<T: Scalar + 'static + std::cmp::PartialOrd> Default for Spline<T> {
     }
 }
 
-impl<T: Scalar + 'static + std::cmp::PartialOrd> Spline<T> {
+impl<T: Scalar + 'static + core::cmp::PartialOrd> Spline<T> {
     /// Creates a new B-Spline.
     ///
     /// # Arguments

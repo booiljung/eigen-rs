@@ -1,0 +1,13 @@
+[package]
+name = "python-eigen-rs"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "python_eigen_rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+eigen-rs = { path = "../" }
+pyo3 = { version = "0.20.2", features = ["extension-module"] }
+numpy = "0.20.0"

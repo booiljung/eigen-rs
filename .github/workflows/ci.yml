@@ -40,6 +40,11 @@ jobs:
       # This requires C++ compiler which ubuntu-latest has (g++)
       run: cargo test --test simd_verify_test -- --nocapture
 
+    - name: Run Tests with CUDA feature (Dynamic Libloading check)
+      # This ensures that the code compiles (and runs tests if they fallback properly)
+      # even on a runner without NVIDIA GPUs, validating the dynamic loading design.
+      run: cargo test --features cuda --verbose
+
     - name: Run Benchmarks (Sanity Check)
       # Just run to ensure they compile and run, not strictly for perf numbers in CI
       run: cargo bench --no-run

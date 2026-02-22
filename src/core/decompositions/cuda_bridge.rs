@@ -1,3 +1,11 @@
+//! CUDA Hardware Acceleration Bridge for Decompositions.
+//!
+//! This module securely wraps the NVIDIA `cuBLAS` and `cuSOLVER` libraries using dynamic module loading
+//! (`libloading`) to avoid strict static linking dependencies. Key features include:
+//! - **CudaDecompositionExt**: A trait implemented on standard Rust matrices enabling fallback-safe GPU operations.
+//! - **High-Performance Decompositions**: Accelerates LLT (Cholesky), LU, QR, and SVD factorizations for massive systems.
+//! - **Asynchronous Portability**: Safely operates on GitHub Actions and CI environments without native CUDA toolkits installed.
+
 #[cfg(feature = "cuda")]
 use crate::core::matrix::Matrix;
 #[cfg(feature = "cuda")]

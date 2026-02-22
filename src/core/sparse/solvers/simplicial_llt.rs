@@ -30,18 +30,26 @@ impl<T: Scalar + std::cmp::PartialOrd> SimplicialLLT<T> {
 
     /// Computes the factorization of the given matrix using COLAMD ordering.
     pub fn compute(&mut self, matrix: &SparseMatrix<T>) -> Result<(), String> {
-        self.analyze_pattern(matrix)?;
+        self.compute_with_ordering(matrix, &COLAMD)
+    }
+
+    /// Computes the factorization using a specific ordering strategy.
+    pub fn compute_with_ordering<O: Ordering>(&mut self, matrix: &SparseMatrix<T>, ordering: &O) -> Result<(), String> {
+        self.analyze_pattern_with_ordering(matrix, ordering)?;
         self.factorize(matrix)
     }
 
-    /// Symbolic factorization: analyzes the sparsity pattern and prepares the L matrix.
+    /// Symbolic factorization: analyzes the sparsity pattern using COLAMD.
     pub fn analyze_pattern(&mut self, matrix: &SparseMatrix<T>) -> Result<(), String> {
+        self.analyze_pattern_with_ordering(matrix, &COLAMD)
+    }
+
+    /// Symbolic factorization: analyzes the sparsity pattern using a specific ordering.
+    pub fn analyze_pattern_with_ordering<O: Ordering>(&mut self, matrix: &SparseMatrix<T>, ordering: &O) -> Result<(), String> {
         if matrix.rows() != matrix.cols() {
             return Err("Matrix must be square for Cholesky factorization".to_string());
         }
 
-        // Compute ordering (COLAMD)
-        let ordering = COLAMD;
         let p = ordering.compute(matrix);
 
         // Store inverse permutation for convenience if needed,

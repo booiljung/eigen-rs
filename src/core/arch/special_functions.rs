@@ -29,6 +29,7 @@
 // Define the logic in `special_functions.rs` as generic functions or specific functions accepting `__m128`.
 // Then call them from `mod.rs`.
 
+#[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
 
 #[cfg(target_arch = "x86_64")]

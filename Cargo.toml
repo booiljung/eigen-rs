@@ -1,6 +1,6 @@
 [package]
 name = "eigen-rs"
-version = "3.4.0"
+version = "1.0.0"
 edition = "2021"
 authors = ["booiljung <user@example.com>"]
 description = "A pure Rust port of the Eigen C++ template library for linear algebra."
@@ -20,6 +20,7 @@ rustfft = "6.4.1"
 num-traits = "0.2"
 num-complex = "0.4"
 libloading = { version = "0.8", optional = true }
+mpi = { version = "0.8.1", optional = true }
 
 [dev-dependencies]
 criterion = "0.5"
@@ -59,7 +60,9 @@ mkl = []
 parallel = ["dep:rayon"]
 lapack = ["dep:lapack-sys"]
 std = []
+mpi_support = ["dep:mpi"]
 default = ["std", "parallel"]
+mpi = ["dep:mpi"]
 
 [profile.release]
 lto = false
@@ -73,3 +76,12 @@ path = "verification/verify_large_regressions.rs"
 name = "verify_tensor_perf"
 path = "verification/verify_tensor_perf.rs"
 
+[[example]]
+name = "debug_svd"
+required-features = ["cuda"]
+
+[workspace]
+members = [
+    ".",
+    "python-eigen-rs"
+]

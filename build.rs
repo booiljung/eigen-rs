@@ -38,9 +38,11 @@ fn main() {
             println!("cargo:rustc-cfg=feature=\"cuda_enabled\"");
             println!("cargo:rustc-link-search=native={}/lib64", path);
             println!("cargo:rustc-link-search=native=/usr/lib/x86_64-linux-gnu"); // Standard Ubuntu path
-            println!("cargo:rustc-link-lib=cuda");
-            println!("cargo:rustc-link-lib=cudart");
-            println!("cargo:rustc-link-lib=cusparse");
+            // We use libloading (dynamic loading) for CUDA libraries to allow the same binary
+            // to run on systems without CUDA installed. Therefore, we DO NOT statically link them.
+            // println!("cargo:rustc-link-lib=cuda");
+            // println!("cargo:rustc-link-lib=cudart");
+            // println!("cargo:rustc-link-lib=cusparse");
 
             // Compile .cu kernels if they exist
             let kernel_src = "src/core/cuda/kernels.cu";

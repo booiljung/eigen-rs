@@ -13,3 +13,6 @@ pub mod sparse;
 pub mod storage;
 pub mod tensor;
 pub mod xpr;
+
+#[cfg(feature = "mpi_support")]
+pub mod distributed;

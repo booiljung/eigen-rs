@@ -40,3 +40,11 @@ check.json
 
 # Ad-hoc C test scripts in root
 /*.c
+
+# Python Build & Environment
+.venv/
+__pycache__/
+*.whl
+*.so
+.pytest_cache/
+python-eigen-rs/target/

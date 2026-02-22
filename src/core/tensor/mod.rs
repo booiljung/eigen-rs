@@ -1,4 +1,11 @@
 //! Tensor module for multi-dimensional arrays.
+//!
+//! This module provides an N-dimensional generalization of matrices, serving as the foundational
+//! infrastructure for Neural Network operations and advanced multi-way data analysis. Key features include:
+//! - **N-Dimensional Expressions**: Lazy evaluation of tensor reshaping, broadcasting, and slice operations.
+//! - **Tensor Contractions**: High-performance multi-dimensional dot products bridging to GEMM.
+//! - **GPU Acceleration**: Built on `CudaDevice` and `CudaStorage` to offload dense element-wise assignments
+//!   and contractions directly to the GPU via custom PTX kernels, vastly accelerating Deep Learning workflows.
 
 use crate::core::scalar::Scalar;
 use crate::core::storage::Storage;
@@ -9,6 +16,7 @@ pub mod device;
 pub mod ops;
 pub mod storage;
 pub mod xpr;
+pub mod nn;
 
 pub use storage::TensorStorage;
 pub use xpr::TensorXpr;
@@ -25,6 +33,10 @@ impl<T: Scalar, const RANK: usize, D: Device> Tensor<T, RANK, D> {
         Ok(Self {
             storage: storage::TensorStorage::new_with_device(dims, device)?,
         })
+    }
+
+    pub fn device(&self) -> &D {
+        &self.storage.device
     }
 
     pub fn dims(&self) -> [usize; RANK] {

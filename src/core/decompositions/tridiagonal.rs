@@ -103,31 +103,52 @@ impl<T: Scalar<Real = T> + PartialOrd, S: Storage<T>> Tridiagonalization<T, S> {
                 }
 
                 unsafe {
-                    if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>()
-                        && is_x86_feature_detected!("fma")
+                    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
                     {
-                        Self::compute_p_symmv_f64(
-                            mat_a,
-                            stride,
-                            &mut w,
-                            &v_buf,
-                            i,
-                            remaining_size,
-                            h,
-                        );
-                    } else if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>()
-                        && is_x86_feature_detected!("fma")
+                        if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>()
+                            && is_x86_feature_detected!("fma")
+                        {
+                            Self::compute_p_symmv_f64(
+                                mat_a,
+                                stride,
+                                &mut w,
+                                &v_buf,
+                                i,
+                                remaining_size,
+                                h,
+                            );
+                        } else if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>()
+                            && is_x86_feature_detected!("fma")
+                        {
+                            Self::compute_p_symmv_f32(
+                                mat_a,
+                                stride,
+                                &mut w,
+                                &v_buf,
+                                i,
+                                remaining_size,
+                                h,
+                            );
+                        } else {
+                            // Scalar Fallback
+                            for (row, val) in w.iter_mut().enumerate().take(remaining_size) {
+                                let mut dot = T::default();
+                                for col in 0..remaining_size {
+                                    let r = row + i + 1;
+                                    let c = col + i + 1;
+                                    let val = if r >= c {
+                                        *mat_a.get(r, c).unwrap()
+                                    } else {
+                                        *mat_a.get(c, r).unwrap()
+                                    };
+                                    dot += val * v_buf[col];
+                                }
+                                *val = h * dot;
+                            }
+                        }
+                    }
+                    #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
                     {
-                        Self::compute_p_symmv_f32(
-                            mat_a,
-                            stride,
-                            &mut w,
-                            &v_buf,
-                            i,
-                            remaining_size,
-                            h,
-                        );
-                    } else {
                         // Scalar Fallback
                         for (row, val) in w.iter_mut().enumerate().take(remaining_size) {
                             let mut dot = T::default();
@@ -154,15 +175,24 @@ impl<T: Scalar<Real = T> + PartialOrd, S: Storage<T>> Tridiagonalization<T, S> {
                 let scale = h * vt_w * T::from_f64(0.5);
 
                 unsafe {
-                    if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>()
-                        && is_x86_feature_detected!("fma")
+                    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
                     {
-                        Self::update_w_vectorized_f64(&mut w, &v_buf, scale);
-                    } else if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>()
-                        && is_x86_feature_detected!("fma")
+                        if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>()
+                            && is_x86_feature_detected!("fma")
+                        {
+                            Self::update_w_vectorized_f64(&mut w, &v_buf, scale);
+                        } else if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>()
+                            && is_x86_feature_detected!("fma")
+                        {
+                            Self::update_w_vectorized_f32(&mut w, &v_buf, scale);
+                        } else {
+                            for (k, val) in w.iter_mut().enumerate().take(remaining_size) {
+                                *val -= scale * v_buf[k];
+                            }
+                        }
+                    }
+                    #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
                     {
-                        Self::update_w_vectorized_f32(&mut w, &v_buf, scale);
-                    } else {
                         for (k, val) in w.iter_mut().enumerate().take(remaining_size) {
                             *val -= scale * v_buf[k];
                         }

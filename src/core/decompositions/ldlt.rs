@@ -82,43 +82,47 @@ impl<T: Scalar + 'static, S: Storage<T> + 'static> LDLT<T, S> {
             // Eigen uses "Left Looking": For current column j, gather contributions from k < j.
 
             unsafe {
-                if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>()
-                    && is_x86_feature_detected!("fma")
+                #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
                 {
-                    let ptr = mat_ptr as *mut f64;
-                    // Gather contributions from previous columns
-                    // Col j = Col j - L(:, 0..j) * (D(0..j) * L(j, 0..j))^T
-                    // This inner loop is the bottleneck.
-                    // Improving locality: Process in blocks of K columns?
-                    // For now, let's just ensure inner loop is tight and vectorized.
-
-                    for k in 0..j {
-                        let l_jk_val = *ptr.add(k * rows + j); // mat(j, k)
-                        let d_k_val = *(d.as_ptr() as *const f64).add(k);
-                        let val_kj = l_jk_val * d_k_val;
-
-                        // Vectorized Update: Col(j) -= val * Col(k)
-                        Self::update_column_vectorized_f64(ptr, rows, j, k, val_kj);
-                    }
-                } else if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>()
-                    && is_x86_feature_detected!("fma")
-                {
-                    let ptr = mat_ptr as *mut f32;
-                    for k in 0..j {
-                        let l_jk_val = *ptr.add(k * rows + j);
-                        let d_k_val = *(d.as_ptr() as *const f32).add(k);
-                        let val_kj = l_jk_val * d_k_val;
-                        Self::update_column_vectorized_f32(ptr, rows, j, k, val_kj);
-                    }
-                } else {
-                    // Scalar Fallback
-                    for k in 0..j {
-                        let val = unsafe { *mat_ptr.add(k * rows + j) }.conj() * d[k];
-                        // Update column j starting from row j
-                        for i in j..rows {
-                            unsafe {
+                    if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>()
+                        && is_x86_feature_detected!("fma")
+                    {
+                        let ptr = mat_ptr as *mut f64;
+                        for k in 0..j {
+                            let l_jk_val = *ptr.add(k * rows + j);
+                            let d_k_val = *(d.as_ptr() as *const f64).add(k);
+                            let val_kj = l_jk_val * d_k_val;
+                            Self::update_column_vectorized_f64(ptr, rows, j, k, val_kj);
+                        }
+                    } else if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>()
+                        && is_x86_feature_detected!("fma")
+                    {
+                        let ptr = mat_ptr as *mut f32;
+                        for k in 0..j {
+                            let l_jk_val = *ptr.add(k * rows + j);
+                            let d_k_val = *(d.as_ptr() as *const f32).add(k);
+                            let val_kj = l_jk_val * d_k_val;
+                            Self::update_column_vectorized_f32(ptr, rows, j, k, val_kj);
+                        }
+                    } else {
+                        // Scalar Fallback
+                        for k in 0..j {
+                            let val = (*mat_ptr.add(k * rows + j)).conj() * d[k];
+                            // Update column j starting from row j
+                            for i in j..rows {
                                 *mat_ptr.add(j * rows + i) -= val * *mat_ptr.add(k * rows + i);
                             }
+                        }
+                    }
+                }
+                #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+                {
+                    // Scalar Fallback
+                    for k in 0..j {
+                        let val = (*mat_ptr.add(k * rows + j)).conj() * d[k];
+                        // Update column j starting from row j
+                        for i in j..rows {
+                            *mat_ptr.add(j * rows + i) -= val * *mat_ptr.add(k * rows + i);
                         }
                     }
                 }

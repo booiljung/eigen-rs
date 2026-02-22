@@ -425,7 +425,8 @@ fn test_sparse_llt_differential() {
     final_a.set_from_triplets(a_triplets);
 
     let mut llt = SimplicialLLT::new();
-    llt.compute(&final_a).expect("Rust factorization failed");
+    llt.compute_with_ordering(&final_a, &eigen_rs::core::sparse::ordering::NaturalOrdering)
+        .expect("Rust factorization failed");
 
     let rust_l = llt.matrix_l();
     // Verify L
